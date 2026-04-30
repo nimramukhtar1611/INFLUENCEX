@@ -108,7 +108,7 @@ VITE_CLOUDINARY_CLOUD_NAME=dhwl7isa7 ✅
 ```bash
 # backend/.env
 GEMINI_API_KEY=AIzaSyD6PWma-f9GXGj8o4PvpD6_-iTQlM7eFQc ✅
-HF_API_KEY=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 ✅
+HF_API_KEY=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ✅
 GEMINI_MODEL=gemini-3.1-flash-lite-preview ✅
 HF_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0 ✅
 ```

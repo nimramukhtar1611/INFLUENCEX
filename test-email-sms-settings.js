@@ -64,7 +64,7 @@ async function testEmailAndSmsSettings() {
       smsNotifications: {
         enabled: true,
         provider: 'twilio',
-        accountSid: 'AC12345678901234567890123456789012',
+        accountSid: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
         authToken: 'abcdefghijklmnopqrstuvwxyz1234567890',
         phoneNumber: '+1234567890'
       }

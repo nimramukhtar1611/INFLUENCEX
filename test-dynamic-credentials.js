@@ -40,7 +40,7 @@ async function testDynamicCredentials() {
         },
         sms: {
           twilio: {
-            accountSid: 'AC12345678901234567890123456789012',
+            accountSid: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
             authToken: 'test-auth-token-32-chars-minimum',
             phoneNumber: '+1234567890'
           }
