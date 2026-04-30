@@ -4,3 +4,7 @@ logs/
 !frontend/src/assets/*.jpg
 !frontend/src/assets/**/*.jpg
 *.docx
+node_modules/
+.env
+dist/
+build/
