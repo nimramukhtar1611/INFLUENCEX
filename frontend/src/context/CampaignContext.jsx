@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ export const CampaignProvider = ({ children }) => {
   const [currentCampaign, setCurrentCampaign] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const loadingRef = useRef(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -64,7 +65,7 @@ export const CampaignProvider = ({ children }) => {
       'Travel', 'Gaming', 'Lifestyle', 'Parenting', 'Finance',
       'Education', 'Entertainment', 'Sports', 'Health', 'Other',
     ],
-    platforms: ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook', 'linkedin'],
+    platforms: ['instagram', 'youtube', 'tiktok', 'facebook'],
     niches: [
       'Fashion', 'Beauty', 'Fitness', 'Travel', 'Food', 'Tech',
       'Gaming', 'Lifestyle', 'Parenting', 'Finance', 'Health',
@@ -159,9 +160,10 @@ export const CampaignProvider = ({ children }) => {
   }, [filters, pagination.page, pagination.limit]);
 
   const fetchBrandCampaigns = useCallback(async () => {
-    if (!isAuthenticated || user?.userType !== 'brand') return;
+    if (!isAuthenticated || user?.userType !== 'brand' || loadingRef.current) return;
 
     try {
+      loadingRef.current = true;
       setLoading(true);
       setError(null);
       const params = buildQueryParams();
@@ -186,14 +188,16 @@ export const CampaignProvider = ({ children }) => {
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [isAuthenticated, user, buildQueryParams]);
 
   const fetchAvailableCampaigns = useCallback(async () => {
-    if (!isAuthenticated || user?.userType !== 'creator') return;
+    if (!isAuthenticated || user?.userType !== 'creator' || loadingRef.current) return;
 
     try {
+      loadingRef.current = true;
       setLoading(true);
       setError(null);
       const params = buildQueryParams();
@@ -217,6 +221,7 @@ export const CampaignProvider = ({ children }) => {
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [isAuthenticated, user, buildQueryParams]);
@@ -259,13 +264,15 @@ export const CampaignProvider = ({ children }) => {
       } else {
         const errorMsg = response.data?.error || 'Failed to create campaign';
         setError(errorMsg);
-        toast.error(errorMsg);
+        toast.error(`Campaign creation failed: ${errorMsg}`);
+        console.error('Campaign creation error:', response.data);
         return null;
       }
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to create campaign';
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Network error while creating campaign';
       setError(errorMsg);
-      toast.error(errorMsg);
+      toast.error(`Unable to create campaign: ${errorMsg}`);
+      console.error('Campaign creation exception:', err);
       return null;
     } finally {
       setLoading(false);
@@ -288,13 +295,15 @@ export const CampaignProvider = ({ children }) => {
       } else {
         const errorMsg = response.data?.error || 'Failed to update campaign';
         setError(errorMsg);
-        toast.error(errorMsg);
+        toast.error(`Campaign update failed: ${errorMsg}`);
+        console.error('Campaign update error:', response.data);
         return null;
       }
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to update campaign';
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Network error while updating campaign';
       setError(errorMsg);
-      toast.error(errorMsg);
+      toast.error(`Unable to update campaign: ${errorMsg}`);
+      console.error('Campaign update exception:', err);
       return null;
     } finally {
       setLoading(false);
@@ -555,16 +564,16 @@ export const CampaignProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      if (user?.userType === 'brand') {
+    if (isAuthenticated && user?.userType) {
+      if (user.userType === 'brand') {
         fetchBrandCampaigns();
-      } else if (user?.userType === 'creator') {
+      } else if (user.userType === 'creator') {
         fetchAvailableCampaigns();
       }
     }
   }, [
     isAuthenticated,
-    user,
+    user?.userType,
     filters,
     pagination.page,
     pagination.limit,

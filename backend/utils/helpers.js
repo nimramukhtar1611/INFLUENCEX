@@ -707,9 +707,7 @@ const getPlatformColor = (platform) => {
     instagram: '#E1306C',
     youtube: '#FF0000',
     tiktok: '#000000',
-    twitter: '#1DA1F2',
     facebook: '#4267B2',
-    linkedin: '#0077B5',
     website: '#4F46E5',
     other: '#6B7280'
   };

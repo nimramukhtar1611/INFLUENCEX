@@ -4,7 +4,7 @@ import {
   Building2, Globe, Mail, Phone, MapPin, Users,
   Edit2, Camera, Save, X, Calendar, DollarSign,
   TrendingUp, Award, Star, CheckCircle, Loader,
-  Instagram, Twitter, Facebook, Linkedin, Youtube,
+  Instagram, Facebook, Youtube,
   AlertCircle, Check
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -26,9 +26,7 @@ const toSocialUrl = (platform, value) => {
   const clean = trimmed.replace(/^@+/, '');
   const map = {
     instagram: `https://instagram.com/${clean}`,
-    twitter: `https://x.com/${clean}`,
     facebook: `https://facebook.com/${clean}`,
-    linkedin: `https://linkedin.com/in/${clean}`,
     youtube: `https://youtube.com/@${clean}`
   };
 
@@ -66,9 +64,7 @@ const BrandProfile = () => {
     },
     socialMedia: {
       instagram: '',
-      twitter: '',
       facebook: '',
-      linkedin: '',
       youtube: ''
     },
     preferences: {
@@ -113,9 +109,7 @@ const BrandProfile = () => {
         },
         socialMedia: profileFromHook.socialMedia || {
           instagram: toSocialUrl('instagram', profileFromHook.socialMedia?.instagram || ''),
-          twitter: toSocialUrl('twitter', profileFromHook.socialMedia?.twitter || ''),
           facebook: toSocialUrl('facebook', profileFromHook.socialMedia?.facebook || ''),
-          linkedin: toSocialUrl('linkedin', profileFromHook.socialMedia?.linkedin || ''),
           youtube: toSocialUrl('youtube', profileFromHook.socialMedia?.youtube || '')
         },
         preferences: profileFromHook.preferences || {
@@ -242,9 +236,7 @@ const BrandProfile = () => {
         },
         socialMedia: profile.socialMedia || {
           instagram: toSocialUrl('instagram', profile.socialMedia?.instagram || ''),
-          twitter: toSocialUrl('twitter', profile.socialMedia?.twitter || ''),
           facebook: toSocialUrl('facebook', profile.socialMedia?.facebook || ''),
-          linkedin: toSocialUrl('linkedin', profile.socialMedia?.linkedin || ''),
           youtube: toSocialUrl('youtube', profile.socialMedia?.youtube || '')
         },
         preferences: profile.preferences || {
@@ -258,34 +250,21 @@ const BrandProfile = () => {
   if (loading || hookLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-12 h-12 animate-spin text-indigo-600" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading profile...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Brand Profile</h1>
-          <p className="text-gray-600">View and manage your brand information</p>
-        </div>
-        {!isEditing ? (
-          <Button variant="outline" icon={Edit2} onClick={() => setIsEditing(true)}>
-            Edit Profile
-          </Button>
-        ) : (
-          <div className="flex gap-2">
-            <Button variant="secondary" icon={X} onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button variant="primary" icon={Save} onClick={handleSave} loading={saving}>
-              Save Changes
-            </Button>
+    <div className={`min-h-screen `}>
+      <div className="max-w-7xl mx-auto px-6 pt-8">
+         <div>
+            <h1 className="text-3xl font-light tracking-tight font-semibold">Brand <span className="font-bold">Profile</span></h1>
+            <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Manage your brand information and public profile.</p>
           </div>
-        )}
-      </div>
 
       {/* Profile Card */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -299,7 +278,7 @@ const BrandProfile = () => {
             />
           )}
           {isEditing && (
-            <button className="absolute bottom-4 right-4 bg-white p-2 rounded-lg shadow-md hover:bg-gray-50">
+            <button className="absolute bottom-4 right-4 bg-white p-2 rounded-lg shadow-md hover:bg-white">
               <Camera className="w-5 h-5 text-gray-700" />
             </button>
           )}
@@ -321,7 +300,7 @@ const BrandProfile = () => {
                 </div>
               )}
               {isEditing && (
-                <button className="absolute -bottom-2 -right-2 bg-white p-1.5 rounded-full shadow-md hover:bg-gray-50">
+                <button className="absolute -bottom-2 -right-2 bg-white p-1.5 rounded-full shadow-md hover:bg-white">
                   <Camera className="w-4 h-4 text-gray-700" />
                 </button>
               )}
@@ -344,28 +323,201 @@ const BrandProfile = () => {
             </div>
           </div>
 
-          {/* Stats Grid */}
+          {/* Stats Grid - Brand Dashboard Style */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-500">Total Campaigns</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalCampaigns}</p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-500">Active Campaigns</p>
-              <p className="text-2xl font-bold text-green-600">{stats.activeCampaigns}</p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-500">Total Spent</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalSpent)}</p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-500">Rating</p>
-              <div className="flex items-center">
-                <Star className="w-5 h-5 text-yellow-400 fill-current" />
-                <span className="text-2xl font-bold text-gray-900 ml-1">
-                  {stats.averageRating?.toFixed(1) || '0.0'}
+            <div 
+              className={`
+                group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+                cursor-default hover:scale-[1.02]
+                bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]
+              `}
+            >
+              <div className="flex justify-between items-start mb-4">
+                {/* Icon Squircle with Spring Animation */}
+                <div className={`
+                  p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+                  bg-zinc-50 text-zinc-600 group-hover:bg-black group-hover:text-white shadow-sm
+                `}>
+                  <TrendingUp size={18} strokeWidth={2.5} />
+                </div>
+
+                {/* Dynamic Badge */}
+                <span className={`
+                  text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+                  text-blue-500 bg-blue-500/5
+                `}>
+                  Total
                 </span>
               </div>
+
+              <div className="space-y-1">
+                <h3 className={`
+                  text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+                  text-zinc-400 group-hover:text-zinc-600
+                `}>
+                  Campaigns
+                </h3>
+                
+                <p className={`
+                  text-2xl font-mono font-bold tracking-tighter transition-all
+                  text-black
+                `}>
+                  {stats.totalCampaigns}
+                </p>
+              </div>
+
+              {/* Subtle Bottom Glow Line */}
+              <div className={`
+                h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+                bg-zinc-200
+              `} />
+            </div>
+
+            <div 
+              className={`
+                group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+                cursor-default hover:scale-[1.02]
+                bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]
+              `}
+            >
+              <div className="flex justify-between items-start mb-4">
+                {/* Icon Squircle with Spring Animation */}
+                <div className={`
+                  p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+                  bg-emerald-50 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white shadow-sm
+                `}>
+                  <CheckCircle size={18} strokeWidth={2.5} />
+                </div>
+
+                {/* Dynamic Badge */}
+                <span className={`
+                  text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+                  text-emerald-500 bg-emerald-500/5
+                `}>
+                  Active
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className={`
+                  text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+                  text-zinc-400 group-hover:text-zinc-600
+                `}>
+                  Running
+                </h3>
+                
+                <p className={`
+                  text-2xl font-mono font-bold tracking-tighter transition-all
+                  text-emerald-600
+                `}>
+                  {stats.activeCampaigns}
+                </p>
+              </div>
+
+              {/* Subtle Bottom Glow Line */}
+              <div className={`
+                h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+                bg-zinc-200
+              `} />
+            </div>
+
+            <div 
+              className={`
+                group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+                cursor-default hover:scale-[1.02]
+                bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]
+              `}
+            >
+              <div className="flex justify-between items-start mb-4">
+                {/* Icon Squircle with Spring Animation */}
+                <div className={`
+                  p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+                  bg-zinc-50 text-zinc-600 group-hover:bg-black group-hover:text-white shadow-sm
+                `}>
+                  <DollarSign size={18} strokeWidth={2.5} />
+                </div>
+
+                {/* Dynamic Badge */}
+                <span className={`
+                  text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+                  text-green-500 bg-green-500/5
+                `}>
+                  Spent
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className={`
+                  text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+                  text-zinc-400 group-hover:text-zinc-600
+                `}>
+                  Investment
+                </h3>
+                
+                <p className={`
+                  text-2xl font-mono font-bold tracking-tighter transition-all
+                  text-black
+                `}>
+                  {formatCurrency(stats.totalSpent)}
+                </p>
+              </div>
+
+              {/* Subtle Bottom Glow Line */}
+              <div className={`
+                h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+                bg-zinc-200
+              `} />
+            </div>
+
+            <div 
+              className={`
+                group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+                cursor-default hover:scale-[1.02]
+                bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]
+              `}
+            >
+              <div className="flex justify-between items-start mb-4">
+                {/* Icon Squircle with Spring Animation */}
+                <div className={`
+                  p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+                  bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white shadow-sm
+                `}>
+                  <Star size={18} strokeWidth={2.5} />
+                </div>
+
+                {/* Dynamic Badge */}
+                <span className={`
+                  text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+                  text-amber-500 bg-amber-500/5
+                `}>
+                  Score
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className={`
+                  text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+                  text-zinc-400 group-hover:text-zinc-600
+                `}>
+                  Rating
+                </h3>
+                
+                <div className="flex items-center gap-2">
+                  <Star className="w-5 h-5 text-yellow-400 fill-current" />
+                  <p className={`
+                    text-2xl font-mono font-bold tracking-tighter transition-all
+                    text-black
+                  `}>
+                    {stats.averageRating?.toFixed(1) || '0.0'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Subtle Bottom Glow Line */}
+              <div className={`
+                h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+                bg-zinc-200
+              `} />
             </div>
           </div>
 
@@ -396,7 +548,7 @@ const BrandProfile = () => {
                       value={formData.industry}
                       onChange={handleChange}
                       disabled={!isEditing}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-white"
                     >
                       <option value="">Select Industry</option>
                       <option value="Fashion">Fashion</option>
@@ -439,7 +591,7 @@ const BrandProfile = () => {
                       value={formData.companySize}
                       onChange={handleChange}
                       disabled={!isEditing}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-white"
                     >
                       <option value="">Select Size</option>
                       <option value="1-10">1-10 employees</option>
@@ -459,7 +611,7 @@ const BrandProfile = () => {
                       value={formData.businessType}
                       onChange={handleChange}
                       disabled={!isEditing}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-white"
                     >
                       <option value="individual">Individual</option>
                       <option value="sole_proprietor">Sole Proprietor</option>
@@ -492,7 +644,7 @@ const BrandProfile = () => {
                   onChange={handleChange}
                   disabled={!isEditing}
                   rows="4"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-white"
                   placeholder="Tell creators about your brand..."
                 />
               </div>
@@ -568,7 +720,7 @@ const BrandProfile = () => {
             {/* Right Column - Social Media & Additional Info */}
             <div className="space-y-6">
               {/* Social Media */}
-              <div className="bg-gray-50 p-6 rounded-xl">
+              <div className="bg-white p-6 rounded-xl">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Social Media</h3>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -582,11 +734,11 @@ const BrandProfile = () => {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Twitter className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                    <Facebook className="w-5 h-5 text-blue-600 flex-shrink-0" />
                     <Input
                       placeholder="@username"
-                      value={formData.socialMedia.twitter}
-                      onChange={(e) => handleSocialChange('twitter', e.target.value)}
+                      value={formData.socialMedia.facebook}
+                      onChange={(e) => handleSocialChange('facebook', e.target.value)}
                       disabled={!isEditing}
                       className="flex-1"
                     />
@@ -597,16 +749,6 @@ const BrandProfile = () => {
                       placeholder="pagename"
                       value={formData.socialMedia.facebook}
                       onChange={(e) => handleSocialChange('facebook', e.target.value)}
-                      disabled={!isEditing}
-                      className="flex-1"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Linkedin className="w-5 h-5 text-blue-700 flex-shrink-0" />
-                    <Input
-                      placeholder="company/name"
-                      value={formData.socialMedia.linkedin}
-                      onChange={(e) => handleSocialChange('linkedin', e.target.value)}
                       disabled={!isEditing}
                       className="flex-1"
                     />
@@ -625,7 +767,7 @@ const BrandProfile = () => {
               </div>
 
               {/* Additional Stats */}
-              <div className="bg-gray-50 p-6 rounded-xl">
+              <div className="bg-white p-6 rounded-xl">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -688,6 +830,7 @@ const BrandProfile = () => {
           </Button>
         </div>
       </Modal>
+      </div>
     </div>
   );
 };

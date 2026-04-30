@@ -52,6 +52,19 @@ const creatorSchema = new mongoose.Schema({
     default: ''
   },
   
+  age: {
+    type: Number,
+    min: 13,
+    max: 100,
+    validate: {
+      validator: function(v) {
+        if (!v) return true;
+        return v >= 13 && v <= 100;
+      },
+      message: 'Age must be between 13 and 100'
+    }
+  },
+
   birthday: {
     type: Date,
     validate: {
@@ -149,16 +162,6 @@ const creatorSchema = new mongoose.Schema({
       verified: { type: Boolean, default: false },
       lastSynced: Date
     },
-    linkedin: {
-      handle: String,
-      url: String,
-      name: String,
-      profilePicture: String,
-      headline: String,
-      connections: { type: Number, default: 0, min: 0 },
-      verified: { type: Boolean, default: false },
-      lastSynced: Date
-    }
   },
   
   // Aggregated fields (calculated from socialMedia)

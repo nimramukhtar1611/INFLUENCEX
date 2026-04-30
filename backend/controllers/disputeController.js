@@ -126,7 +126,20 @@ const createDispute = asyncHandler(async (req, res) => {
     }
   });
 
-  // Notify admins
+  // Notify admins about dispute raised
+  try {
+    const adminNotificationService = require('../services/adminNotificationService');
+    await adminNotificationService.notifyDisputeRaised({
+      dealId: normalizedDealId,
+      raisedBy: req.user.fullName || req.user.email,
+      reason: normalizedReason,
+      priority: 'medium'
+    });
+  } catch (notificationError) {
+    console.warn('Admin notification failed:', notificationError.message);
+  }
+
+  // Also create in-app notifications for admins
   const admins = await User.find({ userType: 'admin' });
   for (const admin of admins) {
     await Notification.create({

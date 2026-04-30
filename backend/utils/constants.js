@@ -141,9 +141,7 @@ const PLATFORMS = {
   INSTAGRAM: 'instagram',
   YOUTUBE: 'youtube',
   TIKTOK: 'tiktok',
-  TWITTER: 'twitter',
   FACEBOOK: 'facebook',
-  LINKEDIN: 'linkedin',
   WEBSITE: 'website',
   OTHER: 'other'
 };
@@ -153,9 +151,7 @@ const PLATFORM_COLORS = {
   [PLATFORMS.INSTAGRAM]: '#E1306C',
   [PLATFORMS.YOUTUBE]: '#FF0000',
   [PLATFORMS.TIKTOK]: '#000000',
-  [PLATFORMS.TWITTER]: '#1DA1F2',
   [PLATFORMS.FACEBOOK]: '#4267B2',
-  [PLATFORMS.LINKEDIN]: '#0077B5',
   [PLATFORMS.WEBSITE]: '#4F46E5',
   [PLATFORMS.OTHER]: '#6B7280'
 };
@@ -333,11 +329,12 @@ const RATE_LIMITS = {
 };
 
 // ==================== PLATFORM_FEES ====================
+// Note: These are fallback values. Dynamic fees are fetched from settings via feeService
 const PLATFORM_FEES = {
-  COMMISSION_RATE: 0.10, // 10%
-  WITHDRAWAL_FEE: 0,
-  MIN_PAYOUT: 50,
-  MIN_ESCROW: 100
+  COMMISSION_RATE: 0.10, // 10% - fallback
+  WITHDRAWAL_FEE: 0,     // fallback
+  MIN_PAYOUT: 50,        // fallback
+  MIN_ESCROW: 100         // fallback
 };
 
 // ==================== SUBSCRIPTION_PLANS ====================
@@ -381,9 +378,7 @@ const SOCIAL_PLATFORMS = [
   'instagram',
   'youtube',
   'tiktok',
-  'twitter',
-  'facebook',
-  'linkedin'
+  'facebook'
 ];
 
 // ==================== HTTP_STATUS ====================

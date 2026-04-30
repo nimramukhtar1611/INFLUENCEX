@@ -1,25 +1,12 @@
-// pages/Creator/AvailableDeals.jsx - COMPLETE FIXED VERSION
+// pages/Creator/AvailableDeals.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Search,
-  DollarSign,
-  Users,
-  Clock,
-  Briefcase,
-  ChevronRight,
-  Loader,
-  Filter,
-  X,
-  Calendar,
-  Target,
-  Award,
-  Star,
-  AlertCircle,
-  CheckCircle
+  Search, DollarSign, Users, Clock, Briefcase, Loader, Filter,
+  X, AlertCircle, ArrowUpRight, Zap, Layers, Globe
 } from 'lucide-react';
 import creatorService from '../../services/creatorService';
-import { formatCurrency, timeAgo } from '../../utils/helpers';
+import { formatCurrency } from '../../utils/helpers';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
 import toast from 'react-hot-toast';
@@ -28,7 +15,8 @@ import { useTheme } from '../../hooks/useTheme';
 const AvailableDeals = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  // ==================== STATE ====================
+
+  // ==================== STATE (KEEPING YOUR LOGIC) ====================
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
@@ -47,26 +35,19 @@ const AvailableDeals = () => {
     niche: ''
   });
   const [searchQuery, setSearchQuery] = useState('');
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    pages: 1
-  });
+  const [pagination, setPagination] = useState({ page: 1, limit: 1000, total: 0, pages: 1 });
   const [error, setError] = useState('');
 
-  // ==================== FETCH CAMPAIGNS ====================
+  // ==================== CONSTANTS ====================
+  const categories = ['Fashion', 'Beauty', 'Fitness', 'Technology', 'Food & Beverage', 'Travel', 'Gaming', 'Lifestyle', 'Parenting', 'Finance'];
+  const platforms = ['instagram', 'youtube', 'tiktok', 'facebook'];
+
+  // ==================== FUNCTIONS (KEEPING YOUR LOGIC) ====================
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
       setError('');
-
-      const response = await creatorService.getAvailableCampaigns(
-        { ...filters, q: searchQuery },
-        pagination.page,
-        pagination.limit
-      );
-
+      const response = await creatorService.getAvailableCampaigns({ ...filters, q: searchQuery }, 1, 1000);
       if (response.success) {
         setCampaigns(response.campaigns || []);
         setPagination({
@@ -80,7 +61,6 @@ const AvailableDeals = () => {
         setCampaigns([]);
       }
     } catch (error) {
-      console.error('Error fetching campaigns:', error);
       setError('Network error. Please try again.');
       setCampaigns([]);
     } finally {
@@ -88,44 +68,28 @@ const AvailableDeals = () => {
     }
   };
 
-  // ==================== INITIAL LOAD & FILTER CHANGE ====================
-  useEffect(() => {
-    fetchCampaigns();
-  }, [filters, pagination.page, searchQuery]);
+  useEffect(() => { fetchCampaigns(); }, [filters, pagination.page, searchQuery]);
 
-  // ==================== HANDLE SEARCH ====================
   const handleSearch = (e) => {
     e.preventDefault();
     setPagination(prev => ({ ...prev, page: 1 }));
     fetchCampaigns();
   };
 
-  // ==================== FILTER HANDLERS ====================
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const clearFilters = () => {
-    setFilters({
-      category: '',
-      minBudget: '',
-      maxBudget: '',
-      platform: '',
-      niche: ''
-    });
+    setFilters({ category: '', minBudget: '', maxBudget: '', platform: '', niche: '' });
     setSearchQuery('');
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  // ==================== APPLY TO CAMPAIGN ====================
   const handleApply = (campaign) => {
     setSelectedCampaign(campaign);
-    setApplicationData({
-      proposal: '',
-      rate: campaign.budget || '',
-      portfolio: []
-    });
+    setApplicationData({ proposal: '', rate: campaign.budget || '', portfolio: [] });
     setShowApplyModal(true);
   };
 
@@ -134,396 +98,328 @@ const AvailableDeals = () => {
       toast.error('Please write a proposal');
       return;
     }
-
     try {
-      const response = await creatorService.applyToCampaign(
-        selectedCampaign._id,
-        applicationData
-      );
-
+      const response = await creatorService.applyToCampaign(selectedCampaign._id, applicationData);
       if (response.success) {
         toast.success('Application submitted successfully!');
         setShowApplyModal(false);
-        fetchCampaigns(); // refresh list
+        fetchCampaigns();
       } else {
         toast.error(response.error || 'Failed to submit application');
       }
     } catch (error) {
-      console.error('Submit application error:', error);
       toast.error('Failed to submit application');
     }
   };
 
-  // ==================== FILTER OPTIONS ====================
-  const categories = [
-    'Fashion', 'Beauty', 'Fitness', 'Technology', 'Food & Beverage',
-    'Travel', 'Gaming', 'Lifestyle', 'Parenting', 'Finance'
-  ];
-
-  const platforms = ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook'];
-
-  // ==================== LOADING STATE ====================
   if (loading && campaigns.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[60vh] flex flex-col items-center justify-center">
         <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading available deals...</p>
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Scanning opportunities...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Available Deals</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Find brand collaborations that match your profile</p>
+          <h1 className="text-3xl font-light tracking-tight font-semibold">Marketplace <span className="font-bold">Deals</span></h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Browse and apply to new brand partnership opportunities.</p>
+        </div>
+        
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+          <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${isDark ? 'border-zinc-800 text-zinc-500' : 'border-zinc-200 text-zinc-400'}`}>
+            {pagination.total} Open Opportunities
+          </span>
         </div>
       </div>
 
       {/* Search and Filters */}
-      <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+      <div className="flex flex-col space-y-4">
+        <form onSubmit={handleSearch} className="relative flex items-center gap-3">
+          <div className="relative flex-1 group">
+            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${isDark ? 'text-zinc-600 group-focus-within:text-white' : 'text-zinc-400 group-focus-within:text-black'}`} />
             <input
               type="text"
-              placeholder="Search campaigns, brands, or keywords..."
-              className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
+              placeholder="Search by brand, category or keyword..."
+              className={`w-full pl-11 pr-4 py-3 text-sm rounded-2xl border outline-none transition-all ${
+                isDark ? 'bg-zinc-900/50 border-zinc-800 focus:border-zinc-600 focus:bg-zinc-900' : 'bg-white border-zinc-200 focus:border-black focus:shadow-lg focus:shadow-zinc-200/50'
               }`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowFilters(!showFilters)}
-              className={`px-4 py-2 border rounded-lg flex items-center gap-2 ${
-                showFilters 
-                  ? 'bg-indigo-50 border-indigo-600 text-indigo-600' 
-                  : isDark
-                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700/50'
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-            </button>
-            <Button type="submit" variant="primary" size="md">
-              Search
-            </Button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-3 rounded-2xl border transition-all ${
+              showFilters 
+              ? (isDark ? 'bg-white text-black border-white' : 'bg-black text-white border-black')
+              : (isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-600' : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-400')
+            }`}
+          >
+            <Filter className="w-5 h-5" />
+          </button>
         </form>
 
-        {/* Filter Panel */}
+        {/* Professional Filter Panel */}
         {showFilters && (
-          <div className={`mt-4 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Category
-                </label>
-                <select
-                  value={filters.category}
-                  onChange={(e) => handleFilterChange('category', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isDark 
-                      ? 'bg-gray-800/50 border-gray-700/50 text-gray-100'
-                      : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  <option value="">All Categories</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Platform
-                </label>
-                <select
-                  value={filters.platform}
-                  onChange={(e) => handleFilterChange('platform', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isDark 
-                      ? 'bg-gray-800/50 border-gray-700/50 text-gray-100'
-                      : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  <option value="">All Platforms</option>
-                  {platforms.map(plat => (
-                    <option key={plat} value={plat}>{plat.charAt(0).toUpperCase() + plat.slice(1)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Min Budget
-                </label>
-                <input
-                  type="number"
-                  value={filters.minBudget}
-                  onChange={(e) => handleFilterChange('minBudget', e.target.value)}
-                  placeholder="Any"
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isDark 
-                      ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                      : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Max Budget
-                </label>
-                <input
-                  type="number"
-                  value={filters.maxBudget}
-                  onChange={(e) => handleFilterChange('maxBudget', e.target.value)}
-                  placeholder="Any"
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isDark 
-                      ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                      : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                  }`}
-                />
-              </div>
+          <div className={`grid grid-cols-1 md:grid-cols-4 gap-4 p-6 rounded-2xl border animate-in fade-in slide-in-from-top-2 ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest opacity-60">Category</label>
+              <select value={filters.category} onChange={(e) => handleFilterChange('category', e.target.value)} className={`w-full bg-transparent border-b py-1 text-sm outline-none ${isDark ? 'border-zinc-700' : 'border-zinc-300'}`}>
+                <option value="" className="!bg-black text-white">All Segments</option>
+                {categories.map(cat => <option className="!bg-black text-white" key={cat} value={cat}>{cat}</option>)}
+              </select>
             </div>
-
-            <div className={`flex justify-end gap-2 mt-4 ${isDark ? 'border-t border-gray-700' : 'border-t border-gray-200'}`}>
-              <button
-                onClick={clearFilters}
-                className={`px-4 py-2 text-sm font-medium ${isDark ? 'text-gray-300 hover:text-gray-100' : 'text-gray-600 hover:text-gray-900'}`}
-              >
-                Clear All
-              </button>
-              <button
-                onClick={() => setShowFilters(false)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
-              >
-                Apply Filters
-              </button>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest opacity-60">Platform</label>
+              <select  value={filters.platform} onChange={(e) => handleFilterChange('platform', e.target.value)} className={`w-full bg-transparent border-b py-1 text-sm outline-none ${isDark ? 'border-zinc-700' : 'border-zinc-300'}`}>
+                <option value="" className="!bg-black text-white">All Channels</option> 
+                {platforms.map (plat => <option className="!bg-black text-white" key={plat} value={plat}>{plat.toUpperCase()}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest opacity-60">Budget Min</label>
+              <input type="number" placeholder="$ 0" value={filters.minBudget} onChange={(e) => handleFilterChange('minBudget', e.target.value)} className={`w-full bg-transparent border-b py-1 text-sm outline-none ${isDark ? 'border-zinc-700' : 'border-zinc-300'}`} />
+            </div>
+            <div className="flex items-end gap-2 pb-1">
+              <button onClick={clearFilters} className="text-[10px] font-bold uppercase hover:underline opacity-50">Reset</button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className={`p-4 rounded-lg border flex items-center gap-3 ${
-          isDark 
-            ? 'bg-red-950/40 border-red-900 text-red-300'
-            : 'bg-red-50 border-red-200 text-red-700'
-        }`}>
-          <AlertCircle className="w-5 h-5" />
-          <p>{error}</p>
-        </div>
-      )}
+      {/* Table Interface */}
+      <div className="relative overflow-hidden">
+        {campaigns.length > 0 ? (
+          <div className="space-y-2">
+            
+            {/* Header Row */}
+            <div className={`hidden md:grid grid-cols-12 px-8 py-4 text-[10px] font-black uppercase tracking-[0.3em] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+              <div className="col-span-4">Operational Alpha</div>
+              <div className="col-span-2">Capital</div>
+              <div className="col-span-3">Mission Status</div>
+              <div className="col-span-2">Deadline</div>
+              <div className="col-span-1 text-right">Access</div>
+            </div>
 
-      {/* Results Count */}
-      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-        Showing {campaigns.length} of {pagination.total} available deals
-      </p>
+            {/* Campaign Rows */}
+            {campaigns.map(campaign => {
+              const daysLeft = campaign.endDate ? Math.ceil((new Date(campaign.endDate) - new Date()) / (1000 * 60 * 60 * 24)) : 30;
+              
+              return (
+                <div 
+                  key={campaign._id}
+                  className="
+                    group relative grid grid-cols-1 md:grid-cols-12 items-center px-8 py-6 rounded-[1.5rem] border transition-all duration-500 cursor-pointer
+                    hover:border-zinc-500 hover:bg-zinc-900 hover:shadow-[0_20px_40px_rgba(0,0,0,0.3)]
+                  "
+                  style={{
+                    backgroundColor: isDark ? 'rgba(24, 24, 27, 0.4)' : 'white',
+                    borderColor: isDark ? 'rgba(63, 63, 70, 0.6)' : 'rgba(244, 244, 245, 1)'
+                  }}
+                >
+                  {/* Leading Status Indicator */}
+                  <div className="absolute left-0 top-1/4 bottom-1/4 w-[2px] rounded-r-full transition-all duration-500 opacity-0 group-hover:opacity-100 bg-indigo-500" />
 
-      {/* Deals Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {campaigns.length > 0 ? campaigns.map((campaign) => {
-          const daysLeft = campaign.endDate
-            ? Math.ceil((new Date(campaign.endDate) - new Date()) / (1000 * 60 * 60 * 24))
-            : 30;
+                  <div className="col-span-4 flex flex-col">
+                    <span className="text-base font-bold tracking-tight truncate" style={{ color: isDark ? 'white' : 'black' }}>
+                      {campaign.title || 'System Protocol'}
+                    </span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: isDark ? '#71717a' : '#a1a1aa' }}>
+                        {campaign.brandId?.brandName || 'Independent Entity'}
+                      </span>
+                      <div className="w-1 h-1 rounded-full" style={{ backgroundColor: isDark ? '#27272a' : '#e4e4e7' }} />
+                      <span className="text-[9px] font-bold uppercase tracking-tighter" style={{ color: '#71717a' }}>Verified Partner</span>
+                    </div>
+                  </div>
 
-          return (
-            <div key={campaign._id} className={`rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 ${
-              isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'
-            }`}>
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center">
-                  <img
-                    src={campaign.brandId?.logo || 'https://via.placeholder.com/60'}
-                    alt={campaign.brandId?.brandName}
-                    className="w-16 h-16 rounded-xl object-cover"
-                  />
-                  <div className="ml-4">
-                    <h3 className={`font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{campaign.brandId?.brandName}</h3>
-                    <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{campaign.title}</p>
+                  <div className="col-span-2 mt-4 md:mt-0">
+                    <span className="text-lg font-mono font-bold tracking-tighter" style={{ color: isDark ? 'white' : 'black' }}>
+                      {formatCurrency(campaign.budget || 0)}
+                    </span>
+                    <p className="text-[9px] font-black uppercase tracking-[0.1em] mt-0.5" style={{ color: '#71717a' }}>Budget Allocation</p>
+                  </div>
+
+                  <div className="col-span-3 mt-4 md:mt-0">
+                    <span className="
+                      inline-flex items-center px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] transition-all duration-500
+                      bg-emerald-500/10 text-emerald-500 group-hover:scale-105
+                    ">
+                      <span className="w-1.5 h-1.5 rounded-full bg-current mr-2.5 animate-pulse" />
+                      Available
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 mt-4 md:mt-0">
+                    <p className="text-sm font-mono font-medium" style={{ color: isDark ? '#a1a1aa' : '#737373' }}>
+                      {daysLeft}d remaining
+                    </p>
+                    <p className="text-[9px] font-black uppercase tracking-[0.1em] mt-0.5" style={{ color: '#71717a' }}>Time Limit</p>
+                  </div>
+
+                  <div className="col-span-1 hidden md:flex justify-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApply(campaign);
+                      }}
+                      className="
+                        w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500
+                        bg-zinc-800 text-zinc-500 group-hover:bg-white group-hover:text-black
+                      "
+                    >
+                      <ArrowUpRight size={18} strokeWidth={3} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Description */}
-              <p className={`text-sm mb-4 line-clamp-2 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                {campaign.description || 'No description provided'}
-              </p>
-
-              {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="flex items-center text-sm">
-                  <DollarSign className={`w-4 h-4 mr-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                  <span className={`font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                    {formatCurrency(campaign.budget || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center text-sm">
-                  <Briefcase className={`w-4 h-4 mr-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                  <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
-                    {campaign.deliverables?.length || 1} deliverables
-                  </span>
-                </div>
-                <div className="flex items-center text-sm">
-                  <Clock className={`w-4 h-4 mr-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                  <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
-                    {daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}
-                  </span>
-                </div>
-                <div className="flex items-center text-sm">
-                  <Users className={`w-4 h-4 mr-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                  <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
-                    {campaign.applications?.length || 0} applicants
-                  </span>
-                </div>
-              </div>
-
-              {/* Tags and Actions */}
-              <div className={`flex items-center justify-between pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
-                <div className="flex gap-2 flex-wrap">
-                  {campaign.category && (
-                    <span className={`px-3 py-1 rounded-full text-xs ${
-                      isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {campaign.category}
-                    </span>
-                  )}
-                  {campaign.targetAudience?.platforms?.slice(0, 2).map(platform => (
-                    <span key={platform} className={`px-3 py-1 rounded-full text-xs capitalize ${
-                      isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {platform}
-                    </span>
-                  ))}
-                </div>
-                <button
-                  onClick={() => handleApply(campaign)}
-                  className="bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white px-4 py-2 rounded-lg text-sm hover:opacity-90 flex items-center"
-                >
-                  Apply Now
-                </button>
-              </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="
+            relative overflow-hidden flex flex-col items-center justify-center py-32 rounded-[3rem] border-2 border-dashed transition-all
+          " style={{
+            backgroundColor: isDark ? 'rgba(24, 24, 27, 0.2)' : 'rgba(250, 250, 250, 0.5)',
+            borderColor: isDark ? '#27272a' : '#e4e4e7'
+          }}>
+            {/* Decorative Grid Pattern Background */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+            
+            <div className="p-5 rounded-3xl mb-6" style={{ backgroundColor: isDark ? '#18181b' : 'white', boxShadow: isDark ? 'none' : '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+              <Briefcase className="w-8 h-8 stroke-[1.5px]" style={{ color: '#71717a' }} />
             </div>
-          );
-        }) : (
-          <div className="col-span-2 text-center py-12">
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No campaigns found</p>
+            
+            <h3 className="text-xl font-bold tracking-tight mb-2" style={{ color: isDark ? 'white' : 'black' }}>No active opportunities</h3>
+            <p className="text-sm max-w-xs text-center mb-10 leading-relaxed" style={{ color: isDark ? '#71717a' : '#a1a1aa' }}>
+              Your command center is awaiting new mission parameters. Modify your filters to discover more opportunities.
+            </p>
           </div>
         )}
       </div>
 
-      {/* Pagination */}
-      {campaigns.length > 0 && (
-        <div className={`flex items-center justify-center gap-4 mt-6 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-            disabled={pagination.page === 1}
-            className={`px-4 py-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-              isDark
-                ? 'border-gray-600 hover:bg-gray-700/50'
-                : 'border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            Previous
-          </button>
-          <span className={`px-4 py-2 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Page {pagination.page} of {pagination.pages}</span>
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-            disabled={pagination.page === pagination.pages}
-            className={`px-4 py-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-              isDark
-                ? 'border-gray-600 hover:bg-gray-700/50'
-                : 'border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            Next
-          </button>
+
+      {/* Apply Modal (Keep Logic) */}
+    <Modal 
+  isOpen={showApplyModal} 
+  onClose={() => setShowApplyModal(false)} 
+  title="Mission Protocol: Submit Proposal" 
+  size="lg"
+>
+  {selectedCampaign && (
+    <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+      
+      {/* Header: Tactical Briefing Box */}
+      <div className={`
+        relative p-6 rounded-[2rem] border overflow-hidden transition-all duration-700
+        ${isDark 
+          ? 'bg-zinc-900/80 border-zinc-800 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
+          : 'bg-zinc-50 border-zinc-200'}
+      `}>
+        {/* Subtle Decorative Grid background */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '16px 16px' }} />
+        
+        <div className="relative z-10">
+          <p className="text-[9px] font-black uppercase tracking-[0.3em] text-indigo-500 mb-2 animate-pulse">
+            Target Partner Identified
+          </p>
+          <h3 className={`font-black text-2xl tracking-tighter ${isDark ? 'text-white' : 'text-black'}`}>
+            {selectedCampaign.brandId?.brandName}
+          </h3>
+          <p className={`text-[11px] font-mono mt-1 opacity-60 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            REF: {selectedCampaign.title}
+          </p>
         </div>
-      )}
+      </div>
 
-      {/* Apply Modal */}
-      <Modal
-        isOpen={showApplyModal}
-        onClose={() => setShowApplyModal(false)}
-        title="Apply to Campaign"
-        size="lg"
-      >
-        {selectedCampaign && (
-          <div className="space-y-4">
-            <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-              <h3 className={`font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{selectedCampaign.title}</h3>
-              <p className={`text-sm mt-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{selectedCampaign.brandId?.brandName}</p>
-            </div>
-
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Your Proposal *
-              </label>
-              <textarea
-                rows="5"
-                value={applicationData.proposal}
-                onChange={(e) => setApplicationData({...applicationData, proposal: e.target.value})}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDark 
-                    ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                }`}
-                placeholder="Explain why you're a great fit for this campaign, your ideas, and how you'll deliver value..."
-              />
-            </div>
-
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Your Rate ($)
-              </label>
-              <input
-                type="number"
-                value={applicationData.rate}
-                onChange={(e) => setApplicationData({...applicationData, rate: e.target.value})}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDark 
-                    ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                }`}
-                placeholder="Enter your rate"
-              />
-            </div>
-
-            <div className={`p-4 rounded-lg ${isDark ? 'bg-yellow-900/30 border border-yellow-700/30' : 'bg-yellow-50'}`}>
-              <p className={`text-sm ${isDark ? 'text-yellow-300' : 'text-yellow-800'}`}>
-                <strong>Tip:</strong> Personalize your proposal. Mention specific ideas for this campaign to increase your chances.
-              </p>
-            </div>
+      <div className="space-y-6">
+        {/* Pitch Details Field */}
+        <div className="space-y-3 group">
+          <div className="flex justify-between items-center px-1">
+            <label className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${isDark ? 'text-zinc-600 group-focus-within:text-white' : 'text-zinc-400 group-focus-within:text-black'}`}>
+              Creative Strategy & Pitch
+            </label>
+            <span className="text-[9px] font-mono opacity-40 italic">Required Input</span>
           </div>
-        )}
-
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowApplyModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSubmitApplication}>
-            Submit Application
-          </Button>
+          <textarea
+            rows="5"
+            value={applicationData.proposal}
+            onChange={(e) => setApplicationData({...applicationData, proposal: e.target.value})}
+            className={`
+              w-full p-5 text-[13px] leading-relaxed rounded-[1.5rem] border outline-none transition-all duration-500
+              ${isDark 
+                ? 'bg-zinc-800/50 border-zinc-700 focus:border-zinc-400 focus:bg-zinc-800' 
+                : 'bg-white border-zinc-200 focus:border-black shadow-sm'}
+            `}
+            placeholder="Outline your creative angle and execution strategy..."
+          />
         </div>
-      </Modal>
+
+        {/* Compensation Field */}
+        <div className="space-y-3 group">
+          <label className={`text-[10px] font-black uppercase tracking-[0.2em] px-1 transition-colors ${isDark ? 'text-zinc-600 group-focus-within:text-white' : 'text-zinc-400 group-focus-within:text-black'}`}>
+            Requested Settlement (USD)
+          </label>
+          <div className="relative">
+            <span className="absolute left-5 top-1/2 -translate-y-1/2 font-mono text-zinc-500 font-bold">$</span>
+            <input
+              type="number"
+              value={applicationData.rate}
+              onChange={(e) => setApplicationData({...applicationData, rate: e.target.value})}
+              className={`
+                w-full pl-10 p-5 text-lg font-mono font-bold tracking-tighter rounded-[1.5rem] border outline-none transition-all duration-500
+                ${isDark 
+                  ? 'bg-zinc-800/50 border-zinc-700 focus:border-zinc-400 focus:bg-zinc-800 text-white' 
+                  : 'bg-white border-zinc-200 focus:border-black text-black'}
+              `}
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Action Footer */}
+      <div className="flex gap-4 pt-6">
+        <button 
+          onClick={() => setShowApplyModal(false)} 
+          className={`
+            flex-1 py-4 text-[10px] font-black uppercase tracking-[0.25em] border rounded-2xl transition-all duration-300
+            ${isDark 
+              ? 'border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-white' 
+              : 'border-zinc-200 text-zinc-400 hover:bg-zinc-50 hover:text-black'}
+          `}
+        >
+          Abort
+        </button>
+        
+        <button 
+          onClick={handleSubmitApplication} 
+          className={`
+            flex-[2] relative overflow-hidden py-4 text-[10px] font-black uppercase tracking-[0.25em] rounded-2xl transition-all duration-500 group/submit
+            ${isDark 
+              ? 'bg-white text-white hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]' 
+              : 'bg-black text-white hover:bg-zinc-800 shadow-xl shadow-black/20'}
+          `}
+        >
+          {/* Internal Shimmer Animation */}
+          <div className="absolute inset-0 w-full h-full transform -translate-x-full group-hover/submit:translate-x-full transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-zinc-400/20 to-transparent" />
+          
+          <span className="relative z-10 flex items-center justify-center gap-2">
+            Transmit Proposal <ArrowUpRight size={14} strokeWidth={3} />
+          </span>
+        </button>
+      </div>
+    </div>
+  )}
+</Modal>
     </div>
   );
 };

@@ -1,11 +1,10 @@
 // components/Layout/Footer.js - COMPLETE FIXED VERSION
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useGlobalSettings } from '../../context/GlobalSettingsContext';
 import {
   Facebook,
-  Twitter,
   Instagram,
-  Linkedin,
   Youtube,
   Mail,
   Phone,
@@ -30,6 +29,7 @@ import {
 } from 'lucide-react';
 
 const Footer = () => {
+  const { getPlatformName, getSupportEmail } = useGlobalSettings();
   const currentYear = new Date().getFullYear();
 
   // ==================== FOOTER LINKS ====================
@@ -77,18 +77,18 @@ const Footer = () => {
   };
 
   // ==================== SOCIAL LINKS ====================
+  const platformName = getPlatformName().toLowerCase();
   const socialLinks = [
-    { icon: Facebook, href: 'https://facebook.com/influencex', label: 'Facebook', color: 'hover:text-blue-600' },
-    { icon: Twitter, href: 'https://twitter.com/influencex', label: 'Twitter', color: 'hover:text-blue-400' },
-    { icon: Instagram, href: 'https://instagram.com/influencex', label: 'Instagram', color: 'hover:text-pink-600' },
-    { icon: Linkedin, href: 'https://linkedin.com/company/influencex', label: 'LinkedIn', color: 'hover:text-blue-700' },
-    { icon: Youtube, href: 'https://youtube.com/@influencex', label: 'YouTube', color: 'hover:text-red-600' },
-    { icon: Github, href: 'https://github.com/influencex', label: 'GitHub', color: 'hover:text-gray-900' }
+    { icon: Facebook, href: `https://facebook.com/${platformName}`, label: 'Facebook', color: 'hover:text-blue-600' },
+    { icon: Instagram, href: `https://instagram.com/${platformName}`, label: 'Instagram', color: 'hover:text-pink-600' },
+    { icon: Youtube, href: `https://youtube.com/@${platformName}`, label: 'YouTube', color: 'hover:text-red-600' },
+    { icon: Github, href: `https://github.com/${platformName}`, label: 'GitHub', color: 'hover:text-gray-900' }
   ];
 
   // ==================== CONTACT INFO ====================
+  const supportEmail = getSupportEmail();
   const contactInfo = [
-    { icon: Mail, text: 'support@influencex.com', href: 'mailto:support@influencex.com' },
+    { icon: Mail, text: supportEmail, href: `mailto:${supportEmail}` },
     { icon: Phone, text: '+1 (555) 123-4567', href: 'tel:+15551234567' },
     { icon: MapPin, text: 'San Francisco, CA', href: 'https://maps.google.com/?q=San+Francisco+CA' }
   ];
@@ -121,7 +121,7 @@ const Footer = () => {
                 <span className="text-white font-bold text-xl">IX</span>
               </div>
               <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                InfluenceX
+                {getPlatformName()}
               </span>
             </Link>
             
@@ -240,7 +240,7 @@ const Footer = () => {
         <div className="border-t border-gray-800 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-gray-400 text-sm">
-              © {currentYear} InfluenceX. All rights reserved.
+              © {currentYear} {getPlatformName()}. All rights reserved.
             </p>
             
             <div className="flex flex-wrap gap-6 justify-center">

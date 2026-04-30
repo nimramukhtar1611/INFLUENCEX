@@ -9,30 +9,12 @@ const crypto = require('crypto');
 const emailService = require('../services/emailService');
 const smsService = require('../services/SMSService');
 const { setTwoFASession, getTwoFASession, incrementAttempts, resetAttempts, MAX_ATTEMPTS } = require('../utils/twoFASessionStore');
-const { generateToken, generateRefreshToken, hashToken } = require('../utils/jwtUtils');
+const { generateTokenPair, generateToken, generateRefreshToken, hashToken } = require('../utils/jwtUtils');
 const { isValidEmail, isValidPhone, isValidPassword } = require('../utils/validators');
 const { catchAsync } = require('../utils/catchAsync');
 
 // ==================== HELPER FUNCTIONS ====================
 
-/**
- * Generate JWT tokens for user
- */
-const generateTokenPair = (user) => {
-  const accessToken = jwt.sign(
-    { id: user._id, userType: user.userType, email: user.email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || '15m' }
-  );
-
-  const refreshToken = jwt.sign(
-    { id: user._id, version: user.tokenVersion || 1 },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d' }
-  );
-
-  return { accessToken, refreshToken };
-};
 
 /**
  * Normalize user response (remove sensitive fields)
@@ -54,12 +36,17 @@ const normalizeUserResponse = (user) => {
 
 // ==================== REGISTER ====================
 exports.register = catchAsync(async (req, res) => {
+  // Fix HTML entity encoding for website field
+  if (req.body.website) {
+    req.body.website = req.body.website.replace(/&#x2F;/g, '/').replace(/&amp;/g, '&');
+  }
+  
   const sanitizedBodyForLog = {
     ...req.body,
     password: req.body?.password ? '***REDACTED***' : undefined,
     captchaToken: req.body?.captchaToken ? '***REDACTED***' : undefined,
   };
-  console.log('📝 Register request body:', JSON.stringify(sanitizedBodyForLog));
+  console.log('Register request body:', JSON.stringify(sanitizedBodyForLog));
   const {
     email,
     password,
@@ -76,6 +63,11 @@ exports.register = catchAsync(async (req, res) => {
     niches,
   } = req.body;
 
+  // Get security settings for dynamic validation
+  const Settings = require('../models/Settings');
+  const settings = await Settings.getSettings();
+  const securitySettings = settings.security || {};
+
   // Validate required fields
   if (!email || !password || !fullName || !userType) {
     return res.status(400).json({
@@ -89,11 +81,35 @@ exports.register = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid email format' });
   }
 
-  // Validate password strength
-  if (!isValidPassword(password)) {
+  // Dynamic password validation based on admin settings
+  const passwordMinLength = securitySettings.passwordMinLength || 8;
+  const requireUppercase = securitySettings.passwordRequireUppercase ?? true;
+  const requireLowercase = securitySettings.passwordRequireLowercase ?? true;
+  const requireNumbers = securitySettings.passwordRequireNumbers ?? true;
+  const requireSymbols = securitySettings.passwordRequireSymbols ?? false;
+
+  // Build password validation error message dynamically
+  const passwordRequirements = [];
+  if (password.length < passwordMinLength) {
+    passwordRequirements.push(`at least ${passwordMinLength} characters`);
+  }
+  if (requireUppercase && !/[A-Z]/.test(password)) {
+    passwordRequirements.push('uppercase letter');
+  }
+  if (requireLowercase && !/[a-z]/.test(password)) {
+    passwordRequirements.push('lowercase letter');
+  }
+  if (requireNumbers && !/[0-9]/.test(password)) {
+    passwordRequirements.push('number');
+  }
+  if (requireSymbols && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    passwordRequirements.push('special character');
+  }
+
+  if (passwordRequirements.length > 0) {
     return res.status(400).json({
       success: false,
-      error: 'Password must be at least 8 characters with uppercase, lowercase, and a number',
+      error: `Password must contain ${passwordRequirements.join(', ')}`,
     });
   }
 
@@ -103,60 +119,54 @@ exports.register = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Email already registered' });
   }
 
-  // Base user data
-  const userData = {
+  // Get user approval settings
+  const userApprovalSettings = settings.userApproval || {};
+  
+  // Determine user status based on auto-approval settings
+  const autoApprove = userType === 'brand' 
+    ? userApprovalSettings.autoApproveBrands 
+    : userApprovalSettings.autoApproveCreators;
+
+  // Create base user object with common fields
+  const userObject = {
     email,
     password,
     fullName,
     userType,
     phone: phone || undefined,
-    profilePicture: profilePicture || 'default-profile.jpg',
-    coverPicture: coverPicture || 'default-cover.jpg',
-    emailVerified: false,
-    status: 'pending',
+    profilePicture: profilePicture || undefined,
+    coverPicture: coverPicture || undefined,
+    emailVerified: false, // Will be verified via OTP
+    phoneVerified: false,
+    status: autoApprove ? 'active' : 'pending',
+    isVerified: autoApprove,
+    verifiedAt: autoApprove ? new Date() : undefined,
+    verificationMethod: autoApprove ? 'automatic' : undefined,
+    verificationRequestedAt: autoApprove ? undefined : new Date(),
+    createdAt: new Date()
   };
 
-  let user;
-
+  // Add brand-specific fields if userType is brand
   if (userType === 'brand') {
-    // Brand-specific validation
-    if (!brandName || !industry) {
-      return res.status(400).json({
-        success: false,
-        error: 'Brand name and industry are required for brand accounts',
-      });
-    }
-
-    user = new Brand({
-      ...userData,
-      brandName,
-      industry,
-      website: website || '',
-    });
-  } else if (userType === 'creator') {
-    // Creator-specific validation
-    if (!displayName && !fullName) {
-      return res.status(400).json({
-        success: false,
-        error: 'Display name is required for creator accounts',
-      });
-    }
-
-    user = new Creator({
-      ...userData,
-      displayName: displayName || fullName,
-      handle: handle || email.split('@')[0],
-      niches: niches || [],
-    });
-  } else {
-    // Admin accounts should not be created via public registration
-    return res.status(400).json({ success: false, error: 'Invalid user type' });
+    userObject.brandName = brandName;
+    userObject.industry = industry;
+    userObject.website = website;
   }
+
+  // Add creator-specific fields if userType is creator
+  if (userType === 'creator') {
+    userObject.displayName = displayName;
+    userObject.handle = handle;
+    userObject.niches = niches;
+  }
+
+  // Create user
+  const user = new User(userObject);
 
   await user.save();
 
   // Generate tokens
-  const { accessToken, refreshToken } = generateTokenPair(user);
+  const { accessToken, refreshToken } = await generateTokenPair(user);
 
   user.refreshToken = refreshToken;
   await user.save();
@@ -168,76 +178,405 @@ exports.register = catchAsync(async (req, res) => {
     console.warn('Welcome email failed:', emailError.message);
   }
 
+  // Notify admins about new user registration
+  try {
+    const adminNotificationService = require('../services/adminNotificationService');
+    await adminNotificationService.notifyNewUser({
+      user,
+      userType,
+      autoApproved: autoApprove
+    });
+  } catch (notificationError) {
+    console.warn('Admin notification failed:', notificationError.message);
+  }
+
+  // If not auto-approved, trigger verification process
+  if (!autoApprove) {
+    try {
+      const userVerificationService = require('../services/userVerificationService');
+      await userVerificationService.processVerification(user._id, userType);
+    } catch (verificationError) {
+      console.warn('Verification process failed:', verificationError.message);
+    }
+  }
+
+  // Set HttpOnly cookies for tokens
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+  });
+
   res.status(201).json({
     success: true,
-    message: 'User registered successfully',
-    token: accessToken,
-    refreshToken,
+    message: autoApprove ? 'Registration successful' : 'Registration successful. Verification pending.',
     user: normalizeUserResponse(user),
+    accessToken,
+    token: accessToken, // For backward compatibility
+    refreshToken, // Keep in response for backward compatibility
+    verificationStatus: {
+      isVerified: autoApprove,
+      requiresVerification: !autoApprove,
+      method: autoApprove ? 'automatic' : 'manual'
+    }
   });
 });
 
 // ==================== LOGIN ====================
 exports.login = catchAsync(async (req, res) => {
-  const { email, password, userType, captchaToken } = req.body;
+  const { email, password, userType } = req.body;
 
-  if (!email || !password || !userType) {
-    return res.status(400).json({ success: false, error: 'Email, password, and user type are required' });
+  // Get security settings for dynamic enforcement
+  const Settings = require('../models/Settings');
+  const settings = await Settings.getSettings();
+  const securitySettings = settings.security || {};
+
+  // Validate input
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Email and password are required' });
   }
 
-  // Find user
-  const user = await User.findOne({ email, userType }).select(
-    '+password +refreshToken +twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes'
-  );
+  // Validate email format
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ success: false, error: 'Invalid email format' });
+  }
 
-  if (!user || !(await user.matchPassword(password))) {
+  // Find user and include password for comparison - auto-detect user type
+  let user = await User.findOne({ email }).select('+password');
+  
+  // If not found in User collection, try Brand and Creator collections
+  if (!user) {
+    const Brand = require('../models/Brand');
+    const Creator = require('../models/Creator');
+    
+    user = await Brand.findOne({ email }).select('+password');
+    if (!user) {
+      user = await Creator.findOne({ email }).select('+password');
+    }
+  }
+
+  if (!user) {
     return res.status(401).json({ success: false, error: 'Invalid email or password' });
   }
 
-  // Check account status
-  if (user.status === 'suspended') {
-    return res.status(403).json({ success: false, error: 'Account is suspended. Contact support.' });
-  }
-  if (user.status === 'deleted') {
-    return res.status(403).json({ success: false, error: 'Account has been deleted.' });
+  // Check if user is active based on status field
+  if (user.status === 'suspended' || user.status === 'deleted') {
+    return res.status(401).json({ success: false, error: 'Account is deactivated' });
   }
 
-  // 2FA check
-  if (user.twoFactorEnabled) {
-    setTwoFASession(user._id);
-    return res.status(200).json({
-      success: true,
-      require2FA: true,
-      userId: user._id,
-      message: '2FA code required',
-      expiresIn: 300,
+  // Check account lockout using dynamic settings
+  const maxAttempts = securitySettings.maxLoginAttempts || 5;
+  const lockoutDuration = (securitySettings.lockoutDuration || 30) * 60 * 1000; // Convert to milliseconds
+
+  if (user.lockUntil && user.lockUntil > Date.now()) {
+    const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / (60 * 1000));
+    return res.status(401).json({
+      success: false,
+      error: `Account locked. Try again in ${minutesLeft} minutes.`
     });
   }
 
-  // Update last login and reset attempts
-  user.lastLogin = new Date();
+  // Check password
+  const isPasswordValid = await user.matchPassword(password);
+  if (!isPasswordValid) {
+    // Increment attempts and potentially lock account
+    user.loginAttempts = (user.loginAttempts || 0) + 1;
+    if (user.loginAttempts >= maxAttempts) {
+      user.lockUntil = Date.now() + lockoutDuration;
+    }
+    
+    await user.save();
+    return res.status(401).json({ success: false, error: 'Invalid email or password' });
+  }
+
+  // Reset login attempts on successful login
   user.loginAttempts = 0;
   user.lockUntil = undefined;
+  await user.save();
 
-  const { accessToken, refreshToken } = generateTokenPair(user);
+  // Generate tokens
+  const { accessToken, refreshToken } = await generateTokenPair(user);
+
   user.refreshToken = refreshToken;
   await user.save();
+
+  // Set HttpOnly cookies for tokens
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+  });
 
   res.json({
     success: true,
     message: 'Login successful',
-    token: accessToken,
-    refreshToken,
     user: normalizeUserResponse(user),
+    accessToken,
+    token: accessToken, // For backward compatibility
+    refreshToken // Keep in response for backward compatibility
   });
+});
+
+// ==================== REFRESH TOKEN ====================
+exports.refreshToken = catchAsync(async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ success: false, error: 'Refresh token required' });
+  }
+
+  try {
+    // Verify refresh token
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    
+    // Find user with additional safety checks
+    let user;
+    try {
+      user = await User.findById(decoded.id).select('+refreshToken');
+    } catch (dbError) {
+      console.error('Database error during refresh:', dbError);
+      return res.status(500).json({ success: false, error: 'Server error during token refresh' });
+    }
+
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'User not found' });
+    }
+
+    if (!user.refreshToken || user.refreshToken !== refreshToken) {
+      return res.status(401).json({ success: false, error: 'Invalid refresh token' });
+    }
+
+    // Check if user is still active based on status field
+    if (user.status === 'suspended' || user.status === 'deleted') {
+      return res.status(401).json({ success: false, error: 'Account is deactivated' });
+    }
+
+    // Generate new tokens
+    const { accessToken, refreshToken: newRefreshToken } = await generateTokenPair(user);
+
+    // Update user with new refresh token
+    try {
+      user.refreshToken = newRefreshToken;
+      await user.save();
+    } catch (saveError) {
+      console.error('Error saving refresh token:', saveError);
+      return res.status(500).json({ success: false, error: 'Failed to update refresh token' });
+    }
+
+    // Set HttpOnly cookies for new tokens
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+
+  res.cookie('refreshToken', newRefreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+  });
+
+  res.json({
+    success: true,
+    accessToken,
+    token: accessToken, // For backward compatibility
+    refreshToken: newRefreshToken // Keep in response for backward compatibility
+  });
+  } catch (jwtError) {
+    console.error('JWT verification error:', jwtError);
+    return res.status(401).json({ success: false, error: 'Invalid or expired refresh token' });
+  }
+});
+
+  // ==================== LOGOUT ====================
+exports.logout = catchAsync(async (req, res) => {
+  try {
+    // Clear refresh token from user document
+    if (req.user) {
+      req.user.refreshToken = undefined;
+      await req.user.save();
+    }
+  } catch (error) {
+    // Log error but don't fail the logout
+    console.error('Logout error:', error);
+  }
+  
+  // Clear HttpOnly cookies
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken');
+  
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// ==================== FORGOT PASSWORD ====================
+exports.forgotPassword = catchAsync(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ success: false, error: 'Email is required' });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    // Don't reveal if email exists or not
+    return res.json({ success: true, message: 'Password reset email sent' });
+  }
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+  user.resetPasswordToken = hashedToken;
+  user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+  await user.save();
+
+  try {
+    await emailService.sendPasswordResetEmail(user.email, resetToken);
+  } catch (error) {
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+    
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send password reset email' 
+    });
+  }
+
+  res.json({ success: true, message: 'Password reset email sent' });
+});
+
+// ==================== RESET PASSWORD ====================
+exports.resetPassword = catchAsync(async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ success: false, error: 'Reset token is required' });
+  }
+
+  if (!newPassword) {
+    return res.status(400).json({ success: false, error: 'New password is required' });
+  }
+
+  // Hash token and find user
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  const user = await User.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpire: { $gt: Date.now() }
+  });
+
+  if (!user) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Password reset token is invalid or has expired' 
+    });
+  }
+
+  // Set new password
+  user.password = newPassword;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
+  // Increment token version to invalidate all sessions
+  user.tokenVersion = (user.tokenVersion || 1) + 1;
+  await user.save();
+
+  res.json({ success: true, message: 'Password reset successful' });
+});
+
+// ==================== VERIFY EMAIL ====================
+exports.verifyEmail = catchAsync(async (req, res) => {
+  const { token } = req.params;
+
+  try {
+    // Hash token and find user
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email verification token is invalid or has expired' 
+      });
+    }
+
+    // Verify email
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Email verified successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Email verification failed' });
+  }
+});
+
+// ==================== CHANGE PASSWORD ====================
+exports.changePassword = catchAsync(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Current password and new password are required' 
+    });
+  }
+
+  try {
+    // Get user with password
+    const user = await User.findById(req.user.id).select('+password');
+    
+    // Check current password
+    const isCurrentPasswordValid = await user.matchPassword(currentPassword);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ success: false, error: 'Current password is incorrect' });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.tokenVersion = (user.tokenVersion || 1) + 1;
+    // Clear the stored refresh token to force re‑login on all devices
+    user.refreshToken = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Password change failed' });
+  }
 });
 
 // ==================== GET ME ====================
 exports.getMe = catchAsync(async (req, res) => {
+  console.log("Auth header:", req.headers.authorization);
+  console.log("Secret length:", process.env.JWT_SECRET?.length);
+  console.log("JWT_SECRET exists:", !!process.env.JWT_SECRET);
+  
   let user = await User.findById(req.user._id).select('-password -refreshToken');
 
   // If not found in User (maybe admin), check Admin model
   if (!user) {
+    const Admin = require('../models/Admin');
     const admin = await Admin.findById(req.user._id).select('-password -twoFactorSecret');
     if (admin) {
       return res.json({
@@ -254,205 +593,42 @@ exports.getMe = catchAsync(async (req, res) => {
   res.json({ success: true, user: normalizeUserResponse(user) });
 });
 
-// ==================== REFRESH TOKEN ====================
-exports.refreshToken = catchAsync(async (req, res) => {
-  const { refreshToken } = req.body;
-
-  if (!refreshToken) {
-    return res.status(401).json({ success: false, error: 'Refresh token required' });
-  }
-
-  try {
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(decoded.id).select('+refreshToken');
-
-    if (!user || user.refreshToken !== refreshToken) {
-      return res.status(401).json({ success: false, error: 'Invalid refresh token' });
-    }
-
-    // Increment token version to invalidate old refresh tokens
-    user.tokenVersion = (user.tokenVersion || 1) + 1;
-    const { accessToken, refreshToken: newRefreshToken } = generateTokenPair(user);
-    user.refreshToken = newRefreshToken;
-    await user.save();
-
-    res.json({
-      success: true,
-      token: accessToken,
-      refreshToken: newRefreshToken,
-    });
-  } catch (error) {
-    return res.status(401).json({ success: false, error: 'Invalid or expired refresh token' });
-  }
-});
-
-// ==================== LOGOUT ====================
-exports.logout = catchAsync(async (req, res) => {
-  if (req.user) {
-    // Increment token version to invalidate all tokens
-    req.user.tokenVersion = (req.user.tokenVersion || 1) + 1;
-    req.user.refreshToken = undefined;
-    await req.user.save();
-  }
-  res.json({ success: true, message: 'Logged out successfully' });
-});
-
-// ==================== FORGOT PASSWORD ====================
-exports.forgotPassword = catchAsync(async (req, res) => {
+// ==================== SEND EMAIL OTP ====================
+exports.sendOTP = catchAsync(async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
     return res.status(400).json({ success: false, error: 'Email is required' });
   }
 
-  const user = await User.findOne({ email });
-
-  if (!user) {
-    // Don't reveal if user exists for security
-    return res.json({
-      success: true,
-      message: 'If that email exists, a reset link has been sent.',
-    });
-  }
-
-  const resetToken = crypto.randomBytes(32).toString('hex');
-  const hashedToken = hashToken(resetToken);
-
-  user.resetPasswordToken = hashedToken;
-  user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
-  await user.save();
-
   try {
-    const emailResult = await emailService.sendPasswordResetEmail(user.email, user.fullName, resetToken);
-    if (!emailResult?.success) {
-      console.warn('Password reset email not delivered:', {
-        to: user.email,
-        error: emailResult?.error,
-        rejected: emailResult?.rejected,
-        pending: emailResult?.pending,
-      });
+    const TempOTP = require('../models/TempOTP');
+    const crypto = require('crypto');
+    const emailService = require('../services/emailService');
+
+    // Check for existing valid OTP
+    const existing = await TempOTP.findOne({ email, expiry: { $gt: new Date() } });
+    if (existing) {
+      return res.json({ success: true, message: 'OTP already sent, please check your email' });
     }
-  } catch (emailError) {
-    console.warn('Password reset email failed:', emailError.message);
-  }
 
-  res.json({
-    success: true,
-    message: 'If that email exists, a reset link has been sent.',
-  });
-});
-
-// ==================== RESET PASSWORD ====================
-exports.resetPassword = catchAsync(async (req, res) => {
-  const { token, newPassword } = req.body;
-
-  if (!token || !newPassword) {
-    return res.status(400).json({ success: false, error: 'Token and new password are required' });
-  }
-
-  if (!isValidPassword(newPassword)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Password must be at least 8 characters with uppercase, lowercase, and a number',
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    await TempOTP.create({ 
+      email, 
+      otp, 
+      expiry: new Date(Date.now() + 10 * 60 * 1000) 
     });
-  }
 
-  const hashedToken = hashToken(token);
-  const user = await User.findOne({
-    resetPasswordToken: hashedToken,
-    resetPasswordExpire: { $gt: Date.now() },
-  });
-
-  if (!user) {
-    return res.status(400).json({ success: false, error: 'Invalid or expired token' });
-  }
-
-  user.password = newPassword;
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpire = undefined;
-  // Increment token version to invalidate all sessions
-  user.tokenVersion = (user.tokenVersion || 1) + 1;
-  await user.save();
-
-  res.json({ success: true, message: 'Password reset successful' });
-});
-
-// ==================== VERIFY EMAIL ====================
-exports.verifyEmail = catchAsync(async (req, res) => {
-  const { token } = req.body;
-
-  if (!token) {
-    return res.status(400).json({ success: false, error: 'Token is required' });
-  }
-
-  const hashedToken = hashToken(token);
-  const user = await User.findOne({
-    emailVerificationToken: hashedToken,
-    emailVerificationExpire: { $gt: Date.now() },
-  });
-
-  if (!user) {
-    return res.status(400).json({ success: false, error: 'Invalid or expired token' });
-  }
-
-  user.emailVerified = true;
-  user.emailVerificationToken = undefined;
-  user.emailVerificationExpire = undefined;
-  await user.save();
-
-  res.json({ success: true, message: 'Email verified successfully' });
-});
-
-// ==================== CHANGE PASSWORD ====================
-exports.changePassword = catchAsync(async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ success: false, error: 'Current and new password are required' });
-  }
-
-  if (!isValidPassword(newPassword)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Password must be at least 8 characters with uppercase, lowercase, and a number',
-    });
-  }
-
-  const user = await User.findById(req.user._id).select('+password');
-  const isMatch = await user.matchPassword(currentPassword);
-
-  if (!isMatch) {
-    return res.status(401).json({ success: false, error: 'Current password is incorrect' });
-  }
-
-  user.password = newPassword;
-  // Increment token version to invalidate all sessions
-  user.tokenVersion = (user.tokenVersion || 1) + 1;
-  // Clear the stored refresh token to force re‑login on all devices
-  user.refreshToken = undefined;
-  await user.save();
-
-  res.json({ success: true, message: 'Password changed successfully' });
-});
-
-// ==================== SEND EMAIL OTP ====================
-exports.sendOTP = catchAsync(async (req, res) => {
-  const { email } = req.body;
-  // Check for existing valid OTP
-  const existing = await TempOTP.findOne({ email, expiry: { $gt: new Date() } });
-  if (existing) {
-    return res.json({ success: true, message: 'OTP already sent, please check your email' });
-  }
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  await TempOTP.create({ email, otp, expiry: new Date(Date.now() + 10 * 60 * 1000) });
-
-  try {
+    // Send OTP email
     await emailService.sendOTP(email, null, otp);
-  } catch (emailError) {
-    console.warn('OTP email failed:', emailError.message);
-  }
 
-  res.json({ success: true, message: 'OTP sent successfully' });
+    res.json({ success: true, message: 'OTP sent successfully' });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send OTP' });
+  }
 });
 
 // ==================== VERIFY EMAIL OTP ====================
@@ -463,19 +639,26 @@ exports.verifyOTP = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Email and OTP are required' });
   }
 
-  const otpRecord = await TempOTP.findOne({
-    email,
-    otp,
-    expiry: { $gt: new Date() },
-  });
+  try {
+    const TempOTP = require('../models/TempOTP');
 
-  if (!otpRecord) {
-    return res.status(400).json({ success: false, error: 'Invalid or expired OTP' });
+    const otpRecord = await TempOTP.findOne({
+      email,
+      otp,
+      expiry: { $gt: new Date() },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired OTP' });
+    }
+
+    await TempOTP.deleteOne({ _id: otpRecord._id });
+
+    res.json({ success: true, message: 'OTP verified successfully' });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify OTP' });
   }
-
-  await TempOTP.deleteOne({ _id: otpRecord._id });
-
-  res.json({ success: true, message: 'OTP verified successfully' });
 });
 
 // ==================== SEND PHONE OTP ====================
@@ -486,25 +669,36 @@ exports.sendPhoneOTP = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Phone number is required' });
   }
 
-  if (!isValidPhone(phone)) {
-    return res.status(400).json({ success: false, error: 'Invalid phone number format' });
-  }
-
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-  await TempOTP.create({
-    email: phone, // using email field as key for phone
-    otp,
-    expiry: new Date(Date.now() + 10 * 60 * 1000),
-  });
-
   try {
-    await smsService.sendOTP(phone, otp);
-  } catch (smsError) {
-    console.warn('SMS OTP failed:', smsError.message);
-  }
+    const TempOTP = require('../models/TempOTP');
+    const crypto = require('crypto');
+    const smsService = require('../services/SMSService');
 
-  res.json({ success: true, message: 'OTP sent successfully' });
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    await TempOTP.create({
+      email: phone, // using email field as key for phone
+      otp,
+      expiry: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    // Send SMS OTP
+    const smsResult = await smsService.sendOTP(phone, otp);
+    
+    if (!smsResult.success) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send SMS OTP',
+        error: smsResult.error 
+      });
+    }
+
+    res.json({ success: true, message: 'OTP sent successfully' });
+  } catch (error) {
+    console.error('Send Phone OTP error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send OTP' });
+  }
 });
 
 // ==================== VERIFY PHONE OTP ====================
@@ -515,22 +709,45 @@ exports.verifyPhoneOTP = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Phone and OTP are required' });
   }
 
-  const otpRecord = await TempOTP.findOne({
-    email: phone,
-    otp,
-    expiry: { $gt: new Date() },
-  });
+  try {
+    const TempOTP = require('../models/TempOTP');
 
-  if (!otpRecord) {
-    return res.status(400).json({ success: false, error: 'Invalid or expired OTP' });
+    const otpRecord = await TempOTP.findOne({
+      email: phone,
+      otp,
+      expiry: { $gt: new Date() },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired OTP' });
+    }
+
+    await TempOTP.deleteOne({ _id: otpRecord._id });
+
+    // Update user phone verified if logged in
+    if (req.user) {
+      await User.findByIdAndUpdate(req.user._id, { phoneVerified: true, phone });
+    }
+
+    res.json({ success: true, message: 'Phone verified successfully' });
+  } catch (error) {
+    console.error('Verify Phone OTP error:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify OTP' });
   }
-
-  await TempOTP.deleteOne({ _id: otpRecord._id });
-
-  // Update user phone verified if logged in
-  if (req.user) {
-    await User.findByIdAndUpdate(req.user._id, { phoneVerified: true, phone });
-  }
-
-  res.json({ success: true, message: 'Phone verified successfully' });
 });
+
+module.exports = {
+  register: exports.register,
+  login: exports.login,
+  logout: exports.logout,
+  refreshToken: exports.refreshToken,
+  forgotPassword: exports.forgotPassword,
+  resetPassword: exports.resetPassword,
+  verifyEmail: exports.verifyEmail,
+  changePassword: exports.changePassword,
+  getMe: exports.getMe,
+  sendOTP: exports.sendOTP,
+  verifyOTP: exports.verifyOTP,
+  sendPhoneOTP: exports.sendPhoneOTP,
+  verifyPhoneOTP: exports.verifyPhoneOTP
+};

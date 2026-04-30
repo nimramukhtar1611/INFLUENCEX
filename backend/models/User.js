@@ -31,10 +31,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  age: {
+    type: Number,
+    min: 13,
+    max: 100
+  },
   profilePicture: {
     type: String,
     default: 'default-profile.jpg'
   },
+  profileImage: String, // Added for consistency with Admin model
   coverPicture: {
     type: String,
     default: 'default-cover.jpg'
@@ -294,12 +300,23 @@ const userSchema = new mongoose.Schema({
 });
 
 // ==================== INDEXES ====================
-userSchema.index({ email: 1 });
-userSchema.index({ userType: 1, status: 1, createdAt: -1 });
-userSchema.index({ isVerified: 1, status: 1 });
-userSchema.index({ lastLogin: -1 });
+userSchema.index({ email: 1 }); // Unique email lookup
+userSchema.index({ userType: 1, status: 1, createdAt: -1 }); // User type filtering with pagination
+userSchema.index({ isVerified: 1, status: 1 }); // Verification status queries
+userSchema.index({ lastLogin: -1 }); // Recent activity sorting
 userSchema.index({ twoFactorEnabled: 1 }); // For 2FA queries
 userSchema.index({ twoFactorTempSecretExpires: 1 }); // For cleanup
+
+// 🚀 PERFORMANCE: Additional indexes for dashboard and search queries
+userSchema.index({ status: 1, createdAt: -1 }); // Status-based filtering with sorting
+userSchema.index({ userType: 1, isVerified: 1 }); // User type + verification filtering
+userSchema.index({ createdAt: -1 }); // Recent user queries
+userSchema.index({ updatedAt: -1 }); // Recently updated users
+userSchema.index({ 'stripeAccountId': 1 }); // Stripe account lookups
+userSchema.index({ 'stripeAccountStatus': 1 }); // Stripe account status filtering
+userSchema.index({ phone: 1 }); // Phone number lookups
+userSchema.index({ fullName: 'text' }); // Full name text search
+userSchema.index({ userType: 1, status: 1, isVerified: 1 }); // Combined user filtering
 
 // ==================== PRE-SAVE MIDDLEWARE ====================
 userSchema.pre('save', async function(next) {

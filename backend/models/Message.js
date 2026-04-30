@@ -1,7 +1,13 @@
-
 const mongoose = require('mongoose');
+const uuid = require('uuid');
 
 const messageSchema = new mongoose.Schema({
+  message_id: {
+    type: String,
+    unique: true,
+    required: true,
+    default: uuid.v4
+  },
   conversationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Conversation',
@@ -114,6 +120,7 @@ const messageSchema = new mongoose.Schema({
 });
 
 // ==================== INDEXES ====================
+messageSchema.index({ message_id: 1 });
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 messageSchema.index({ senderId: 1, createdAt: -1 });
 messageSchema.index({ 'readBy.userId': 1 });
@@ -124,6 +131,11 @@ messageSchema.index({ dealId: 1 });
 
 // ==================== PRE-SAVE ====================
 messageSchema.pre('save', function (next) {
+  // Ensure message_id is set
+  if (!this.message_id) {
+    this.message_id = uuid.v4();
+  }
+
   this.readCount      = this.readBy?.length      || 0;
   this.deliveredCount = this.deliveredTo?.length  || 0;
 

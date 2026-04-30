@@ -602,67 +602,6 @@ class SocialService {
     }
   }
 
-  // ==================== TWITTER (kept for completeness) ====================
-  async verifyTwitter(handle) {
-    try {
-      const username = handle.replace('@', '').trim();
-
-      // Twitter API v2 (requires Bearer token)
-      if (process.env.TWITTER_BEARER_TOKEN) {
-        try {
-          const res = await axios.get(`https://api.twitter.com/2/users/by/username/${username}`, {
-            params: { 'user.fields': 'public_metrics,profile_image_url,verified,description' },
-            headers: { Authorization: `Bearer ${process.env.TWITTER_BEARER_TOKEN}` },
-            timeout: 8000
-          });
-
-          const user    = res.data?.data;
-          const metrics = user?.public_metrics;
-
-          if (user) {
-            const followers  = metrics?.followers_count || 0;
-            const tweets     = metrics?.tweet_count || 0;
-            const engagement = followers > 0
-              ? parseFloat(((metrics?.like_count || 0) / (tweets || 1) / followers * 100).toFixed(2))
-              : 0;
-
-            return {
-              success: true,
-              data: {
-                handle:         username,
-                name:           user.name,
-                followers,
-                following:      metrics?.following_count || 0,
-                tweets,
-                profilePicture: user.profile_image_url?.replace('_normal', '_400x400') || this._avatar(username, '1DA1F2'),
-                description:    user.description || '',
-                isVerified:     user.verified || false,
-                engagement,
-                source:         'twitter-api'
-              }
-            };
-          }
-        } catch (e) {
-          console.log('Twitter API failed:', e.message);
-        }
-      }
-
-      return {
-        success: true,
-        data: {
-          handle:         username,
-          name:           username,
-          followers:      0,
-          profilePicture: this._avatar(username, '1DA1F2'),
-          source:         'fallback',
-          note:           'Add TWITTER_BEARER_TOKEN for stats'
-        }
-      };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }
-
   // ==================== BATCH VERIFY ====================
   async batchVerify(platforms) {
     // platforms = [{ platform: 'instagram', handle: 'user123' }, ...]
@@ -675,7 +614,6 @@ class SocialService {
             case 'instagram': results[platform] = await this.verifyInstagram(handle); break;
             case 'youtube':   results[platform] = await this.verifyYouTube(handle);   break;
             case 'tiktok':    results[platform] = await this.verifyTikTok(handle);    break;
-            case 'twitter':   results[platform] = await this.verifyTwitter(handle);   break;
           }
         } catch (e) {
           results[platform] = { success: false, error: e.message };

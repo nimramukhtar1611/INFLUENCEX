@@ -1,0 +1,152 @@
+[
+  {
+    "timestamp": "2026-04-24T06:33:14.525Z",
+    "message": "🚀 Testing Current Verification Flow Implementation",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.532Z",
+    "message": "===============================================",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.532Z",
+    "message": "\n=== Fetching Current Security Settings ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.727Z",
+    "message": "✅ Security settings fetched successfully",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.727Z",
+    "message": "Current settings: {\n  \"emailVerification\": true,\n  \"phoneVerification\": true,\n  \"passwordMinLength\": 8,\n  \"passwordRequireUppercase\": true,\n  \"passwordRequireLowercase\": true,\n  \"passwordRequireNumbers\": true,\n  \"passwordRequireSymbols\": false\n}",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.730Z",
+    "message": "Expected behavior based on settings:",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.730Z",
+    "message": "- Email verification required: true",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.731Z",
+    "message": "- Phone verification required: true",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.732Z",
+    "message": "Expected flow: Email -> Phone -> Dashboard",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.733Z",
+    "message": "\n=== Testing Frontend Settings Fetch ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.855Z",
+    "message": "✅ Frontend settings endpoint working",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.856Z",
+    "message": "✅ All required security settings fields present",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.856Z",
+    "message": "\n=== Testing Conditional Logic ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:14.857Z",
+    "message": "\n=== Testing Email OTP Endpoint ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:18.664Z",
+    "message": "✅ Email OTP endpoint is accessible and working",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:18.682Z",
+    "message": "✅ Email OTP conditional logic working correctly",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:18.683Z",
+    "message": "\n=== Testing Phone OTP Endpoint ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.112Z",
+    "message": "✅ Phone OTP endpoint is accessible and working",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.122Z",
+    "message": "✅ Phone OTP conditional logic working correctly",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.123Z",
+    "message": "✅ All conditional logic working correctly",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.124Z",
+    "message": "\n=== Test Summary ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.125Z",
+    "message": "Settings Fetch: ✅",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.126Z",
+    "message": "Frontend Endpoint: ✅",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.127Z",
+    "message": "Conditional Logic: ✅",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.129Z",
+    "message": "🎉 All tests passed! Verification flow is working correctly.",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.131Z",
+    "message": "\n📋 Current Configuration Summary:",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.136Z",
+    "message": "- Email Verification: ENABLED",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.137Z",
+    "message": "- Phone Verification: ENABLED",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.138Z",
+    "message": "- Backend validation: ✅ Working",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:33:21.139Z",
+    "message": "- Frontend integration: ✅ Working",
+    "type": "info"
+  }
+]

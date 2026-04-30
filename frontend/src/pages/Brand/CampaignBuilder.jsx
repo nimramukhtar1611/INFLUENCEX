@@ -19,15 +19,18 @@ import {
   Loader,
   Instagram,
   Youtube,
-  Twitter,
   Facebook,
-  Linkedin,
   Globe2,
   Hash,
   MapPin,
   Users2,
+  Music,
 } from 'lucide-react';
 import { useCampaign } from '../../hooks/useCampaign';
+import { useTheme } from '../../hooks/useTheme';
+import { useGlobalSettings } from '../../context/GlobalSettingsContext';
+import campaignService from '../../services/campaignService';
+import { formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
 import Button from '../../components/UI/Button';
 import Input from '../../components/UI/Input';
 import toast from 'react-hot-toast';
@@ -36,6 +39,8 @@ import api from '../../services/api';
 const CampaignBuilder = () => {
   const navigate = useNavigate();
   const { createCampaign, loading } = useCampaign();
+  const { theme, isDark } = useTheme();
+  const { getSetting, isFeatureEnabled, formatCurrency: formatCurrencyWithSettings } = useGlobalSettings();
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
@@ -77,7 +82,7 @@ const CampaignBuilder = () => {
       ages: [],
       genders: [],
       niches: [],
-      platforms: ['instagram', 'youtube', 'tiktok'],
+      platforms: ['instagram', 'youtube', 'tiktok', 'facebook'],
     },
 
     // Additional
@@ -125,7 +130,7 @@ const CampaignBuilder = () => {
 
   const ageGroups = ['18-24', '25-34', '35-44', '45+'];
   const genders = ['male', 'female', 'all'];
-  const platforms = ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook'];
+  const platforms = ['instagram', 'youtube', 'tiktok', 'facebook'];
 
   const deliverableTypes = [
     { value: 'post', label: 'Post' },
@@ -140,8 +145,7 @@ const CampaignBuilder = () => {
   const platformIcons = {
     instagram: Instagram,
     youtube: Youtube,
-    tiktok: Twitter,
-    twitter: Twitter,
+    tiktok: Music,
     facebook: Facebook,
   };
 
@@ -297,6 +301,34 @@ const CampaignBuilder = () => {
 
     try {
       setSubmitting(true);
+
+      // Check campaign limits from global settings
+      const maxCampaignsPerBrand = getSetting('customLimits.maxCampaignsPerBrand', 50);
+      const minCampaignBudget = getSetting('payments.minPayoutAmount', 50);
+      const maxCampaignBudget = getSetting('customLimits.maxCampaignBudget', 100000);
+
+      // Validate budget limits
+      if (parseFloat(formData.budget) < minCampaignBudget) {
+        toast.error(`Minimum campaign budget is ${formatCurrencyWithSettings(minCampaignBudget)}`);
+        setSubmitting(false);
+        return;
+      }
+
+      if (parseFloat(formData.budget) > maxCampaignBudget) {
+        toast.error(`Maximum campaign budget is ${formatCurrencyWithSettings(maxCampaignBudget)}`);
+        setSubmitting(false);
+        return;
+      }
+
+      // Check if campaigns feature is enabled
+      if (!isFeatureEnabled('campaigns')) {
+        toast.error('Campaign creation is currently disabled');
+        setSubmitting(false);
+        return;
+      }
+
+      // Check brand's current campaign count (optional - would need API call)
+      // This could be implemented as a separate validation step
 
       // Prepare data for API
       const campaignData = {
@@ -587,895 +619,837 @@ const CampaignBuilder = () => {
   // ==================== RENDER STEP CONTENT ====================
   const renderStepContent = () => {
     switch (currentStep) {
-      case 1:
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Campaign Title <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  errors.title ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="e.g., Summer Collection Launch 2024"
-                value={formData.title}
-                onChange={(e) => {
-                  setFormData({ ...formData, title: e.target.value });
-                  if (errors.title) {
-                    setErrors({ ...errors, title: null });
-                  }
-                }}
-              />
-              {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title}</p>}
-            </div>
+   case 1:
+  return (
+    <div className="space-y-4">
+      <div>
+        {/* Label text color updated to white in dark mode */}
+        <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+          Campaign Title <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          required
+          className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors appearance-none ${
+            errors.title 
+              ? 'border-red-500 bg-red-50' 
+              : isDark 
+                ? '!bg-zinc-900 !border-zinc-700 !text-white placeholder-zinc-500' 
+                : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+          }`}
+          placeholder="e.g., Summer Collection Launch 2024"
+          value={formData.title}
+          onChange={(e) => {
+            setFormData({ ...formData, title: e.target.value });
+            if (errors.title) {
+              setErrors({ ...errors, title: null });
+            }
+          }}
+        />
+        {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
+      </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Campaign Description <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                required
-                rows="5"
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  errors.description ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Describe your campaign goals, requirements, and what you're looking for in creators..."
-                value={formData.description}
-                onChange={(e) => {
-                  setFormData({ ...formData, description: e.target.value });
-                  if (errors.description) {
-                    setErrors({ ...errors, description: null });
-                  }
-                }}
-              />
-              {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description}</p>}
-              <p className="text-xs text-gray-500 mt-1">
-                {formData.description.length}/2000 characters
-              </p>
-            </div>
+      <div>
+        <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+          Campaign Description <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          required
+          rows="3"
+          className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors appearance-none ${
+            errors.description
+              ? 'border-red-500 bg-red-50'
+              : isDark
+                ? '!bg-zinc-900 !border-zinc-700 !text-white placeholder-zinc-500'
+                : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+          }`}
+          placeholder="Describe your campaign goals..."
+          value={formData.description}
+          onChange={(e) => {
+            setFormData({ ...formData, description: e.target.value });
+            if (errors.description) {
+              setErrors({ ...errors, description: null });
+            }
+          }}
+        />
+        {errors.description && <p className="mt-1 text-xs text-red-600">{errors.description}</p>}
+        <p className={`text-[10px] mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+          {formData.description.length}/2000 characters
+        </p>
+      </div>
 
+      <div>
+        <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+          Category <span className="text-red-500">*</span>
+        </label>
+        <select
+          required
+          className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors ${
+            errors.category 
+              ? 'border-red-500 bg-red-50' 
+              : isDark 
+                ? '!bg-zinc-900 !border-zinc-700 !text-white' 
+                : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+          }`}
+          value={formData.category}
+          onChange={(e) => {
+            setFormData({ ...formData, category: e.target.value });
+            if (errors.category) {
+              setErrors({ ...errors, category: null });
+            }
+          }}
+        >
+          <option value="" className={isDark ? 'bg-zinc-900' : ''}>Select a category</option>
+          {categories.map(cat => (
+            <option key={cat} value={cat} className={isDark ? 'bg-zinc-900' : ''}>
+              {cat}
+            </option>
+          ))}
+        </select>
+        {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
+      </div>
+
+      <div>
+        <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+          Campaign Objectives
+        </label>
+        <div className="space-y-2">
+          {formData.objectives.map((obj, index) => (
+            <div key={index} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
+              isDark ? 'bg-zinc-900/50 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+            }`}>
+              <CheckCircle className="w-3 h-3 text-green-600" />
+              <span className="flex-1 text-xs">{obj}</span>
+              <button
+                onClick={() => removeObjective(index)}
+                className="text-zinc-400 hover:text-red-400 transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Add an objective..."
+              className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors appearance-none ${
+                isDark 
+                  ? '!bg-zinc-900 !border-zinc-700 !text-white placeholder-zinc-500' 
+                  : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+              }`}
+              value={newObjective}
+              onChange={(e) => setNewObjective(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && addObjective()}
+            />
+            <Button 
+              variant="secondry" 
+              onClick={addObjective} 
+              icon={Plus}
+              className="px-4 py-2 text-xs rounded-xl"
+            >
+              Add
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+    case 2:
+  return (
+    <div className="space-y-4">
+      {formData.deliverables.map((deliverable, index) => (
+        <div 
+          key={index} 
+          className={`p-4 rounded-xl border relative transition-all ${
+            isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-zinc-50 border-zinc-200'
+          }`}
+        >
+          {formData.deliverables.length > 1 && (
+            <button
+              onClick={() => removeDeliverable(index)}
+              className="absolute top-3 right-3 text-zinc-400 hover:text-red-500 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Platform Select */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Category <span className="text-red-500">*</span>
+              <label className={`block text-xs font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+                Platform
               </label>
               <select
-                required
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  errors.category ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all appearance-none cursor-pointer ${
+                  isDark 
+                    ? '!bg-zinc-900 border-zinc-700 text-white' 
+                    : 'bg-white border-zinc-200 text-zinc-900'
                 }`}
-                value={formData.category}
-                onChange={(e) => {
-                  setFormData({ ...formData, category: e.target.value });
-                  if (errors.category) {
-                    setErrors({ ...errors, category: null });
-                  }
-                }}
+                value={deliverable.platform}
+                onChange={(e) => updateDeliverable(index, 'platform', e.target.value)}
               >
-                <option value="">Select a category</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>
-                    {cat}
+                <option value="instagram">Instagram</option>
+                <option value="youtube">YouTube</option>
+                <option value="tiktok">TikTok</option>
+                <option value="facebook">Facebook</option>
+              </select>
+            </div>
+
+            {/* Content Type Select */}
+            <div>
+              <label className={`block text-xs font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+                Content Type
+              </label>
+              <select
+                className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all appearance-none cursor-pointer ${
+                  isDark 
+                    ? '!bg-zinc-900 border-zinc-700 text-white' 
+                    : 'bg-white border-zinc-200 text-zinc-900'
+                }`}
+                value={deliverable.type}
+                onChange={(e) => updateDeliverable(index, 'type', e.target.value)}
+              >
+                {deliverableTypes.map(type => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
                   </option>
                 ))}
               </select>
-              {errors.category && <p className="mt-1 text-sm text-red-600">{errors.category}</p>}
             </div>
 
+            {/* Quantity Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Campaign Objectives
-              </label>
-              <div className="space-y-2">
-                {formData.objectives.map((obj, index) => (
-                  <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="flex-1 text-sm">{obj}</span>
-                    <button
-                      onClick={() => removeObjective(index)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add an objective..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={newObjective}
-                    onChange={(e) => setNewObjective(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addObjective()}
-                  />
-                  <Button variant="outline" onClick={addObjective} icon={Plus}>
-                    Add
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 2:
-        return (
-          <div className="space-y-6">
-            {formData.deliverables.map((deliverable, index) => (
-              <div key={index} className="bg-gray-50 p-6 rounded-lg relative">
-                {formData.deliverables.length > 1 && (
-                  <button
-                    onClick={() => removeDeliverable(index)}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Platform
-                    </label>
-                    <select
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      value={deliverable.platform}
-                      onChange={(e) => updateDeliverable(index, 'platform', e.target.value)}
-                    >
-                      <option value="instagram">Instagram</option>
-                      <option value="youtube">YouTube</option>
-                      <option value="tiktok">TikTok</option>
-                      <option value="twitter">Twitter</option>
-                      <option value="facebook">Facebook</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Content Type
-                    </label>
-                    <select
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      value={deliverable.type}
-                      onChange={(e) => updateDeliverable(index, 'type', e.target.value)}
-                    >
-                      {deliverableTypes.map(type => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Quantity
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                        errors[`deliverable_${index}_quantity`] ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      value={deliverable.quantity}
-                      onChange={(e) => updateDeliverable(index, 'quantity', parseInt(e.target.value))}
-                    />
-                    {errors[`deliverable_${index}_quantity`] && (
-                      <p className="mt-1 text-sm text-red-600">{errors[`deliverable_${index}_quantity`]}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Budget per Item ($)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                        errors[`deliverable_${index}_budget`] ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      value={deliverable.budget}
-                      onChange={(e) => updateDeliverable(index, 'budget', parseFloat(e.target.value))}
-                    />
-                    {errors[`deliverable_${index}_budget`] && (
-                      <p className="mt-1 text-sm text-red-600">{errors[`deliverable_${index}_budget`]}</p>
-                    )}
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      rows="2"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Describe what you want in this deliverable..."
-                      value={deliverable.description}
-                      onChange={(e) => updateDeliverable(index, 'description', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Specific Requirements
-                    </label>
-                    <textarea
-                      rows="2"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder="e.g., Must include specific hashtags, mention our handle, etc."
-                      value={deliverable.requirements}
-                      onChange={(e) => updateDeliverable(index, 'requirements', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={addDeliverable}
-              className="flex items-center text-[#667eea] hover:text-[#5a67d8] transition-colors"
-            >
-              <Plus className="w-5 h-5 mr-1" />
-              Add Another Deliverable
-            </button>
-
-            {/* Brand Assets Upload */}
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Brand Assets (Optional)
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="asset-upload"
-                  disabled={uploadingAssets}
-                  accept="image/*,video/*,.pdf,.doc,.docx,.zip"
-                />
-                <label htmlFor="asset-upload" className="cursor-pointer">
-                  {uploadingAssets ? (
-                    <Loader className="w-12 h-12 text-[#667eea] animate-spin mx-auto mb-3" />
-                  ) : (
-                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  )}
-                  <p className="text-sm text-gray-600">
-                    Drag and drop files here, or{' '}
-                    <span className="text-[#667eea] font-medium">browse</span>
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Upload logos, product images, brand guidelines (Max 100MB)
-                  </p>
-                </label>
-              </div>
-
-              {formData.brandAssets.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {formData.brandAssets.map((asset, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                      <div className="flex items-center">
-                        <FileText className="w-4 h-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-600">{asset.name}</span>
-                        <span className="text-xs text-gray-400 ml-2">
-                          ({(asset.fileSize / 1024 / 1024).toFixed(2)} MB)
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => removeAsset(index)}
-                        className="text-gray-400 hover:text-red-600"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Campaign Start Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    errors.startDate ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  value={formData.startDate}
-                  onChange={(e) => {
-                    setFormData({ ...formData, startDate: e.target.value });
-                    if (errors.startDate) {
-                      setErrors({ ...errors, startDate: null });
-                    }
-                  }}
-                />
-                {errors.startDate && <p className="mt-1 text-sm text-red-600">{errors.startDate}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Campaign End Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    errors.endDate ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  value={formData.endDate}
-                  onChange={(e) => {
-                    setFormData({ ...formData, endDate: e.target.value });
-                    if (errors.endDate) {
-                      setErrors({ ...errors, endDate: null });
-                    }
-                  }}
-                />
-                {errors.endDate && <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Content Submission Deadline
-                </label>
-                <input
-                  type="date"
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    errors.submissionDeadline ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  value={formData.submissionDeadline}
-                  onChange={(e) => {
-                    setFormData({ ...formData, submissionDeadline: e.target.value });
-                    if (errors.submissionDeadline) {
-                      setErrors({ ...errors, submissionDeadline: null });
-                    }
-                  }}
-                />
-                {errors.submissionDeadline && <p className="mt-1 text-sm text-red-600">{errors.submissionDeadline}</p>}
-              </div>
-            </div>
-
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <div className="flex items-start gap-3">
-                <Info className="w-5 h-5 text-yellow-600 mt-0.5" />
-                <p className="text-sm text-yellow-800">
-                  <strong>Note:</strong> Submission deadline should be at least 3-5 days before campaign end date to allow for revisions.
-                </p>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 4:
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Total Campaign Budget ($) <span className="text-red-500">*</span>
+              <label className={`block text-xs font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+                Quantity
               </label>
               <input
                 type="number"
-                required
-                min="10"
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  errors.budget ? 'border-red-500' : 'border-gray-300'
+                min="1"
+                className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all ${
+                  errors[`deliverable_${index}_quantity`] 
+                    ? 'border-red-500 bg-red-50'
+                    : isDark
+                      ? '!bg-zinc-900 border-zinc-700 text-white'
+                      : 'bg-white border-zinc-200 text-zinc-900'
                 }`}
-                placeholder="e.g., 5000"
-                value={formData.budget}
-                onChange={(e) => {
-                  setFormData({ ...formData, budget: e.target.value });
-                  if (errors.budget) {
-                    setErrors({ ...errors, budget: null });
-                  }
-                }}
+                value={deliverable.quantity}
+                onChange={(e) => updateDeliverable(index, 'quantity', parseInt(e.target.value))}
               />
-              {errors.budget && <p className="mt-1 text-sm text-red-600 font-medium flex items-center gap-1">
-                <AlertCircle className="w-4 h-4" />
-                {errors.budget}
-              </p>}
-              <div className="flex justify-between mt-1">
-                <p className="text-xs text-gray-500">
-                  This is the total budget for all deliverables combined
+              {errors[`deliverable_${index}_quantity`] && (
+                <p className="mt-1 text-xs text-red-500 font-medium">{errors[`deliverable_${index}_quantity`]}</p>
+              )}
+            </div>
+
+            {/* Budget Input */}
+            <div>
+              <label className={`block text-xs font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+                Budget per Item ($)
+              </label>
+              <input
+                type="number"
+                min="0"
+                className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all ${
+                  errors[`deliverable_${index}_budget`] 
+                    ? 'border-red-500 bg-red-50' 
+                    : isDark 
+                      ? '!bg-zinc-900 border-zinc-700 text-white' 
+                      : 'bg-white border-zinc-200 text-zinc-900'
+                }`}
+                value={deliverable.budget}
+                onChange={(e) => updateDeliverable(index, 'budget', parseFloat(e.target.value))}
+              />
+              {errors[`deliverable_${index}_budget`] && (
+                <p className="mt-1 text-xs text-red-500 font-medium">{errors[`deliverable_${index}_budget`]}</p>
+              )}
+            </div>
+
+            {/* Textareas */}
+            <div className="md:col-span-2">
+              <label className={`block text-xs font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+                Description
+              </label>
+              <textarea
+                rows="2"
+                className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all resize-none ${
+                  isDark 
+                    ? '!bg-zinc-900 border-zinc-700 text-white !placeholder-white' 
+                    : 'bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400'
+                }`}
+                placeholder="Describe what you want in this deliverable..."
+                value={deliverable.description}
+                onChange={(e) => updateDeliverable(index, 'description', e.target.value)}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={`block text-xs font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+                Specific Requirements
+              </label>
+              <textarea
+                rows="2"
+                className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all resize-none ${
+                  isDark 
+                    ? '!bg-zinc-900 border-zinc-700 text-white !placeholder-white' 
+                    : 'bg-white border-zinc-200 text-zinc-900 placeholder-zinc-400'
+                }`}
+                placeholder="e.g., Must include specific hashtags, mention our handle, etc."
+                value={deliverable.requirements}
+                onChange={(e) => updateDeliverable(index, 'requirements', e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={addDeliverable}
+        className={`flex items-center text-xs font-semibold ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-zinc-600 hover:text-zinc-900'} transition-colors`}
+      >
+        <Plus className="w-4 h-4 mr-1" />
+        Add Another Deliverable
+      </button>
+
+      {/* Brand Assets Upload */}
+      <div className="mt-4">
+        <label className={`block text-xs font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-700'}`}>
+          Brand Assets (Optional)
+        </label>
+        <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+          isDark ? 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-500' : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300'
+        }`}>
+          <input
+            type="file"
+            multiple
+            onChange={handleFileUpload}
+            className="hidden"
+            id="asset-upload"
+            disabled={uploadingAssets}
+            accept="image/*,video/*,.pdf,.doc,.docx,.zip"
+          />
+          <label htmlFor="asset-upload" className="cursor-pointer block">
+            {uploadingAssets ? (
+              <Loader className={`w-8 h-8 ${isDark ? 'text-blue-400' : 'text-zinc-600'} animate-spin mx-auto mb-2`} />
+            ) : (
+              <Upload className={`w-8 h-8 ${isDark ? 'text-zinc-500' : 'text-zinc-400'} mx-auto mb-2`} />
+            )}
+            <p className={`text-xs ${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}>
+              Drag and drop files here, or{' '}
+              <span className="text-gray-300 font-bold">browse</span>
+            </p>
+            <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">
+              Max 100MB (Logos, Images, Guidelines)
+            </p>
+          </label>
+        </div>
+
+        {/* File List */}
+        {formData.brandAssets.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {formData.brandAssets.map((asset, index) => (
+              <div key={index} className={`flex items-center justify-between p-3 rounded-lg border ${
+                isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'
+              }`}>
+                <div className="flex items-center">
+                  <FileText className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-zinc-400'} mr-2`} />
+                  <span className={`text-xs font-medium ${isDark ? 'text-white' : 'text-zinc-700'}`}>{asset.name}</span>
+                  <span className="text-[10px] text-zinc-500 ml-2 font-mono">
+                    ({(asset.fileSize / 1024 / 1024).toFixed(2)} MB)
+                  </span>
+                </div>
+                <button
+                  onClick={() => removeAsset(index)}
+                  className="text-zinc-400 hover:text-red-500 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+   case 3:
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Campaign Start Date */}
+        <div>
+          <label className={`block text-xs font-medium mb-1 ${isDark ? '!text-white' : 'text-zinc-700'}`}>
+            Campaign Start Date <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            required
+            className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-colors 
+              ${errors.startDate 
+                ? 'border-red-500 bg-red-50' 
+                : isDark 
+                  ? '!bg-zinc-900 !text-white !border-zinc-700 focus:!ring-zinc-500 accent-zinc-500' 
+                  : 'bg-white border-zinc-200 text-zinc-900 focus:ring-blue-500'}`}
+            value={formData.startDate}
+            onChange={(e) => {
+              setFormData({ ...formData, startDate: e.target.value });
+              if (errors.startDate) {
+                setErrors({ ...errors, startDate: null });
+              }
+            }}
+          />
+          {errors.startDate && <p className="mt-1 text-xs text-red-600">{errors.startDate}</p>}
+        </div>
+
+        {/* Campaign End Date */}
+        <div>
+          <label className={`block text-xs font-medium mb-1 ${isDark ? '!text-white' : 'text-zinc-700'}`}>
+            Campaign End Date <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            required
+            className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-colors 
+              ${errors.endDate 
+                ? 'border-red-500 bg-red-50' 
+                : isDark 
+                  ? '!bg-zinc-900 !text-white !border-zinc-700 focus:!ring-zinc-500 accent-zinc-500' 
+                  : 'bg-white border-zinc-200 text-zinc-900 focus:ring-blue-500'}`}
+            value={formData.endDate}
+            onChange={(e) => {
+              setFormData({ ...formData, endDate: e.target.value });
+              if (errors.endDate) {
+                setErrors({ ...errors, endDate: null });
+              }
+            }}
+          />
+          {errors.endDate && <p className="mt-1 text-xs text-red-600">{errors.endDate}</p>}
+        </div>
+
+        {/* Submission Deadline */}
+        <div className="md:col-span-2">
+          <label className={`block text-xs font-medium mb-1 ${isDark ? '!text-white' : 'text-zinc-700'}`}>
+            Content Submission Deadline
+          </label>
+          <input
+            type="date"
+            className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-colors 
+              ${errors.submissionDeadline 
+                ? 'border-red-500 bg-red-50' 
+                : isDark 
+                  ? '!bg-zinc-900 !text-white !border-zinc-700 focus:!ring-zinc-500 accent-zinc-500' 
+                  : 'bg-white border-zinc-200 text-zinc-900 focus:ring-blue-500'}`}
+            value={formData.submissionDeadline}
+            onChange={(e) => {
+              setFormData({ ...formData, submissionDeadline: e.target.value });
+              if (errors.submissionDeadline) {
+                setErrors({ ...errors, submissionDeadline: null });
+              }
+            }}
+          />
+          {errors.submissionDeadline && <p className="mt-1 text-xs text-red-600">{errors.submissionDeadline}</p>}
+        </div>
+      </div>
+
+      {/* Info Box */}
+      <div className={`p-3 rounded-xl border ${
+        isDark ? '!bg-zinc-900 !border-zinc-800' : 'bg-blue-50 border-blue-100'
+      }`}>
+        <div className="flex items-start gap-2">
+          <Info className={`w-4 h-4 mt-0.5 ${isDark ? 'text-zinc-400' : 'text-blue-500'}`} />
+          <p className={`text-xs ${isDark ? '!text-zinc-300' : 'text-blue-700'}`}>
+            <strong className={`${isDark ? '!text-white' : 'text-blue-900'}`}>Note:</strong> Submission deadline should be at least 3-5 days before campaign end date to allow for revisions.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+ case 4:
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className={`block text-xs font-medium mb-1 ${isDark ? '!text-white' : 'text-zinc-700'}`}>
+          Total Campaign Budget ($) <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="number"
+          required
+          min="10"
+          className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 transition-colors ${
+            errors.budget 
+              ? 'border-red-500 bg-red-50' 
+              : isDark 
+              ? '!bg-zinc-900 !border-zinc-700 !text-white !placeholder-white/60 focus:!ring-zinc-500' 
+              : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+          }`}
+          placeholder="e.g., 5000"
+          value={formData.budget}
+          onChange={(e) => {
+            setFormData({ ...formData, budget: e.target.value });
+            if (errors.budget) {
+              setErrors({ ...errors, budget: null });
+            }
+          }}
+        />
+        {errors.budget && (
+          <p className="mt-1 text-xs text-red-600 font-medium flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            {errors.budget}
+          </p>
+        )}
+        <div className="flex justify-between mt-1">
+          <p className={`text-[10px] ${isDark ? '!text-zinc-400' : 'text-zinc-500'}`}>
+            This is the total budget for all deliverables combined
+          </p>
+          <p className={`text-xs font-medium ${availableBalance < formData.budget ? 'text-red-600' : isDark ? '!text-green-400' : 'text-green-600'}`}>
+            Available Balance: ${availableBalance.toFixed(2)}
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <label className={`block text-xs font-medium mb-1 ${isDark ? '!text-white' : 'text-zinc-700'}`}>
+          Budget Type
+        </label>
+        <div className="space-y-2">
+          {['fixed', 'outcome-based'].map((type) => (
+            <label 
+              key={type}
+              className={`flex items-center p-3 rounded-xl border cursor-pointer transition-colors ${
+                isDark 
+                  ? `!bg-zinc-900 !border-zinc-700 hover:!bg-zinc-800 ${formData.budgetType === type ? '!ring-1 !ring-zinc-500 !border-zinc-500' : ''}` 
+                  : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100'
+              }`}
+            >
+              <input
+                type="radio"
+                name="budgetType"
+                value={type}
+                checked={formData.budgetType === type}
+                onChange={(e) => setFormData({ ...formData, budgetType: e.target.value })}
+                className={`mr-3 ${isDark ? 'accent-zinc-500' : ''}`}
+              />
+              <div>
+                <span className={`text-xs font-medium ${isDark ? '!text-white' : ''}`}>
+                  {type === 'fixed' ? 'Fixed Price' : 'Outcome-based'}
+                </span>
+                <p className={`text-[10px] ${isDark ? '!text-zinc-400' : 'text-zinc-500'}`}>
+                  {type === 'fixed' ? 'Set a fixed price for each creator' : 'Pay based on performance (CPE/CPA)'}
                 </p>
-                <p className={`text-xs font-medium ${availableBalance < formData.budget ? 'text-red-600' : 'text-green-600'}`}>
-                  Available Balance: ${availableBalance.toFixed(2)}
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className={`p-3 rounded-xl border ${
+        isDark ? '!bg-zinc-900 !border-zinc-800' : 'bg-blue-50 border-blue-200'
+      }`}>
+        <div className="flex items-start gap-2">
+          <Info className={`w-4 h-4 mt-0.5 ${isDark ? '!text-zinc-400' : 'text-blue-600'}`} />
+          <div>
+            <p className={`text-xs ${isDark ? '!text-zinc-300' : 'text-blue-800'}`}>
+              <strong className={`${isDark ? '!text-white' : ''}`}>Platform Fee:</strong> 10% of campaign budget will be deducted upon completion.
+            </p>
+            <p className={`text-xs mt-1 ${isDark ? '!text-zinc-300' : 'text-blue-800'}`}>
+              You'll pay <span className={isDark ? '!text-white font-bold' : ''}>${(formData.budget * 0.1).toFixed(2)}</span> in fees.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+case 5:
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Min Followers */}
+        <div>
+          <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white !important' : 'text-zinc-700'}`}>
+            Min Followers
+          </label>
+          <select
+            className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors appearance-none ${
+              isDark 
+                ? '!bg-zinc-900 !border-zinc-700 !text-white' 
+                : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+            }`}
+            value={formData.targetAudience.minFollowers}
+            onChange={(e) => setFormData({ ...formData, targetAudience: { ...formData.targetAudience, minFollowers: e.target.value } })}
+          >
+            <option value="" className={isDark ? "bg-zinc-900" : ""}>Any</option>
+            <option value="1000" className={isDark ? "bg-zinc-900" : ""}>1,000+</option>
+            <option value="5000" className={isDark ? "bg-zinc-900" : ""}>5,000+</option>
+            <option value="10000" className={isDark ? "bg-zinc-900" : ""}>10,000+</option>
+            <option value="25000" className={isDark ? "bg-zinc-900" : ""}>25,000+</option>
+            <option value="50000" className={isDark ? "bg-zinc-900" : ""}>50,000+</option>
+            <option value="100000" className={isDark ? "bg-zinc-900" : ""}>100,000+</option>
+          </select>
+        </div>
+
+        {/* Max Followers */}
+        <div>
+          <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white !important' : 'text-zinc-700'}`}>
+            Max Followers
+          </label>
+          <select
+            className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors appearance-none ${
+              isDark 
+                ? '!bg-zinc-900 !border-zinc-700 !text-white' 
+                : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+            }`}
+            value={formData.targetAudience.maxFollowers}
+            onChange={(e) => setFormData({ ...formData, targetAudience: { ...formData.targetAudience, maxFollowers: e.target.value } })}
+          >
+            <option value="" className={isDark ? "bg-zinc-900" : ""}>Any</option>
+            <option value="10000" className={isDark ? "bg-zinc-900" : ""}>Up to 10,000</option>
+            <option value="25000" className={isDark ? "bg-zinc-900" : ""}>Up to 25,000</option>
+            <option value="50000" className={isDark ? "bg-zinc-900" : ""}>Up to 50,000</option>
+            <option value="100000" className={isDark ? "bg-zinc-900" : ""}>Up to 100,000</option>
+          </select>
+        </div>
+
+        {/* Min Engagement */}
+        <div>
+          <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white !important' : 'text-zinc-700'}`}>
+            Min Engagement Rate (%)
+          </label>
+          <select
+            className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors appearance-none ${
+              isDark 
+                ? '!bg-zinc-900 !border-zinc-700 !text-white' 
+                : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+            }`}
+            value={formData.targetAudience.minEngagement}
+            onChange={(e) => setFormData({ ...formData, targetAudience: { ...formData.targetAudience, minEngagement: e.target.value } })}
+          >
+            <option value="" className={isDark ? "bg-zinc-900" : ""}>Any</option>
+            <option value="1" className={isDark ? "bg-zinc-900" : ""}>1%+</option>
+            <option value="2" className={isDark ? "bg-zinc-900" : ""}>2%+</option>
+            <option value="3" className={isDark ? "bg-zinc-900" : ""}>3%+</option>
+            <option value="4" className={isDark ? "bg-zinc-900" : ""}>4%+</option>
+            <option value="5" className={isDark ? "bg-zinc-900" : ""}>5%+</option>
+          </select>
+        </div>
+
+        {/* Platforms */}
+        <div>
+          <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white !important' : 'text-zinc-700'}`}>
+            Platforms
+          </label>
+          <div className="space-y-1 mt-1">
+            {platforms.map(platform => {
+              const Icon = platformIcons[platform] || Globe2;
+              return (
+                <label
+                  key={platform}
+                  className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
+                    isDark ? '!bg-zinc-900 !border !border-zinc-800 hover:!bg-zinc-800' : 'bg-zinc-50 hover:bg-zinc-100'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className={`mr-2 rounded ${isDark ? '!bg-zinc-800 !border-zinc-700 !text-zinc-400' : 'text-zinc-700'}`}
+                    checked={formData.targetAudience.platforms.includes(platform)}
+                    onChange={() => togglePlatform(platform)}
+                  />
+                  <Icon className={`w-3 h-3 mr-2 ${platform === 'instagram' ? 'text-pink-500' : platform === 'youtube' ? 'text-red-500' : isDark ? 'text-white' : 'text-zinc-900'}`} />
+                  <span className={`text-xs capitalize ${isDark ? 'text-white' : ''}`}>{platform}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Target Locations */}
+      <div>
+        <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white !important' : 'text-zinc-700'}`}>
+          Target Locations
+        </label>
+        <div className="space-y-2">
+          {formData.targetAudience.locations.map((loc, index) => (
+            <div key={index} className={`flex items-center gap-2 p-2 rounded-lg border ${
+              isDark ? '!bg-zinc-900 !border-zinc-700 !text-white' : 'bg-zinc-50 border-zinc-200'
+            }`}>
+              <MapPin className="w-3 h-3 text-zinc-400" />
+              <span className="flex-1 text-xs">{loc}</span>
+              <button onClick={() => removeLocation(index)} className="text-zinc-400 hover:text-red-400 transition-colors">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Add a location (e.g., New York, USA)"
+              className={`flex-1 px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-zinc-500 transition-colors ${
+                isDark 
+                  ? '!bg-zinc-900 !border-zinc-700 !text-white !placeholder-zinc-500' 
+                  : 'bg-zinc-50 border-zinc-200 text-zinc-900 placeholder-zinc-400'
+              }`}
+              value={newLocation}
+              onChange={(e) => setNewLocation(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && addLocation()}
+            />
+            <Button 
+              variant="secondry" 
+              onClick={addLocation} 
+              icon={Plus}
+              className={`px-4 py-2 text-xs rounded-xl ${isDark ? '!bg-zinc-100 !text-zinc-900 hover:!bg-white' : ''}`}
+            >
+              Add
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  case 6:
+  return (
+    <div className={`space-y-4 ${isDark ? 'dark' : ''}`}>
+      <h3 className="text-base font-semibold text-zinc-900 dark:!text-white">
+        Review Your Campaign
+      </h3>
+
+      <div className={`p-4 rounded-xl border space-y-3 ${
+        isDark 
+          ? '!bg-zinc-900 !border-zinc-700' 
+          : 'bg-zinc-50 border-zinc-200'
+      }`}>
+        {/* Basic Info */}
+        <div>
+          <p className="text-xs text-zinc-500 dark:!text-zinc-400">Campaign Title</p>
+          <p className="text-sm font-medium text-zinc-900 dark:!text-white">
+            {formData.title || 'Not specified'}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs text-zinc-500 dark:!text-zinc-400">Description</p>
+          <p className="text-xs text-zinc-700 dark:!text-zinc-300">
+            {formData.description || 'Not specified'}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs text-zinc-500 dark:!text-zinc-400">Category</p>
+          <p className="text-sm font-medium text-zinc-900 dark:!text-white">
+            {formData.category || 'Not specified'}
+          </p>
+        </div>
+
+        {formData.objectives.length > 0 && (
+          <div>
+            <p className="text-xs text-zinc-500 dark:!text-zinc-400">Objectives</p>
+            <ul className="list-disc list-inside text-xs text-zinc-700 dark:!text-zinc-300">
+              {formData.objectives.map((obj, i) => (
+                <li key={i}>{obj}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Deliverables */}
+        <div>
+          <p className="text-xs text-zinc-500 dark:!text-zinc-400 mb-2">Deliverables</p>
+          {formData.deliverables.map((d, i) => (
+            <div key={i} className={`mb-2 p-2 rounded-lg border ${
+              isDark 
+                ? '!bg-zinc-900 !border-zinc-700' 
+                : 'bg-white border-zinc-200'
+            }`}>
+              <p className="text-xs font-medium dark:!text-white">
+                {d.quantity}x {d.type} on {d.platform}
+              </p>
+              {d.description && (
+                <p className="text-[10px] text-zinc-500 dark:!text-zinc-400 mt-1">
+                  {d.description}
                 </p>
-              </div>
+              )}
+              <p className={`text-[10px] font-medium mt-1 ${
+                isDark ? '!text-zinc-300' : 'text-zinc-700'
+              }`}>
+                ${d.budget || 0} each
+              </p>
             </div>
+          ))}
+        </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Budget Type
-              </label>
-              <div className="space-y-2">
-                <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="radio"
-                    name="budgetType"
-                    value="fixed"
-                    checked={formData.budgetType === 'fixed'}
-                    onChange={(e) => setFormData({ ...formData, budgetType: e.target.value })}
-                    className="mr-3"
-                  />
-                  <div>
-                    <span className="font-medium">Fixed Price</span>
-                    <p className="text-xs text-gray-500">Set a fixed price for each creator</p>
-                  </div>
-                </label>
-                <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="radio"
-                    name="budgetType"
-                    value="outcome-based"
-                    checked={formData.budgetType === 'outcome-based'}
-                    onChange={(e) => setFormData({ ...formData, budgetType: e.target.value })}
-                    className="mr-3"
-                  />
-                  <div>
-                    <span className="font-medium">Outcome-based</span>
-                    <p className="text-xs text-gray-500">Pay based on performance (CPE/CPA)</p>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Payment terms hidden as it's always escrow */}
-
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-start gap-3">
-                <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div>
-                  <p className="text-sm text-blue-800">
-                    <strong>Platform Fee:</strong> 10% of campaign budget will be deducted upon completion.
-                  </p>
-                  <p className="text-sm text-blue-800 mt-1">
-                    You'll pay ${(formData.budget * 0.1).toFixed(2)} in fees.
-                  </p>
-                </div>
-              </div>
-            </div>
+        {/* Timeline */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-zinc-500 dark:!text-zinc-400">Start Date</p>
+            <p className="text-sm font-medium text-zinc-900 dark:!text-white">
+              {formData.startDate ? new Date(formData.startDate).toLocaleDateString() : 'Not set'}
+            </p>
           </div>
-        );
-
-      case 5:
-        return (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Min Followers
-                </label>
-                <select
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.targetAudience.minFollowers}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      targetAudience: {
-                        ...formData.targetAudience,
-                        minFollowers: e.target.value,
-                      },
-                    })
-                  }
-                >
-                  <option value="">Any</option>
-                  <option value="1000">1,000+</option>
-                  <option value="5000">5,000+</option>
-                  <option value="10000">10,000+</option>
-                  <option value="25000">25,000+</option>
-                  <option value="50000">50,000+</option>
-                  <option value="100000">100,000+</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Max Followers
-                </label>
-                <select
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.targetAudience.maxFollowers}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      targetAudience: {
-                        ...formData.targetAudience,
-                        maxFollowers: e.target.value,
-                      },
-                    })
-                  }
-                >
-                  <option value="">Any</option>
-                  <option value="10000">Up to 10,000</option>
-                  <option value="25000">Up to 25,000</option>
-                  <option value="50000">Up to 50,000</option>
-                  <option value="100000">Up to 100,000</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Min Engagement Rate (%)
-                </label>
-                <select
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={formData.targetAudience.minEngagement}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      targetAudience: {
-                        ...formData.targetAudience,
-                        minEngagement: e.target.value,
-                      },
-                    })
-                  }
-                >
-                  <option value="">Any</option>
-                  <option value="1">1%+</option>
-                  <option value="2">2%+</option>
-                  <option value="3">3%+</option>
-                  <option value="4">4%+</option>
-                  <option value="5">5%+</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Platforms
-                </label>
-                <div className="space-y-2 mt-2">
-                  {platforms.map(platform => {
-                    const Icon = platformIcons[platform] || Globe2;
-                    return (
-                      <label
-                        key={platform}
-                        className="flex items-center p-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
-                      >
-                        <input
-                          type="checkbox"
-                          className="mr-3 rounded border-gray-300 text-[#667eea] focus:ring-[#667eea]"
-                          checked={formData.targetAudience.platforms.includes(platform)}
-                          onChange={() => togglePlatform(platform)}
-                        />
-                        <Icon
-                          className={`w-4 h-4 mr-2 ${
-                            platform === 'instagram'
-                              ? 'text-pink-600'
-                              : platform === 'youtube'
-                              ? 'text-red-600'
-                              : platform === 'tiktok'
-                              ? 'text-black'
-                              : platform === 'twitter'
-                              ? 'text-blue-400'
-                              : 'text-blue-600'
-                          }`}
-                        />
-                        <span className="capitalize">{platform}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Preferred Niches
-              </label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {niches.map(niche => (
-                  <label
-                    key={niche}
-                    className="flex items-center p-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mr-2 rounded border-gray-300 text-[#667eea] focus:ring-[#667eea]"
-                      checked={formData.targetAudience.niches.includes(niche)}
-                      onChange={() => toggleNiche(niche)}
-                    />
-                    <Hash className="w-3 h-3 text-gray-400 mr-1" />
-                    <span className="text-sm">{niche}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Age Groups
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {ageGroups.map(age => (
-                  <label
-                    key={age}
-                    className="flex items-center p-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mr-2 rounded border-gray-300 text-[#667eea] focus:ring-[#667eea]"
-                      checked={formData.targetAudience.ages.includes(age)}
-                      onChange={() => toggleAgeGroup(age)}
-                    />
-                    <Users2 className="w-3 h-3 text-gray-400 mr-1" />
-                    <span className="text-sm">{age}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Genders
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {genders.map(gender => (
-                  <label
-                    key={gender}
-                    className="flex items-center p-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mr-2 rounded border-gray-300 text-[#667eea] focus:ring-[#667eea]"
-                      checked={formData.targetAudience.genders.includes(gender)}
-                      onChange={() => toggleGender(gender)}
-                    />
-                    <span className="capitalize text-sm">{gender}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Target Locations
-              </label>
-              <div className="space-y-2">
-                {formData.targetAudience.locations.map((loc, index) => (
-                  <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                    <MapPin className="w-4 h-4 text-gray-400" />
-                    <span className="flex-1 text-sm">{loc}</span>
-                    <button
-                      onClick={() => removeLocation(index)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add a location (e.g., New York, USA)"
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={newLocation}
-                    onChange={(e) => setNewLocation(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addLocation()}
-                  />
-                  <Button variant="outline" onClick={addLocation} icon={Plus}>
-                    Add
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <div>
+            <p className="text-xs text-zinc-500 dark:!text-zinc-400">End Date</p>
+            <p className="text-sm font-medium text-zinc-900 dark:!text-white">
+              {formData.endDate ? new Date(formData.endDate).toLocaleDateString() : 'Not set'}
+            </p>
           </div>
-        );
+        </div>
 
-      case 6:
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900">Review Your Campaign</h3>
+        {/* Budget */}
+        <div>
+          <p className="text-xs text-zinc-500 dark:!text-zinc-400">Total Budget</p>
+          <p className={`text-lg font-bold ${isDark ? '!text-white' : 'text-zinc-700'}`}>
+            ${formData.budget.toLocaleString()}
+          </p>
+        </div>
 
-            <div className="bg-gray-50 p-6 rounded-lg space-y-4">
-              {/* Basic Info */}
-              <div>
-                <p className="text-sm text-gray-500">Campaign Title</p>
-                <p className="font-medium text-gray-900">{formData.title || 'Not specified'}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-500">Description</p>
-                <p className="text-sm text-gray-700">{formData.description || 'Not specified'}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-500">Category</p>
-                <p className="font-medium text-gray-900">{formData.category || 'Not specified'}</p>
-              </div>
-
-              {formData.objectives.length > 0 && (
-                <div>
-                  <p className="text-sm text-gray-500">Objectives</p>
-                  <ul className="list-disc list-inside text-sm text-gray-700">
-                    {formData.objectives.map((obj, i) => (
-                      <li key={i}>{obj}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Deliverables */}
-              <div>
-                <p className="text-sm text-gray-500 mb-2">Deliverables</p>
-                {formData.deliverables.map((d, i) => (
-                  <div key={i} className="mb-2 p-2 bg-white rounded border border-gray-200">
-                    <p className="text-sm font-medium">
-                      {d.quantity}x {d.type} on {d.platform}
-                    </p>
-                    {d.description && <p className="text-xs text-gray-500 mt-1">{d.description}</p>}
-                    <p className="text-xs font-medium text-[#667eea] mt-1">${d.budget || 0} each</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Timeline */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Start Date</p>
-                  <p className="font-medium text-gray-900">
-                    {formData.startDate ? new Date(formData.startDate).toLocaleDateString() : 'Not set'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">End Date</p>
-                  <p className="font-medium text-gray-900">
-                    {formData.endDate ? new Date(formData.endDate).toLocaleDateString() : 'Not set'}
-                  </p>
-                </div>
-                {formData.submissionDeadline && (
-                  <div>
-                    <p className="text-sm text-gray-500">Submission Deadline</p>
-                    <p className="font-medium text-gray-900">
-                      {new Date(formData.submissionDeadline).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Budget */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Total Budget</p>
-                  <p className="text-xl font-bold text-[#667eea]">
-                    ${formData.budget.toLocaleString()}
-                  </p>
-                </div>
-                {/* Payment terms hidden as it's always escrow */}
-              </div>
-
-              {/* Target Audience */}
-              <div>
-                <p className="text-sm text-gray-500 mb-2">Target Niches</p>
-                <div className="flex flex-wrap gap-2">
-                  {formData.targetAudience.niches.length > 0 ? (
-                    formData.targetAudience.niches.map(niche => (
-                      <span key={niche} className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs">
-                        {niche}
-                      </span>
-                    ))
-                  ) : (
-                    <p className="text-gray-400 text-sm">No niches selected</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-500 mb-2">Platforms</p>
-                <div className="flex flex-wrap gap-2">
-                  {formData.targetAudience.platforms.map(platform => (
-                    <span key={platform} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs capitalize">
-                      {platform}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {formData.targetAudience.ages.length > 0 && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Age Groups</p>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.targetAudience.ages.map(age => (
-                      <span key={age} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
-                        {age}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {formData.targetAudience.genders.length > 0 && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Genders</p>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.targetAudience.genders.map(gender => (
-                      <span key={gender} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs capitalize">
-                        {gender}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {formData.targetAudience.locations.length > 0 && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Locations</p>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.targetAudience.locations.map(loc => (
-                      <span key={loc} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
-                        {loc}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Requirements */}
-              {formData.requirements.length > 0 && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Additional Requirements</p>
-                  <ul className="list-disc list-inside text-sm text-gray-700">
-                    {formData.requirements.map((req, i) => (
-                      <li key={i}>{req}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Brand Assets */}
-              {formData.brandAssets.length > 0 && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Brand Assets</p>
-                  <div className="space-y-1">
-                    {formData.brandAssets.map((asset, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                        <FileText className="w-4 h-4 text-gray-400" />
-                        {asset.name}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                <div>
-                  <p className="text-sm text-yellow-800">
-                    <strong>Note:</strong> You'll need to fund the escrow account before launching the campaign.
-                  </p>
-                  <p className="text-sm text-yellow-700 mt-1">
-                    Funds are only released after content approval.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div>
-                  <p className="text-sm text-blue-800">
-                    <strong>Platform Fee:</strong> ${(formData.budget * 0.1).toFixed(2)} (10%)
-                  </p>
-                  <p className="text-sm text-blue-700 mt-1">
-                    <strong>Total to Fund:</strong> ${formData.budget.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
+        {/* Target Audience - Using Slate/Gray for Tags in Dark Mode */}
+        <div>
+          <p className="text-xs text-zinc-500 dark:!text-zinc-400 mb-2">Target Niches</p>
+          <div className="flex flex-wrap gap-1">
+            {formData.targetAudience.niches.map(niche => (
+              <span key={niche} className={`px-2 py-1 rounded-full text-[10px] ${
+                isDark 
+                  ? '!bg-zinc-800 !text-zinc-200 !border !border-zinc-700' 
+                  : 'bg-indigo-100 text-indigo-800'
+              }`}>
+                {niche}
+              </span>
+            ))}
           </div>
-        );
+        </div>
+      </div>
+
+      {/* Warnings & Fees Section */}
+      <div className={`p-3 rounded-xl border ${
+        isDark ? '!bg-zinc-900 !border-amber-900/50' : 'bg-amber-50 border-amber-200'
+      }`}>
+        <div className="flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
+          <div>
+            <p className={`text-xs ${isDark ? '!text-amber-200' : 'text-amber-800'}`}>
+              <strong>Note:</strong> You'll need to fund the escrow account before launching.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className={`p-3 rounded-xl border ${
+        isDark ? '!bg-zinc-900 !border-zinc-700' : 'bg-blue-50 border-blue-200'
+      }`}>
+        <div className="flex items-start gap-2">
+          <Info className="w-4 h-4 text-blue-500 mt-0.5" />
+          <div className="text-xs">
+            <p className={isDark ? '!text-zinc-300' : 'text-blue-800'}>
+              <strong className="dark:!text-white">Platform Fee:</strong> ${(formData.budget * 0.1).toFixed(2)} (10%)
+            </p>
+            <p className={`mt-1 font-bold ${isDark ? '!text-white' : 'text-blue-700'}`}>
+              Total to Fund: ${formData.budget.toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
       default:
         return null;
@@ -1483,103 +1457,125 @@ const CampaignBuilder = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Create New Campaign</h1>
+    <div className={`min-h-screen`}>
+      <div className="max-w-7xl mx-auto px-4 pt-6 pb-8">
+         <div>
+            <h1 className="text-3xl font-light tracking-tight font-semibold">Brand <span className="font-bold">Campaign Builder</span></h1>
+            <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Create a new marketing campaign step by step.</p>
+          </div>
 
+      <div className="max-w-4xl mx-auto">
       {/* Progress Steps */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          {steps.map((step, index) => (
-            <div key={step.number} className="flex items-center">
-              <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors
-                ${
-                  currentStep > step.number
-                    ? 'bg-[#667eea] border-[#667eea] text-white'
-                    : currentStep === step.number
-                    ? 'border-[#667eea] text-[#667eea]'
-                    : 'border-gray-300 text-gray-400'
-                }`}
-              >
-                {currentStep > step.number ? (
-                  <CheckCircle className="w-5 h-5 text-white" />
-                ) : (
-                  <step.icon className="w-5 h-5" />
-                )}
-              </div>
-              {index < steps.length - 1 && (
-                <div
-                  className={`w-20 h-1 mx-2 transition-colors ${
-                    currentStep > step.number ? 'bg-[#667eea]' : 'bg-gray-300'
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-between mt-2">
-          {steps.map(step => (
-            <span key={step.number} className="text-xs text-gray-600">
-              {step.name}
-            </span>
-          ))}
-        </div>
+      <div className="mb-6 mt-3">
+        {/* Mobile Grid Layout */}
+<div className="grid grid-cols-2 gap-2 md:hidden">
+  {steps.map((step) => (
+    <div key={step.number} className="flex flex-col items-center">
+      <div
+        className={`flex items-center justify-center w-full h-8 rounded-lg border-2 transition-colors text-xs font-medium px-2
+        ${
+          currentStep === step.number
+            ? `${isDark ? 'border-zinc-300 text-zinc-300' : 'border-zinc-700 text-zinc-700'}`
+            : 'border-zinc-300 text-zinc-400'
+        }`}
+      >
+        <span className="text-xs font-bold truncate">{step.name}</span>
+      </div>
+    </div>
+  ))}
+</div>
+        
+       {/* Desktop Layout */}
+{/* Desktop Layout */}
+<div className="hidden md:flex justify-between gap-0">
+  {steps.map((step) => (
+    <div key={step.number} className="flex flex-col items-center">
+      <div
+        className={`flex items-center justify-center w-28 h-6 rounded-lg border-2 transition-colors text-xs font-medium px-2
+        ${
+          currentStep === step.number
+            ? `${isDark ? 'border-zinc-300 text-zinc-300' : 'border-zinc-700 bg-black text-white'}`
+            : 'border-zinc-300 text-zinc-400'
+        }`}
+      >
+        <span className="text-xs font-bold truncate">{step.name}</span>
+      </div>
+    </div>
+  ))}
+</div>
       </div>
 
       {/* Step Content */}
-      <div className="bg-white p-8 rounded-xl shadow-sm mb-6">{renderStepContent()}</div>
+      <div className={`p-6 rounded-xl shadow-sm mb-5 ${isDark ? 'bg-zinc-900/50 border border-zinc-800' : 'bg-white border border-zinc-300'}`}>{renderStepContent()}</div>
 
       {/* Navigation Buttons */}
-      <div className="flex justify-between">
-        <button
-          onClick={handlePrev}
-          disabled={currentStep === 1}
-          className={`px-6 py-3 rounded-lg flex items-center transition-colors ${
-            currentStep === 1
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <ChevronLeft className="w-5 h-5 mr-2" />
-          Previous
-        </button>
+     <div className="flex justify-between items-center mt-6">
+  {/* PREVIOUS BUTTON */}
+  <button
+    onClick={handlePrev}
+    disabled={currentStep === 1}
+    className={`
+      px-4 py-2 rounded-xl flex items-center text-xs font-medium
+      transition-all duration-200 ease-in-out
+      active:scale-[0.98]
+      ${
+        currentStep === 1
+          ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed opacity-50'
+          : isDark
+            ? 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white hover:scale-[1.02] hover:shadow-lg hover:shadow-black/20'
+            : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:scale-[1.02] hover:shadow-md'
+      }
+    `}
+  >
+    <ChevronLeft className="w-4 h-4 mr-2" />
+    Previous
+  </button>
 
-        {currentStep === steps.length ? (
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || loading}
-            className="px-8 py-3 bg-[#667eea] text-white rounded-lg hover:bg-[#5a67d8] font-medium flex items-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting || loading ? (
-              <>
-                <Loader className="w-5 h-5 animate-spin mr-2" />
-                Creating...
-              </>
-            ) : (
-              <>
-                Launch Campaign
-                <ChevronRight className="w-5 h-5 ml-2" />
-              </>
-            )}
-          </button>
-        ) : (
-          <button
-            onClick={handleNext}
-            className="px-8 py-3 bg-[#667eea] text-white rounded-lg hover:bg-[#5a67d8] font-medium flex items-center transition-colors"
-          >
-            Next
-            <ChevronRight className="w-5 h-5 ml-2" />
-          </button>
-        )}
-      </div>
+  {/* NEXT / SUBMIT BUTTON */}
+  <button
+    onClick={currentStep === steps.length ? handleSubmit : handleNext}
+    disabled={submitting || loading}
+    className={`
+      px-6 py-2 rounded-xl text-xs font-medium flex items-center 
+      transition-all duration-200 ease-in-out
+      active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
+      ${
+        isDark 
+          ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-900/50 hover:text-white hover:scale-[1.02] hover:shadow-lg hover:shadow-white/10' 
+          : 'bg-zinc-900 text-white hover:bg-zinc-800  hover:scale-[1.02] hover:shadow-lg'
+      }
+    `}
+  >
+    {currentStep === steps.length ? (
+      submitting || loading ? (
+        <>
+          <Loader className="w-4 h-4 animate-spin mr-2" />
+          Creating...
+        </>
+      ) : (
+        <>
+          Launch Campaign
+          <ChevronRight className="w-4 h-4 ml-2" />
+        </>
+      )
+    ) : (
+      <>
+        Next
+        <ChevronRight className="w-4 h-4 ml-2" />
+      </>
+    )}
+  </button>
+</div>
 
       {/* Help Text */}
-      <div className="mt-6 text-center text-xs text-gray-500">
+      <div className="mt-4 text-center text-[10px] text-zinc-500">
         <p>All fields marked with <span className="text-red-500">*</span> are required</p>
         <p className="mt-1">You can save as draft and complete later</p>
+      </div>
+      </div>
       </div>
     </div>
   );
 };
 
-export default CampaignBuilder;
+export default CampaignBuilder; 

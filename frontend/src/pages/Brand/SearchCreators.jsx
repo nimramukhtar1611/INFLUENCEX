@@ -1,14 +1,18 @@
-// pages/Brand/SearchCreators.js - FULL FIXED VERSION
+// pages/Brand/SearchCreators.js
 import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
-import { Link } from 'react-router-dom';
-import { Search, SlidersHorizontal, X, Star, Instagram, Youtube, Globe, ChevronDown, Loader, User, Sparkles } from 'lucide-react';
+import { motion } from "framer-motion";
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+  Search, SlidersHorizontal, X, Star, Instagram, Youtube, 
+  Globe, ChevronLeft, ChevronRight, Loader, User, Sparkles, 
+  ArrowUpRight, MapPin, Users 
+} from 'lucide-react';
 import brandService from '../../services/brandService';
 import campaignService from '../../services/campaignService';
 import { formatNumber } from '../../utils/helpers';
 import { useSubscription } from '../../context/SubscriptionContext';
-import { useNavigate } from 'react-router-dom';
 
 const normalizePlanId = (value) => {
   if (!value) return '';
@@ -21,116 +25,69 @@ const normalizePlanId = (value) => {
 const SearchCreators = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [showFilters,setShowFilters]= useState(false);
-  const [creators,   setCreators]   = useState([]);
-  const [campaigns,  setCampaigns]  = useState([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [creators, setCreators] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [aiMatchingActive, setAiMatchingActive] = useState(false);
   const [aiMatchingCanUse, setAiMatchingCanUse] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
   const requestIdRef = useRef(0);
-const navigate = useNavigate();
   const { currentSubscription } = useSubscription();
 
   const currentPlanId = normalizePlanId(currentSubscription?.planId || currentSubscription?.plan || currentSubscription);
   const canUseAiMatchingByPlan = ['professional', 'enterprise'].includes(currentPlanId);
 
-  const hasPlatformAccount = (creator, platform) => {
-    const social = creator?.socialMedia?.[platform];
-    const explicitVerification = creator?.socialVerification?.[platform];
-    if (!social) return false;
-
-    if (explicitVerification || social?.verified) return true;
-
-    const handle = typeof social?.handle === 'string' ? social.handle.trim() : '';
-    const url = typeof social?.url === 'string' ? social.url.trim() : '';
-    if (handle || url) return true;
-
-    return [social?.followers, social?.subscribers, social?.views, social?.posts, social?.videos, social?.likes]
-      .some((value) => Number(value) > 0);
-  };
-  // FIX 29: q: '' added to initial state
   const [filters, setFilters] = useState({
-    q:             '',
-    niche:         '',
-    minFollowers:  '',
-    maxFollowers:  '',
+    q: '',
+    niche: '',
+    minFollowers: '',
+    maxFollowers: '',
     minEngagement: '',
-    platform:      '',
-    location:      '',
-    verified:      '',
-    available:     '',
-    sort:          'relevance',
-    aiMatching:    false,
-    campaignId:    ''
+    platform: '',
+    location: '',
+    verified: '',
+    available: '',
+    sort: 'relevance',
+    aiMatching: false,
+    campaignId: ''
   });
 
   useEffect(() => { fetchCreators(); }, [filters, pagination.page]);
+  
   useEffect(() => {
     if (canUseAiMatchingByPlan) {
       fetchCampaignOptions();
       return;
     }
-
     setCampaigns([]);
     setAiMatchingCanUse(false);
-  }, [canUseAiMatchingByPlan]);
-
-  useEffect(() => {
-    if (canUseAiMatchingByPlan) return;
-
-    setFilters((prev) => ({
-      ...prev,
-      aiMatching: false,
-      campaignId: '',
-      sort: prev.sort === 'ai_match' ? 'relevance' : prev.sort,
-    }));
   }, [canUseAiMatchingByPlan]);
 
   const fetchCampaignOptions = async () => {
     try {
       const res = await campaignService.getBrandCampaigns('all', 1, 100);
-      const list = Array.isArray(res?.campaigns) ? res.campaigns : [];
-      setCampaigns(list);
+      setCampaigns(Array.isArray(res?.campaigns) ? res.campaigns : []);
     } catch (error) {
-      console.error('Failed to load campaign options for AI matching:', error);
-      setCampaigns([]);
+      console.error('Failed to load campaign options:', error);
     }
   };
 
   const fetchCreators = async () => {
     const requestId = ++requestIdRef.current;
-
     try {
       setLoading(true);
       const res = await brandService.searchCreators(filters, pagination.page, pagination.limit);
-
       if (requestId !== requestIdRef.current) return;
-
       if (res?.success || res?.creators) {
         setCreators(res.creators || []);
         setAiMatchingActive(Boolean(res.aiMatching));
-        const entitlementCanUse = typeof res?.aiMatchingEntitlement?.canUse === 'boolean'
-          ? res.aiMatchingEntitlement.canUse
-          : canUseAiMatchingByPlan;
-        setAiMatchingCanUse(entitlementCanUse);
-
-        if (!entitlementCanUse && filters.aiMatching) {
-          setFilters((prev) => ({
-            ...prev,
-            aiMatching: false,
-            campaignId: '',
-            sort: prev.sort === 'ai_match' ? 'relevance' : prev.sort,
-          }));
-        }
+        setAiMatchingCanUse(typeof res?.aiMatchingEntitlement?.canUse === 'boolean' ? res.aiMatchingEntitlement.canUse : canUseAiMatchingByPlan);
         setPagination(res.pagination || { page: 1, limit: 10, total: 0, pages: 1 });
       }
     } catch (e) { console.error('Search error:', e); }
-    finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
+    finally { if (requestId === requestIdRef.current) setLoading(false); }
   };
 
   const handleFilterChange = (key, value) => {
@@ -138,284 +95,317 @@ const navigate = useNavigate();
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  // FIX 30: q: '' included in reset
   const clearFilters = () => {
     setFilters({ q: '', niche: '', minFollowers: '', maxFollowers: '', minEngagement: '', platform: '', location: '', verified: '', available: '', sort: 'relevance', aiMatching: false, campaignId: '' });
     setAiMatchingActive(false);
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const niches    = ['Fashion', 'Beauty', 'Fitness', 'Travel', 'Food', 'Tech', 'Gaming', 'Lifestyle', 'Parenting', 'Finance'];
-  const platforms = ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook'];
+  const niches = ['Fashion', 'Beauty', 'Fitness', 'Travel', 'Food', 'Tech', 'Gaming', 'Lifestyle', 'Parenting', 'Finance'];
+  const platforms = ['instagram', 'youtube', 'tiktok', 'facebook'];
 
   if (loading && creators.length === 0) {
-    return <div className="min-h-screen flex items-center justify-center"><Loader className="w-12 h-12 animate-spin text-[#667eea]" /></div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Searching creators...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-6xl mx-auto space-y-6 p-4 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Find Creators</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Discover the perfect creators for your brand</p>
+          <h1 className="text-3xl  tracking-tight"><span className="font-semibold ">Brand</span> <span className="font-bold">Search</span></h1>
+          <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Connect with top-tier talent for your brand.</p>
         </div>
-      </div>
 
-      {/* Search bar */}
-      <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-        <div className="flex items-center gap-4">
-          <div className="flex-1 relative">
-            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-            <input type="text" placeholder="Search by name, niche, or location..."
-              className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-              }`}
-              // FIX: filters.q is now defined
-              value={filters.q}
-              onChange={e => handleFilterChange('q', e.target.value)} />
-          </div>
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={`px-4 py-3 border rounded-lg flex items-center gap-2 ${
+        <div className="flex items-center gap-2">
+          {aiMatchingActive && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[9px] font-bold uppercase tracking-wider">
+              <Sparkles className="w-2.5 h-2.5" /> AI Optimized
+            </div>
+          )}
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
               showFilters 
-                ? 'bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 border-[#667eea]/60 text-[#667eea]' 
-                : isDark
-                  ? 'border-gray-600 text-gray-300 hover:bg-gray-700/50'
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}>
-            <SlidersHorizontal className="w-5 h-5" /> Filters
+                ? (isDark ? 'bg-black border-white text-white' : 'bg-black border-black text-white')
+                : (isDark ? 'border-zinc-800 text-zinc-500' : 'border-zinc-200 text-zinc-500')
+            }`}
+          >
+            <SlidersHorizontal className="w-3 h-3" /> Filters
           </button>
         </div>
-
-        {/* Filters panel */}
-        {showFilters && (
-          <div className={`mt-4 pt-4 border-t ${isDark ? 'border-gray-700/50' : 'border-gray-200'}`}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className={`font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Filters</h3>
-              <button onClick={() => setShowFilters(false)} className={`${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}><X className="w-5 h-5" /></button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Niche</label>
-                <select value={filters.niche} onChange={e => handleFilterChange('niche', e.target.value)}
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                    isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100' : 'bg-white border-gray-300 text-gray-900'
-                  }`}>
-                  <option value="">All Niches</option>
-                  {niches.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Platform</label>
-                <select value={filters.platform} onChange={e => handleFilterChange('platform', e.target.value)}
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                    isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100' : 'bg-white border-gray-300 text-gray-900'
-                  }`}>
-                  <option value="">All Platforms</option>
-                  {platforms.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Min Followers</label>
-                <input type="number" value={filters.minFollowers}
-                  onChange={e => handleFilterChange('minFollowers', e.target.value)}
-                  placeholder="e.g., 1000"
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                    isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                  }`} />
-              </div>
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Min Engagement %</label>
-                <input type="number" step="0.1" value={filters.minEngagement}
-                  onChange={e => handleFilterChange('minEngagement', e.target.value)}
-                  placeholder="e.g., 3.5"
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                    isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                  }`} />
-              </div>
-            </div>
-
-            {aiMatchingCanUse && (
-            <div className="mt-4 p-4 rounded-lg border border-[#667eea]/20 bg-gradient-to-r from-[#667eea]/5 to-[#764ba2]/5">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#667eea]">AI Creator Matching Engine</p>
-                  <p className="text-xs text-[#764ba2]">Behavioral + engagement + niche scoring with campaign success probability.</p>
-                </div>
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-[#667eea]">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(filters.aiMatching)}
-                    onChange={(e) => {
-                      const enabled = e.target.checked;
-                      setFilters((prev) => ({
-                        ...prev,
-                        aiMatching: enabled,
-                        sort: enabled ? 'ai_match' : 'relevance',
-                        campaignId: enabled ? prev.campaignId : ''
-                      }));
-                      setPagination((prev) => ({ ...prev, page: 1 }));
-                    }}
-                    className="rounded border-[#667eea] text-[#667eea] focus:ring-[#667eea]"
-                  />
-                  Enable AI Matching
-                </label>
-              </div>
-
-              {filters.aiMatching && (
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Campaign Context (optional but recommended)</label>
-                  <select
-                    value={filters.campaignId}
-                    onChange={(e) => handleFilterChange('campaignId', e.target.value)}
-                    className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] bg-white"
-                  >
-                    <option value="">No campaign context</option>
-                    {campaigns.map((campaign) => (
-                      <option key={campaign._id} value={campaign._id}>
-                        {campaign.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-            )}
-
-            <div className={`flex justify-end gap-3 mt-4 pt-4 border-t ${isDark ? 'border-gray-700/50' : 'border-gray-200'}`}>
-              <button onClick={clearFilters} className={`px-4 py-2 text-sm font-medium ${isDark ? 'text-gray-300 hover:text-gray-100' : 'text-gray-700 hover:text-gray-900'}`}>Clear All</button>
-              <button onClick={() => setShowFilters(false)} className="px-4 py-2 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white text-sm font-medium rounded-lg hover:from-[#5a67d8] hover:to-[#6b46a0] transition-all duration-200">Apply Filters</button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Results header */}
-      <div className="flex justify-between items-center">
-        <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Showing {creators.length} of {pagination.total} creators</p>
-        {aiMatchingActive && (
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 text-[#667eea] text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5" />
-            AI Matching Active
-          </div>
-        )}
-   
+      {/* Modern Search Bar */}
+      <div className="relative group">
+        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
+        <input 
+          type="text" 
+          placeholder="Search name, niche, or location..."
+          className={`w-full pl-11 pr-4 py-3 rounded-xl border transition-all outline-none text-sm ${
+            isDark 
+              ? 'bg-zinc-900/50 border-zinc-800 focus:border-zinc-600 text-white' 
+              : 'bg-white border-zinc-100 focus:border-zinc-300 shadow-sm'
+          }`}
+          value={filters.q}
+          onChange={e => handleFilterChange('q', e.target.value)}
+        />
       </div>
 
-      {/* Creator grid */}
-      {creators.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {creators.map(creator => (
-            <div key={creator._id} className={`rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 ${
-              isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'
-            }`}>
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center">
-                  {creator.profilePicture ? (
-                    <img src={creator.profilePicture} alt={creator.displayName} className="w-16 h-16 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-16 h-16 bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 rounded-full flex items-center justify-center">
-                      <User className="w-8 h-8 text-[#667eea]" />
-                    </div>
+      {/* Expanded Filters Panel */}
+      {showFilters && (
+        <div className={`p-5 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} animate-in fade-in slide-in-from-top-2 duration-200`}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            <div>
+              <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">Niche</label>
+              <select 
+                value={filters.niche} 
+                onChange={e => handleFilterChange('niche', e.target.value)}
+                className={`w-full bg-transparent  border-b py-1.5 focus:outline-none text-xs ${isDark ? 'border-zinc-800 !bg-black' : 'border-zinc-200'}`}
+              >
+                <option value="">All Niches</option>
+                {niches.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">Platform</label>
+              <select 
+                value={filters.platform} 
+                onChange={e => handleFilterChange('platform', e.target.value)}
+                className={`w-full bg-transparent border-b py-1.5 focus:outline-none text-xs ${isDark ? 'border-zinc-800 !bg-black' : 'border-zinc-200'}`}
+              >
+                <option value="">All Platforms</option>
+                {platforms.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">Followers</label>
+              <input 
+                type="number" 
+                placeholder="Min e.g. 10k"
+                value={filters.minFollowers}
+                onChange={e => handleFilterChange('minFollowers', e.target.value)}
+                className={`w-full bg-transparent border-b py-1.5 focus:outline-none text-xs ${isDark ? 'border-zinc-800 !bg-black' : 'border-zinc-200'}`}
+              />
+            </div>
+            <div className="flex items-end">
+              <button onClick={clearFilters} className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 hover:text-red-500 transition-colors mb-1.5">Reset All</button>
+            </div>
+          </div>
+
+          {aiMatchingCanUse && (
+            <div className={`mt-6 pt-5 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+              <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-tight text-[#667eea]">AI Matching Engine</p>
+                  <p className={`text-[10px] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Smart scoring based on campaign objectives.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {filters.aiMatching && (
+                    <select
+                      value={filters.campaignId}
+                      onChange={(e) => handleFilterChange('campaignId', e.target.value)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] ${isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200 border'}`}
+                    >
+                      <option value="">No context</option>
+                      {campaigns.map((c) => <option key={c._id} value={c._id}>{c.title}</option>)}
+                    </select>
                   )}
-                  <div className="ml-4">
-                    <h3 className={`font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{creator.displayName}</h3>
-                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{creator.handle}</p>
-                    <div className="flex items-center mt-1">
-                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                      <span className={`text-sm ml-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{creator.stats?.averageRating?.toFixed(1) || '0.0'}</span>
-                    </div>
-                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={Boolean(filters.aiMatching)}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        setFilters(prev => ({ ...prev, aiMatching: enabled, sort: enabled ? 'ai_match' : 'relevance' }));
+                      }}
+                    />
+                    <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#667eea]"></div>
+                  </label>
                 </div>
-              </div>
-
-              <div className="space-y-2 mb-4">
-                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{creator.niches?.join(', ') || 'No niches'}</p>
-                {creator.location && <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{creator.location}</p>}
-                <div className="flex items-center gap-4">
-                  <div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatNumber(creator.totalFollowers || 0)}</p>
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Followers</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-green-600">{creator.averageEngagement?.toFixed(1) || '0'}%</p>
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Engagement</p>
-                  </div>
-                  {creator.stats?.completedDeals > 0 && (
-                    <div>
-                      <p className={`text-sm font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{creator.stats.completedDeals}</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Deals</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {creator.aiMatch && (
-                <div className="mb-4 p-3 rounded-lg border border-[#667eea]/20 bg-gradient-to-r from-[#667eea]/5 to-[#764ba2]/5">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-xs font-semibold text-[#667eea] uppercase tracking-wide">AI Match</p>
-                    <span className="text-xs font-bold text-[#764ba2]">{creator.aiMatch.score}%</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-[#764ba2] mb-2">
-                    <span>Success Probability</span>
-                    <span className="font-semibold">{creator.aiMatch.successProbability}%</span>
-                  </div>
-                  <div className="text-[11px] text-[#667eea]/80">
-                    {(creator.aiMatch.reasons || []).slice(0, 1).join('')}
-                  </div>
-                </div>
-              )}
-
-              {/* Platforms */}
-              <div className="flex items-center gap-2 mb-4">
-                {hasPlatformAccount(creator, 'instagram') && <Instagram className="w-5 h-5 text-pink-600" />}
-                {hasPlatformAccount(creator, 'youtube')   && <Youtube   className="w-5 h-5 text-red-600" />}
-                {hasPlatformAccount(creator, 'tiktok')    && <Globe     className="w-5 h-5 text-black" />}
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <button
-  onClick={() => navigate (`/brand/createdeal?creator=${creator._id}`)}
-  className="flex-1 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-[#5a67d8] hover:to-[#6b46a0] transition-all duration-200 text-center"
->
-  Send Offer
-</button>
-                <Link to={`/brand/creators/${creator._id}`}
-                  className={`flex-1 px-4 py-2 border rounded-lg text-sm font-medium text-center ${
-                    isDark 
-                      ? 'border-gray-600 text-gray-300 hover:bg-gray-700/50'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                  }`}>
-                  View Profile
-                </Link>
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className={`text-center py-12 rounded-xl shadow-sm ${
-          isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'
-        }`}>
-          <User className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
-          <h3 className={`text-lg font-medium mb-2 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>No creators found</h3>
-          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Try adjusting your filters</p>
-          <button onClick={clearFilters} className="mt-4 text-[#667eea] hover:text-[#764ba2] text-sm font-medium transition-colors duration-200">Clear all filters</button>
+          )}
         </div>
       )}
 
-      {/* Load more */}
-      {pagination.pages > pagination.page && (
-        <div className="text-center pt-4">
-          <button
-            onClick={() => { setLoading(true); setPagination(prev => ({ ...prev, page: prev.page + 1 })); }}
-            className={`px-6 py-3 border rounded-lg text-sm font-medium inline-flex items-center ${
-              isDark 
-                ? 'border-gray-600 text-gray-300 hover:bg-gray-700/50'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}>
-            Load More <ChevronDown className="ml-2 w-4 h-4" />
-          </button>
+      {/* Creator Table/List Interface */}
+    <div className="space-y-4">
+  {/* Row Header - Ultra-wide tracking for an editorial feel */}
+  <div className={`hidden md:grid grid-cols-12 px-8 py-3 text-[10px] font-black uppercase tracking-[0.25em] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+    <div className="col-span-4">Talent Profile</div>
+    <div className="col-span-2">Audience Size</div>
+    <div className="col-span-2">Engagement</div>
+    <div className="col-span-2">AI Match Score</div>
+    <div className="col-span-2 text-right">Acquisition</div>
+  </div>
+
+  {creators.length > 0 ? (
+    creators.map((creator, index) => (
+      <div 
+        key={creator._id}
+        className={`
+          group relative grid grid-cols-1 md:grid-cols-12 items-center px-8 py-5 rounded-[2.5rem] border 
+          transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+          ${isDark 
+            ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)]' 
+            : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]'}
+        `}
+      >
+        {/* Profile Identity: Squircle + Social Badge */}
+        <div className="col-span-4 flex items-center gap-5">
+          <div className="relative shrink-0">
+            <div className={`
+              p-1 rounded-[1.4rem] border transition-all duration-700 
+              ${isDark ? 'bg-zinc-800 border-zinc-700 group-hover:border-zinc-500' : 'bg-white border-zinc-100 shadow-sm group-hover:border-zinc-300'}
+            `}>
+              {creator.profilePicture ? (
+                <img 
+                  src={creator.profilePicture} 
+                  className="w-12 h-12 rounded-[1rem] object-cover grayscale group-hover:grayscale-0 transition-all duration-700 ease-in-out group-hover:scale-110" 
+                  alt="" 
+                />
+              ) : (
+                <div className={`w-12 h-12 rounded-[1rem] flex items-center justify-center ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}>
+                  <User className="w-6 h-6 text-zinc-500 opacity-40" />
+                </div>
+              )}
+            </div>
+            {/* Social Floating Badge */}
+            {creator.socialMedia?.instagram && (
+              <div className="absolute -bottom-1 -right-1 bg-white p-1 rounded-full shadow-lg border border-zinc-100">
+                <Instagram className="w-3 h-3 text-pink-500 fill-current" />
+              </div>
+            )}
+          </div>
+          
+          <div className="flex flex-col min-w-0">
+            <span className={`font-bold text-[15px] tracking-tight leading-tight ${isDark ? 'text-zinc-100 group-hover:text-white' : 'text-zinc-900'}`}>
+              {creator.displayName}
+            </span>
+            <div className="flex items-center gap-1 mt-1">
+              <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                {creator.niches?.slice(0, 2).join(' • ') || 'General'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Audience Size: Clean Financial Look */}
+        <div className="col-span-2 mt-4 md:mt-0 flex flex-col">
+          <span className={`text-lg font-bold tracking-tighter leading-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+            {formatNumber(creator.totalFollowers || 0)}
+          </span>
+          <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 opacity-50">Reach Potential</span>
+        </div>
+
+        {/* Engagement: Emerald Pill */}
+        <div className="col-span-2 mt-4 md:mt-0 flex items-center">
+          <span className={`
+            inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border
+            ${isDark 
+              ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500' 
+              : 'bg-emerald-50 border-emerald-100 text-emerald-600'}
+          `}>
+            {creator.averageEngagement?.toFixed(1) || '0'}% Eng.
+          </span>
+        </div>
+
+        {/* AI Match Score: Gradient Impact */}
+        <div className="col-span-2 mt-4 md:mt-0">
+          {creator.aiMatch ? (
+            <div className="flex flex-col">
+              <span className="text-sm font-black bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent italic">
+                {creator.aiMatch.score}% MATCH
+              </span>
+              <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest opacity-40">Predictive Fit</span>
+            </div>
+          ) : (
+            <span className="text-zinc-500 opacity-20 text-xs">--</span>
+          )}
+        </div>
+
+        {/* Action Col: Inverted Utility Buttons */}
+        <div className="col-span-2 mt-4 md:mt-0 flex justify-end gap-2.5">
+          <motion.button 
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => navigate(`/brand/createdeal?creator=${creator._id}`)}
+            className={`
+              p-3 rounded-xl transition-all duration-300 group/btn shadow-sm
+              ${isDark 
+                ? 'bg-zinc-800 text-zinc-400 hover:bg-white hover:text-black' 
+                : 'bg-zinc-100 text-zinc-500 hover:bg-black hover:text-white'}
+            `}
+            title="Create Deal"
+          >
+            <ArrowUpRight className="w-4 h-4 transition-transform group-hover/btn:rotate-45" strokeWidth={3} />
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => navigate(`/brand/creators/${creator._id}`)}
+            className={`
+              p-3 rounded-xl border transition-all duration-300 group/btn
+              ${isDark 
+                ? 'border-zinc-800 text-zinc-500 hover:border-zinc-500 hover:text-white' 
+                : 'border-zinc-200 text-zinc-400 hover:border-zinc-900 hover:text-zinc-900 shadow-sm'}
+            `}
+          >
+            <User className="w-4 h-4" strokeWidth={2.5} />
+          </motion.button>
+        </div>
+      </div>
+    ))
+  ) : (
+    /* Clean Discovery Empty State */
+    <div className={`
+      flex flex-col items-center justify-center py-32 rounded-[3.5rem] border-2 border-dashed transition-all
+      ${isDark ? 'border-zinc-800 bg-zinc-900/10' : 'border-zinc-100 bg-zinc-50/50'}
+    `}>
+      <div className={`p-8 rounded-[2.5rem] mb-6 shadow-inner ${isDark ? 'bg-zinc-800/50' : 'bg-white'}`}>
+        <Search className="w-12 h-12 text-zinc-500 opacity-20 stroke-[1px]" />
+      </div>
+      <h3 className="text-lg font-bold tracking-tight">Marketplace Silent</h3>
+      <p className="text-[12px] text-zinc-500 mt-2 max-w-[240px] text-center leading-relaxed">
+        No creators match your current discovery parameters. Try expanding your niche filters.
+      </p>
+    </div>
+  )}
+</div>
+
+      {/* Pagination */}
+      {pagination.pages > 1 && (
+        <div className="flex items-center justify-between pt-6 border-t border-zinc-800/10 dark:border-zinc-200/10">
+          <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+            Page {pagination.page} / {pagination.pages}
+          </p>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
+              disabled={pagination.page === 1}
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 disabled:opacity-30 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
+              disabled={pagination.page === pagination.pages}
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 disabled:opacity-30 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>

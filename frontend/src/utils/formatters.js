@@ -1,5 +1,5 @@
 // utils/formatters.js - COMPLETE FIXED VERSION
-import { format, formatDistance, formatDistanceToNow, formatRelative, formatDuration, intervalToDuration } from 'date-fns';
+import { format, formatDistanceToNow, intervalToDuration } from 'date-fns';
 
 // ==================== CURRENCY FORMATTERS ====================
 
@@ -223,7 +223,7 @@ export const smartDate = (date) => {
  * @param {number} days - Number of days
  * @returns {string}
  */
-export const formatDuration = (days) => {
+export const formatDurationInDays = (days) => {
   if (!days) return '0 days';
   
   const duration = intervalToDuration({ start: 0, end: days * 24 * 60 * 60 * 1000 });
@@ -402,7 +402,7 @@ export default {
   timeAgo,
   formatDateRange,
   smartDate,
-  formatDuration,
+  formatDurationInDays,
   formatFileSize,
   formatFileSizePrecise,
   formatCompactNumber,

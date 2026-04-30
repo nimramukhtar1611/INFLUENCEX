@@ -66,9 +66,6 @@ class CreatorService {
         case 'tiktok':
           result = await socialService.verifyTikTok(handle);
           break;
-        case 'twitter':
-          result = await socialService.verifyTwitter(handle);
-          break;
         default:
           throw new Error('Unsupported platform');
       }

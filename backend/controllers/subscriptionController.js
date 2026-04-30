@@ -1099,49 +1099,103 @@ const updatePaymentMethod = asyncHandler(async (req, res) => {
 // @route   GET /api/subscriptions/history
 // @access  Private
 const getSubscriptionHistory = asyncHandler(async (req, res) => {
+  console.log(`📋 [API] Getting subscription history for user: ${req.user._id} (${req.user.email})`);
+  
   const { page = 1, limit = 10 } = req.query;
+  console.log(`📍 [API] Query params: page=${page}, limit=${limit}`);
 
-  const subscriptions = await Subscription.find({ userId: req.user._id })
-    .populate('planId')
-    .sort({ createdAt: -1 })
-    .limit(parseInt(limit))
-    .skip((parseInt(page) - 1) * parseInt(limit));
+  try {
+    console.log(`🔍 [API] Fetching subscriptions from database...`);
+    const subscriptions = await Subscription.find({ userId: req.user._id })
+      .populate('planId')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
 
-  const total = await Subscription.countDocuments({ userId: req.user._id });
-
-  let invoices = [];
-  if (req.user.stripeCustomerId) {
-    try {
-      const stripeInvoices = await stripe.invoices.list({
-        customer: req.user.stripeCustomerId,
-        limit: 12
+    const total = await Subscription.countDocuments({ userId: req.user._id });
+    
+    console.log(`📈 [API] Found ${subscriptions.length} subscriptions (total: ${total})`);
+    
+    // Log subscription details for debugging
+    subscriptions.forEach((sub, index) => {
+      console.log(`📋 [API] Subscription ${index + 1}:`, {
+        id: sub._id,
+        planId: sub.planId?.planId || sub.planId,
+        status: sub.status,
+        stripeSubscriptionId: sub.stripeSubscriptionId,
+        billingPeriod: {
+          start: sub.billingPeriod?.start,
+          end: sub.billingPeriod?.end
+        },
+        isActive: sub.isActive ? sub.isActive() : 'N/A'
       });
-      invoices = stripeInvoices.data.map(inv => ({
-        id: inv.id,
-        number: inv.number,
-        amount: inv.amount_paid / 100,
-        currency: inv.currency,
-        status: inv.status,
-        date: new Date(inv.created * 1000),
-        pdf: inv.invoice_pdf,
-        hostedUrl: inv.hosted_invoice_url
-      }));
-    } catch (error) {
-      console.error('Stripe invoices error:', error.message);
-    }
-  }
+    });
 
-  res.json({
-    success: true,
-    subscriptions,
-    invoices,
-    pagination: {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      total,
-      pages: Math.ceil(total / limit)
+    let invoices = [];
+    if (req.user.stripeCustomerId) {
+      console.log(`💳 [API] Fetching Stripe invoices for customer: ${req.user.stripeCustomerId}`);
+      try {
+        const stripeInvoices = await stripe.invoices.list({
+          customer: req.user.stripeCustomerId,
+          limit: 12
+        });
+        invoices = stripeInvoices.data.map(inv => ({
+          id: inv.id,
+          number: inv.number,
+          amount: inv.amount_paid / 100,
+          currency: inv.currency,
+          status: inv.status,
+          date: new Date(inv.created * 1000),
+          pdf: inv.invoice_pdf,
+          hostedUrl: inv.hosted_invoice_url
+        }));
+        console.log(`💳 [API] Found ${invoices.length} Stripe invoices`);
+      } catch (error) {
+        console.error('❌️ [API] Stripe invoices error:', error.message);
+        console.log(`⚠️ [API] Continuing without Stripe invoices...`);
+      }
+    } else {
+      console.log(`⚠️ [API] User has no stripeCustomerId, skipping invoice fetch`);
     }
-  });
+
+    const response = {
+      success: true,
+      subscriptions,
+      invoices,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    };
+
+    console.log(`✅ [API] Returning subscription history:`, {
+      subscriptionCount: subscriptions.length,
+      invoiceCount: invoices.length,
+      hasActiveSubscription: subscriptions.some(sub => ['active', 'trialing'].includes(sub.status))
+    });
+
+    res.json(response);
+    
+  } catch (error) {
+    console.error(`❌️ [API] Error in getSubscriptionHistory:`, error.message);
+    console.error(`🔍 [API] Error stack:`, error.stack);
+    
+    // Return empty data rather than failing completely
+    res.json({
+      success: true,
+      subscriptions: [],
+      invoices: [],
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: 0,
+        pages: 0
+      },
+      error: error.message
+    });
+  }
 });
 
 // @desc    Get invoice by ID

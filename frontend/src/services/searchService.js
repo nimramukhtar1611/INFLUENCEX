@@ -428,8 +428,7 @@ class SearchService {
         platforms: [
           { value: 'instagram', label: 'Instagram', icon: '📸' },
           { value: 'youtube', label: 'YouTube', icon: '🎥' },
-          { value: 'tiktok', label: 'TikTok', icon: '🎵' },
-          { value: 'twitter', label: 'Twitter', icon: '🐦' }
+          { value: 'tiktok', label: 'TikTok', icon: '🎵' }
         ],
         sortOptions: [
           { value: 'followers', label: 'Followers' },

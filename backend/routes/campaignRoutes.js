@@ -3,6 +3,8 @@ const router = express.Router();
 const { protect, authorize, hasPermission, resolveBrandContext } = require('../middleware/auth');
 const campaignController = require('../controllers/campaignController');
 const Campaign = require('../models/Campaign');
+const { brandLimiter, creatorLimiter, dealCreationLimiter } = require('../middleware/rateLimiter');
+
 
 // ==================== PUBLIC ROUTES ====================
 // Get available campaigns for creators
@@ -14,7 +16,12 @@ router.use(protect, resolveBrandContext); // All routes below require authentica
 // -------------------- BRAND ROUTES --------------------
 
 // Create a campaign
-router.post('/', authorize('brand'), hasPermission('create_campaigns'), campaignController.createCampaign);
+router.post('/', 
+  brandLimiter, // 🔒 SECURITY: Prevent campaign spam (200 requests per 15min)
+  authorize('brand'), 
+  hasPermission('create_campaigns'), 
+  campaignController.createCampaign
+);
 
 // Middleware to check if the campaign belongs to the brand
 async function checkBrandOwnership(req, res, next) {

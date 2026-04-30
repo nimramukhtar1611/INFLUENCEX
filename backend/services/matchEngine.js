@@ -308,7 +308,7 @@ class MatchEngine {
     if (socialMedia?.instagram?.handle) availablePlatforms.push('instagram');
     if (socialMedia?.youtube?.handle) availablePlatforms.push('youtube');
     if (socialMedia?.tiktok?.handle) availablePlatforms.push('tiktok');
-    if (socialMedia?.twitter?.handle) availablePlatforms.push('twitter');
+    if (socialMedia?.facebook?.handle) availablePlatforms.push('facebook');
 
     if (availablePlatforms.length === 0) {
       return { score: 0, reason: 'No social media connected' };

@@ -108,7 +108,7 @@ const Input = forwardRef(({
         <input
           ref={ref}
           type={getInputType()}
-          value={value}
+          value={value || ''}
           onChange={onChange}
           onBlur={handleBlur}
           onFocus={onFocus}

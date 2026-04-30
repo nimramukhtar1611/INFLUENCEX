@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import { useEarnings } from '../../hooks/useEarnings';
 import { useAuth } from '../../hooks/useAuth';
+import { useGlobalSettings } from '../../context/GlobalSettingsContext';
 import { formatNumber, formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
 import { getStatusColor, getStatusIconColor } from '../../utils/colorScheme';
 import Button from '../../components/UI/Button';
@@ -51,6 +52,7 @@ import { useTheme } from '../../hooks/useTheme';
 const CreatorEarnings = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { calculateFee, formatCurrency: formatCurrencyWithSettings } = useGlobalSettings();
   const { user, refreshUser } = useAuth();
   const {
     loading,
@@ -180,6 +182,16 @@ const CreatorEarnings = () => {
     }
   };
 
+  // Status Style Config mimicking Brand Payments
+  const statusConfig = {
+    completed: { bg: isDark ? 'bg-white' : 'bg-black', text: isDark ? 'text-black' : 'text-white' },
+    released: { bg: isDark ? 'bg-white' : 'bg-black', text: isDark ? 'text-black' : 'text-white' },
+    pending: { bg: isDark ? 'bg-zinc-800' : 'bg-gray-100', text: isDark ? 'text-zinc-400' : 'text-gray-600' },
+    'in-escrow': { bg: 'bg-blue-500/10', text: 'text-blue-500' },
+    failed: { bg: 'bg-red-500/10', text: 'text-red-500' },
+    refunded: { bg: 'bg-purple-500/10', text: 'text-purple-500' }
+  };
+
   // ==================== STATUS HELPERS ====================
   const getStatusColorClass = (status) => {
     return getStatusColor(status, 'payment', isDark);
@@ -242,175 +254,122 @@ const CreatorEarnings = () => {
   if (loading && transactions.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-10 h-10 animate-spin text-[#667eea]" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading earnings...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Earnings</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Track your income and manage payouts</p>
+          <h1 className="text-3xl font-light tracking-tight font-semibold">Creator <span className="font-bold">Earnings</span></h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Monitor your revenue, withdraw earnings, and view payment history.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => {
-              fetchBalance();
-              fetchTransactions(1, 10);
-              fetchWithdrawals(1, 10);
-              fetchEarningsHistory(period);
-            }}
-          >
-            Refresh
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            icon={Wallet}
+        
+        <div className="flex items-center gap-3">
+         
+          <button 
             onClick={() => setShowWithdrawModal(true)}
             disabled={balance < 50}
+            className={`px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${isDark ? 'bg-white !text-white hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'} disabled:opacity-50 hover:scale-105`}
           >
             Withdraw Funds
-          </Button>
-        </div>
-      </div>
-
-      {/* Balance Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-[#667eea] to-[#764ba2] p-6 rounded-xl shadow-lg text-white">
-          <p className="text-sm opacity-90 mb-2">Available Balance</p>
-          <h2 className="text-3xl font-bold mb-4">{formatCurrency(balance)}</h2>
-          <button
-            onClick={() => setShowWithdrawModal(true)}
-            disabled={balance < 50}
-            className="w-full bg-white text-[#667eea] py-2 rounded-lg text-sm font-medium hover:bg-[#667eea]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Withdraw Now
           </button>
         </div>
-
-        <StatsCard
-          title="Pending"
-          value={formatCurrency(pendingBalance)}
-          change="Awaiting approval"
-          icon={Clock}
-          color="bg-yellow-500"
-        />
-
-        <StatsCard
-          title="This Month"
-          value={formatCurrency(summary.thisMonth)}
-          change={getGrowthPercentage()}
-          icon={TrendingUp}
-          color="bg-green-500"
-        />
-
-        <StatsCard
-          title="Lifetime"
-          value={formatCurrency(realizedTotal || summary.total)}
-          change={`${transactions.length} transactions`}
-          icon={DollarSign}
-          color="bg-blue-500"
-        />
       </div>
 
-      <div className={`p-6 rounded-xl shadow-sm border ${isDark ? 'bg-blue-900/30 border-blue-700/30' : 'bg-blue-50 border-blue-100'}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Stripe Payout Account</h2>
-            <p className={`text-sm mt-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Connect Stripe so approved withdrawals can be paid out.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${payoutStatusClass}`}>
-              Stripe: {payoutStatusText}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              icon={Link2}
-              onClick={handleConnectStripe}
-              loading={connectingStripe || payoutAccount.loading}
-            >
-              {payoutAccount.connected ? 'Update Stripe Account' : 'Connect Stripe Account'}
-            </Button>
-          </div>
+      {/* Stats as Status Tabs (Brand Payment Style) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[160px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Available Balance</span>
+            <span className="text-xl font-light tracking-tighter mt-1">{formatCurrency(balance)}</span>
         </div>
+        <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[160px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Pending</span>
+            <span className="text-xl font-light tracking-tighter mt-1">{formatCurrency(pendingBalance)}</span>
+        </div>
+        <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[160px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">This Month</span>
+            <span className="text-xl font-light tracking-tighter mt-1">{formatCurrency(summary.thisMonth)}</span>
+        </div>
+        <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[160px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Lifetime</span>
+            <span className="text-xl font-light tracking-tighter mt-1">{formatCurrency(realizedTotal || summary.total)}</span>
+        </div>
+      </div>
+
+      {/* Stripe Account Status */}
+      <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[200px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-900/50">Stripe Account</span>
+          <span className="text-sm font-light tracking-tight mt-1">{payoutStatusText}</span>
+         <button
+  onClick={handleConnectStripe}
+  disabled={connectingStripe || payoutAccount.loading}
+  className={`mt-2 px-6 py-2 w-full sm:w-auto rounded-md text-[12px] font-bold uppercase tracking-wider 
+    transition-all duration-200 ease-in-out border
+    hover:shadow-lg active:scale-[0.98]
+    ${
+    payoutAccount.connected 
+      ? (isDark 
+          ? 'bg-zinc-800 text-zinc-100 border-zinc-700 hover:bg-zinc-700' 
+          : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200')
+      : (isDark 
+          ? 'bg-black text-white border-gray-800 hover:bg-zinc-900 hover:border-zinc-700' 
+          : 'bg-black text-white border-black hover:bg-zinc-800 hover:shadow-zinc-300')
+  } disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none`}
+>
+  {connectingStripe || payoutAccount.loading ? (
+    <span className="flex items-center justify-center gap-2">
+       {/* Simple dot-pulse animation ya loading text */}
+       <span className="animate-pulse">Loading...</span>
+    </span>
+  ) : (
+    payoutAccount.connected ? 'Update Account' : 'Connect Stripe'
+  )}
+</button>
       </div>
 
       {/* Time Period Selector */}
-      <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Calendar className={`w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`} />
-            <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Time Period:</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {['7d', '30d', '90d', '12m'].map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  period === p
-                    ? 'bg-[#667eea] text-white'
-                    : isDark
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : p === '90d' ? '90 Days' : '12 Months'}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+        {['7d', '30d', '90d', '12m'].map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[120px] transition-all ${
+              period === p
+                ? (isDark ? 'bg-white text-white border-white' : 'bg-black text-white border-black')
+                : (isDark ? 'bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:border-zinc-600' : 'bg-white border-zinc-100 text-zinc-600 hover:border-zinc-300')
+            }`}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider">{p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : p === '90d' ? '90 Days' : '12 Months'}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Earnings Chart */}
-      <div className={`p-6 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
+      {/* Earnings Chart - Simplified */}
+      <div className={`px-6 py-5 rounded-2xl border ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Earnings Overview</h2>
-          <div className={`flex items-center gap-2 rounded-lg p-1 ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
-            <button
-              onClick={() => setChartType('area')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                chartType === 'area' 
-                  ? 'bg-white shadow-sm text-[#667eea]' 
-                  : isDark
-                    ? 'text-gray-300 hover:text-gray-100'
-                    : 'text-gray-600'
-              }`}
-            >
-              Area
-            </button>
-            <button
-              onClick={() => setChartType('bar')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                chartType === 'bar' 
-                  ? 'bg-white shadow-sm text-[#667eea]' 
-                  : isDark
-                    ? 'text-gray-300 hover:text-gray-100'
-                    : 'text-gray-600'
-              }`}
-            >
-              Bar
-            </button>
-            <button
-              onClick={() => setChartType('line')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                chartType === 'line' 
-                  ? 'bg-white shadow-sm text-[#667eea]' 
-                  : isDark
-                    ? 'text-gray-300 hover:text-gray-100'
-                    : 'text-gray-600'
-              }`}
-            >
-              Line
-            </button>
+          <h2 className="text-lg font-semibold tracking-tight">Earnings Overview</h2>
+          <div className="flex items-center gap-2">
+            {['area', 'bar', 'line'].map((type) => (
+              <button
+                key={type}
+                onClick={() => setChartType(type)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                  chartType === type
+                    ? (isDark ? 'bg-white text-white' : 'bg-black text-white')
+                    : (isDark ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200')
+                }`}
+              >
+                {type}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -419,18 +378,18 @@ const CreatorEarnings = () => {
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                  <stop offset="5%" stopColor={isDark ? '#fff' : '#000'} stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor={isDark ? '#fff' : '#000'} stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#e5e7eb'} />
+              <XAxis dataKey="date" stroke={isDark ? '#9ca3af' : '#6b7280'} />
+              <YAxis stroke={isDark ? '#9ca3af' : '#6b7280'} />
+              <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }} />
               <Area
                 type="monotone"
                 dataKey="earnings"
-                stroke="#4F46E5"
+                stroke={isDark ? '#fff' : '#000'}
                 fillOpacity={1}
                 fill="url(#colorEarnings)"
               />
@@ -439,367 +398,240 @@ const CreatorEarnings = () => {
 
           {chartType === 'bar' && (
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Bar dataKey="earnings" fill="#4F46E5" />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#e5e7eb'} />
+              <XAxis dataKey="date" stroke={isDark ? '#9ca3af' : '#6b7280'} />
+              <YAxis stroke={isDark ? '#9ca3af' : '#6b7280'} />
+              <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }} />
+              <Bar dataKey="earnings" fill={isDark ? '#fff' : '#000'} />
             </BarChart>
           )}
 
           {chartType === 'line' && (
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Line type="monotone" dataKey="earnings" stroke="#4F46E5" strokeWidth={2} />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#374151' : '#e5e7eb'} />
+              <XAxis dataKey="date" stroke={isDark ? '#9ca3af' : '#6b7280'} />
+              <YAxis stroke={isDark ? '#9ca3af' : '#6b7280'} />
+              <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#fff', border: 'none', borderRadius: '8px' }} />
+              <Line type="monotone" dataKey="earnings" stroke={isDark ? '#fff' : '#000'} strokeWidth={2} />
             </LineChart>
           )}
         </ResponsiveContainer>
       </div>
 
-      {/* Tabs */}
-      <div className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-        <nav className="flex space-x-8">
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-zinc-800/10 dark:border-zinc-200/10">
+        {['overview', 'transactions', 'withdrawals'].map(tab => (
           <button
-            onClick={() => setActiveTab('overview')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'overview'
-                ? 'border-[#667eea] text-[#667eea]'
-                : isDark
-                  ? 'border-transparent text-gray-400 hover:text-gray-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+              activeTab === tab 
+                ? (isDark ? 'border-white text-white' : 'border-black text-black')
+                : 'border-transparent text-zinc-500 hover:text-zinc-400'
             }`}
           >
-            Overview
+            {tab}
           </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'transactions'
-                ? 'border-[#667eea] text-[#667eea]'
-                : isDark
-                  ? 'border-transparent text-gray-400 hover:text-gray-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Transactions
-          </button>
-          <button
-            onClick={() => setActiveTab('withdrawals')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'withdrawals'
-                ? 'border-[#667eea] text-[#667eea]'
-                : isDark
-                  ? 'border-transparent text-gray-400 hover:text-gray-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Withdrawals
-          </button>
-        </nav>
+        ))}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content - Only show active tab */}
       {activeTab === 'overview' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-              <p className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Total Earned</p>
-              <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatCurrency(totalEarned)}</p>
-            </div>
-            <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-              <p className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Total Withdrawn</p>
-              <p className="text-xl font-bold text-green-600">{formatCurrency(totalWithdrawn)}</p>
-            </div>
-            <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-              <p className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Pending</p>
-              <p className="text-xl font-bold text-yellow-600">{formatCurrency(pendingTotal)}</p>
-            </div>
-            <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-              <p className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Avg. Deal Value</p>
-              <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatCurrency(summary.averageDealValue)}</p>
-            </div>
-          </div>
+        <div className="space-y-3">
+          {transactions.length > 0 ? (
+            <>
+              {/* Table Header */}
+              <div className={`hidden md:grid grid-cols-12 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                <div className="col-span-4">Transaction & Ref</div>
+                <div className="col-span-2">Amount</div>
+                <div className="col-span-3">Status</div>
+                <div className="col-span-2">Date</div>
+                <div className="col-span-1 text-right">Type</div>
+              </div>
 
-          <div className={`rounded-xl shadow-sm overflow-hidden ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-            <div className={`px-6 py-4 border-b flex justify-between items-center ${isDark ? 'border-gray-700/50' : 'border-gray-200/50'}`}>
-              <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Recent Transactions</h2>
-              <button
-                onClick={() => setActiveTab('transactions')}
-                className={`text-sm font-medium hover:underline ${isDark ? 'text-[#667eea] hover:text-[#667eea]/80' : 'text-[#667eea] hover:text-[#5a67d8]'}`}
-              >
-                View All
-              </button>
-            </div>
-            <div className={`divide-y ${isDark ? 'divide-gray-700/30' : 'divide-gray-200/30'}`}>
-              {transactions.slice(0, 5).map((transaction) => (
-                <div key={transaction._id} className={`p-4 transition-all duration-200 ${isDark ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50/50'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        transaction.type === 'payment' ? 'bg-green-100' : 'bg-blue-100'
-                      }`}>
-                        {transaction.type === 'payment' ? (
-                          <ArrowUpRight className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <ArrowDownRight className="w-4 h-4 text-blue-600" />
-                        )}
-                      </div>
-                      <div>
-                        <p className={`font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                          {transaction.description || 'Payment received'}
-                        </p>
-                        <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {timeAgo(transaction.createdAt)} • {transaction.transactionId}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-green-600">
-                        +{formatCurrency(transaction.amount || 0)}
-                      </p>
-                      <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColorClass(transaction.status)}`}>
-                        {React.createElement(getStatusIcon(transaction.status), { className: `w-3 h-3 ${getStatusIconColor(transaction.status)}` })}
-                        {transaction.status}
-                      </span>
-                    </div>
+              {/* Recent Transaction Rows */}
+              {transactions.slice(0, 5).map(t => (
+                <div 
+                  key={t._id}
+                  className={`group grid grid-cols-1 md:grid-cols-12 items-center px-6 py-5 rounded-2xl border transition-all ${
+                    isDark 
+                      ? 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-600' 
+                      : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-lg shadow-zinc-200/50'
+                  }`}
+                >
+                  <div className="col-span-4 flex flex-col space-y-1">
+                    <span className="font-bold text-base tracking-tight truncate">{t.description || 'Payment Received'}</span>
+                    <span className="text-[10px] font-mono opacity-50 uppercase">{t.transactionId}</span>
+                  </div>
+
+                  <div className="col-span-2 mt-2 md:mt-0">
+                    <span className="text-lg font-light tracking-tighter">{formatCurrency(t.amount)}</span>
+                  </div>
+
+                  <div className="col-span-3 mt-2 md:mt-0">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusConfig[t.status]?.bg || 'bg-zinc-100'} ${statusConfig[t.status]?.text || 'text-zinc-600'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse" />
+                      {t.status}
+                    </span>
+                  </div>
+
+                  <div className={`col-span-2 mt-2 md:mt-0 text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {timeAgo(t.createdAt)}
+                  </div>
+
+                  <div className="col-span-1 text-right text-[10px] font-bold uppercase opacity-40">
+                    {t.type}
                   </div>
                 </div>
               ))}
+            </>
+          ) : (
+            <div className={`text-center py-12 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              <p className="text-sm">No transactions available</p>
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {activeTab === 'transactions' && (
-        <div className={`rounded-xl shadow-sm overflow-hidden ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-          <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-700/50' : 'border-gray-200/50'}`}>
-            <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>All Transactions</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-              <thead className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Date</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Description</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Amount</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Status</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Type</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reference</th>
-                  <th className={`px-6 py-3 text-right text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Actions</th>
-                 </tr>
-              </thead>
-              <tbody className={`${isDark ? 'bg-gray-900' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                {transactions.length > 0 ? (
-                  transactions.map((transaction) => (
-                    <tr key={transaction._id} className={isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                        {formatDate(transaction.createdAt)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className={`text-sm font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                          {transaction.description || 'Payment'}
-                        </div>
-                        <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {transaction.dealId?.campaignId?.title || ''}
-                        </div>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                        {formatCurrency(transaction.amount || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColor(transaction.status)}`}>
-                          {getStatusIcon(transaction.status)}
-                          {transaction.status}
-                        </span>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {transaction.type}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-xs font-mono ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                        {transaction.transactionId}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => {
-                            setSelectedTransaction(transaction);
-                            setShowTransactionModal(true);
-                          }}
-                          className={`hover:${isDark ? 'text-[#667eea]' : 'text-[#667eea]/80'} transition-colors`}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="7" className={`px-6 py-12 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      No transactions found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="space-y-3">
+          {transactions.length > 0 ? (
+            <>
+              {/* Table Header */}
+              <div className={`hidden md:grid grid-cols-12 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                <div className="col-span-4">Transaction & Ref</div>
+                <div className="col-span-2">Amount</div>
+                <div className="col-span-3">Status</div>
+                <div className="col-span-2">Date</div>
+                <div className="col-span-1 text-right">Type</div>
+              </div>
 
-          {pagination.pages > 1 && (
-            <div className={`px-6 py-4 border-t flex justify-between items-center ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-              <div className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Page {pagination.page} of {pagination.pages}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => fetchTransactions(pagination.page - 1)}
-                  disabled={pagination.page === 1}
-                  className={`px-3 py-1 border rounded-lg disabled:opacity-50 ${
-                    isDark
-                      ? 'border-gray-600 hover:bg-gray-700/50'
-                      : 'border-gray-300 hover:bg-gray-50'
+              {/* All Transaction Rows */}
+              {transactions.map(t => (
+                <div 
+                  key={t._id}
+                  className={`group grid grid-cols-1 md:grid-cols-12 items-center px-6 py-5 rounded-2xl border transition-all ${
+                    isDark 
+                      ? 'bg-zinc-900/50 text-white border-zinc-800 hover:border-zinc-600' 
+                      : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-lg shadow-zinc-200/50'
                   }`}
                 >
-                  Previous
-                </button>
-                <button
-                  onClick={() => fetchTransactions(pagination.page + 1)}
-                  disabled={pagination.page === pagination.pages}
-                  className={`px-3 py-1 border rounded-lg disabled:opacity-50 ${
-                    isDark
-                      ? 'border-gray-600 hover:bg-gray-700/50'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
+                  <div className="col-span-4 flex flex-col space-y-1">
+                    <span className="font-bold text-base tracking-tight truncate">{t.description || 'Payment Received'}</span>
+                    <span className="text-[10px] font-mono opacity-50 uppercase">{t.transactionId}</span>
+                  </div>
+
+                  <div className="col-span-2 mt-2 md:mt-0">
+                    <span className="text-lg font-light tracking-tighter">{formatCurrency(t.amount)}</span>
+                  </div>
+
+                  <div className="col-span-3 mt-2 md:mt-0">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusConfig[t.status]?.bg || 'bg-zinc-100'} ${statusConfig[t.status]?.text || 'text-zinc-600'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse" />
+                      {t.status}
+                    </span>
+                  </div>
+
+                  <div className={`col-span-2 mt-2 md:mt-0 text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {timeAgo(t.createdAt)}
+                  </div>
+
+                  <div className="col-span-1 text-right text-[10px] font-bold uppercase opacity-40">
+                    {t.type}
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className={`text-center py-12 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              <p className="text-sm">No transactions found</p>
             </div>
           )}
         </div>
       )}
 
       {activeTab === 'withdrawals' && (
-        <div className={`rounded-xl shadow-sm overflow-hidden ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-          <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-700/50' : 'border-gray-200/50'}`}>
-            <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Withdrawal History</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-              <thead className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Date</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Amount</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Method</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Status</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reference</th>
-                  <th className={`px-6 py-3 text-right text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody className={`${isDark ? 'bg-gray-900' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                {withdrawals.length > 0 ? (
-                  withdrawals.map((withdrawal) => (
-                    <tr key={withdrawal._id} className={isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                        {formatDate(withdrawal.createdAt)}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                        {formatCurrency(withdrawal.amount || 0)}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Stripe
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColorClass(withdrawal.status)}`}>
-                          {React.createElement(getStatusIcon(withdrawal.status), { className: `w-3 h-3 ${getStatusIconColor(withdrawal.status)}` })}
-                          {withdrawal.status}
-                        </span>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                        {withdrawal.transactionId}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button className={`hover:${isDark ? 'text-[#667eea]' : 'text-[#667eea]/80'} transition-colors`}>
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="6" className={`px-6 py-12 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      No withdrawals yet
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="space-y-3">
+          {withdrawals.length > 0 ? (
+            <>
+              {/* Table Header */}
+              <div className={`hidden md:grid grid-cols-12 px-6 py-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                <div className="col-span-4">Withdrawal & Ref</div>
+                <div className="col-span-2">Amount</div>
+                <div className="col-span-3">Status</div>
+                <div className="col-span-2">Date</div>
+                <div className="col-span-1 text-right">Method</div>
+              </div>
+
+              {/* Withdrawal Rows */}
+              {withdrawals.map(w => (
+                <div 
+                  key={w._id}
+                  className={`group grid grid-cols-1 md:grid-cols-12 items-center px-6 py-5 rounded-2xl border transition-all ${
+                    isDark 
+                      ? 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-600' 
+                      : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-lg shadow-zinc-200/50'
+                  }`}
+                >
+                  <div className="col-span-4 flex flex-col space-y-1">
+                    <span className="font-bold text-base tracking-tight truncate">Withdrawal Request</span>
+                    <span className="text-[10px] font-mono opacity-50 uppercase">{w.transactionId}</span>
+                  </div>
+
+                  <div className="col-span-2 mt-2 md:mt-0">
+                    <span className="text-lg font-light tracking-tighter">{formatCurrency(w.amount)}</span>
+                  </div>
+
+                  <div className="col-span-3 mt-2 md:mt-0">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusConfig[w.status]?.bg || 'bg-zinc-100'} ${statusConfig[w.status]?.text || 'text-zinc-600'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse" />
+                      {w.status}
+                    </span>
+                  </div>
+
+                  <div className={`col-span-2 mt-2 md:mt-0 text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    {timeAgo(w.createdAt)}
+                  </div>
+
+                  <div className="col-span-1 text-right text-[10px] font-bold uppercase opacity-40">
+                    Stripe
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className={`text-center py-12 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              <p className="text-sm">No withdrawals yet</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Withdraw Modal */}
-      <Modal
-        isOpen={showWithdrawModal}
-        onClose={() => {
-          setShowWithdrawModal(false);
-          setWithdrawAmount('');
-        }}
-        title="Withdraw Funds"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Amount to Withdraw
-            </label>
-            <div className="relative">
-              <DollarSign className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-              <input
-                type="number"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                placeholder="0.00"
-                min="50"
-                max={balance}
-                step="0.01"
-                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDark 
-                    ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                }`}
-              />
-            </div>
-            <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              Available balance: {formatCurrency(balance)} | Minimum withdrawal: $50
-            </p>
+      {/* Modern Modal styling stays consistent with the theme */}
+      <Modal isOpen={showWithdrawModal} onClose={() => setShowWithdrawModal(false)} title="Withdraw Funds">
+        <div className="space-y-6 pt-4">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-light">$</span>
+            <input
+              type="number"
+              value={withdrawAmount}
+              onChange={e => setWithdrawAmount(e.target.value)}
+              placeholder="0.00"
+              min="50"
+              max={balance}
+              className={`w-full pl-8 pr-4 py-4 text-2xl font-light bg-transparent border-b-2 focus:outline-none transition-colors ${isDark ? 'border-zinc-800 focus:border-white' : 'border-zinc-100 focus:border-black'}`}
+            />
           </div>
-
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-blue-900/30 border border-blue-700/30' : 'bg-blue-50'}`}>
-            <p className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-800'}`}>
-              <strong>Processing:</strong> Withdrawal requests stay pending until admin approval, then payout is sent via Stripe.
-            </p>
+          <div className={`p-4 rounded-2xl text-xs uppercase tracking-widest font-bold ${isDark ? 'bg-zinc-800/50 text-zinc-400' : 'bg-white text-zinc-500'}`}>
+            Available balance: {formatCurrency(balance)} | Minimum withdrawal: $50
           </div>
-
-          {!payoutAccount.connected ? (
-            <div className={`p-4 rounded-lg border ${isDark ? 'bg-amber-900/30 border-amber-700/30' : 'bg-amber-50 border-amber-200'}`}>
-              <p className={`text-sm ${isDark ? 'text-amber-300' : 'text-amber-900'}`}>
-                Stripe payout account is not connected yet. You can submit this request, then connect Stripe before admin approval.
-              </p>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowWithdrawModal(false)}>
-            Cancel
-          </Button>
-          <Button 
-            variant="primary" 
+          <button
             onClick={handleWithdraw}
             disabled={!withdrawAmount || parseFloat(withdrawAmount) < 50 || parseFloat(withdrawAmount) > balance}
+            className={`w-full py-4 rounded-full text-xs font-bold uppercase tracking-[0.2em] transition-all ${isDark ? 'bg-white text-black hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'} disabled:opacity-50`}
           >
-            Confirm Withdrawal
-          </Button>
+            Complete Withdrawal
+          </button>
         </div>
       </Modal>
 
@@ -881,4 +713,4 @@ const CreatorEarnings = () => {
   );
 };
 
-export default CreatorEarnings;
+export default CreatorEarnings; 

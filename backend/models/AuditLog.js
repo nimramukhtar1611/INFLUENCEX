@@ -21,7 +21,8 @@ const auditLogSchema = new mongoose.Schema({
       'admin_assigned', 'report_generation_started', 'report_generation_completed', 'report_generation_failed',
       'report_deleted', 'report_downloaded', 'report_scheduled',
       'backup_created', 'backup_restored',
-      'account_deletion', 'privacy_update', 'consent_withdrawal', 'data_correction_request', 'processing_restriction', 'processing_objection', 'permanent_deletion'
+      'account_deletion', 'privacy_update', 'consent_withdrawn', 'data_correction_request', 'processing_restriction', 'processing_objection', 'permanent_deletion',
+      'usage_limits_updated', 'file_upload_settings_updated', 'file_type_added', 'file_type_removed'
     ]
   },
   targetUser: {

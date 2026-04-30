@@ -32,6 +32,10 @@ export const SubscriptionProvider = ({ children }) => {
 
   const loadPlans = useCallback(async (interval = 'month') => {
     if (!isSubscriptionUser) return;
+    
+    // Additional token check to prevent race condition
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
     const response = await subscriptionService.getPlans(user?.userType, interval);
     if (response.success) {
@@ -45,6 +49,10 @@ export const SubscriptionProvider = ({ children }) => {
 
   const loadCurrentSubscription = useCallback(async () => {
     if (!isSubscriptionUser) return null;
+    
+    // Additional token check to prevent race condition
+    const token = localStorage.getItem('token');
+    if (!token) return null;
 
     const response = await subscriptionService.getCurrentSubscription();
     if (response.success) {
@@ -58,6 +66,10 @@ export const SubscriptionProvider = ({ children }) => {
 
   const loadPaymentMethods = useCallback(async () => {
     if (!isSubscriptionUser) return [];
+    
+    // Additional token check to prevent race condition
+    const token = localStorage.getItem('token');
+    if (!token) return [];
 
     const response = await subscriptionService.getPaymentMethods();
     if (response.success) {

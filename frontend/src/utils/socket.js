@@ -38,8 +38,11 @@ class SocketManager {
     const SOCKET_URL =
       resolveSocketUrl();
 
+    // Use localStorage token as fallback for better reliability
+    const resolvedToken = token || localStorage.getItem('token');
+
     this.socket = io(SOCKET_URL, {
-      auth: { token },
+      auth: { token: resolvedToken },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,

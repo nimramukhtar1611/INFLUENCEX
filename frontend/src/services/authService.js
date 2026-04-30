@@ -26,7 +26,15 @@ class AuthService {
       });
       
       if (response?.success) {
-        // Store user data
+        const accessToken = response.accessToken || response.token;
+        const refreshToken = response.refreshToken;
+        
+        if (accessToken) {
+          localStorage.setItem('token', accessToken);
+        }
+        if (refreshToken) {
+          localStorage.setItem('refreshToken', refreshToken);
+        }
         if (response.user) {
           localStorage.setItem('user', JSON.stringify(response.user));
         }

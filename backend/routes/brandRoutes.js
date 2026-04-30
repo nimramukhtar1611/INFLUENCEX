@@ -5,6 +5,8 @@ const { validateRequest } = require('../middleware/validation');
 const { checkTeamMemberLimit } = require('../middleware/subscriptionCheck');
 const { brandValidations, paymentValidations } = require('../middleware/validators');
 const brandController = require('../controllers/brandController');
+const campaignController = require('../controllers/campaignController');
+const SettingsEnforcement = require('../middleware/settingsEnforcement');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC ROUTES (no auth required — must be BEFORE router.use(protect))
@@ -38,6 +40,20 @@ router.get('/analytics', brandController.getAnalytics || brandController.getBran
 
 // ── Search creators ───────────────────────────────────────────────────────
 router.get('/creators/search', protect, authorize('brand'), brandController.searchCreators);
+
+// ── Campaign Management with Enforcement ───────────────────────────────
+router.post(
+  '/campaigns',
+  SettingsEnforcement.checkCampaignLimit,
+  SettingsEnforcement.applyPlatformFees,
+  campaignController.createCampaign
+);
+
+router.put(
+  '/campaigns/:id',
+  SettingsEnforcement.applyPlatformFees,
+  campaignController.updateCampaign
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEAM ROUTES

@@ -52,5 +52,6 @@ router.post('/withdraw', paymentController.requestWithdrawal);
 router.get('/withdrawals', protect, paymentController.getWithdrawals);
 // ==================== INVOICES ====================
 router.get('/invoices', paymentController.getInvoices);
+router.get('/invoices/:invoiceId/download', paymentController.downloadInvoice);
 
 module.exports = router;

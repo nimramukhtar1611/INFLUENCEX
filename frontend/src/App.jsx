@@ -14,7 +14,9 @@ import { PaymentProvider } from './context/PaymentContext';
 import { SearchProvider } from './context/SearchContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import { useSubscription } from './context/SubscriptionContext';
-
+import { GlobalSettingsProvider } from './context/GlobalSettingsContext';
+import { FeeProvider } from './context/FeeContext';
+import ErrorBoundary from './components/ErrorBoundary';
 // Layout Components
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -27,18 +29,19 @@ import ForgotPassword from './pages/Auth/ForgotPassword';
 import ResetPassword from './pages/Auth/ResetPassword';
 import VerifyEmail from './pages/Auth/VerifyEmail';
 import Verify2FA from './pages/Auth/Verify2FA';
+import SearchResults from './pages/SearchResults';
 import NotFound from './pages/NotFound';
 
 // Brand Pages
 import BrandDashboard from './pages/Brand/Dashboard';
 import BrandCampaigns from './pages/Brand/CampaignList';
-import BrandCreatorProfile from './pages/Brand/CreatorProfile'
 import BrandCampaignBuilder from './pages/Brand/CampaignBuilder';
 import BrandCampaignDetails from './pages/Brand/CampaignDetails';
 import BrandSearchCreators from './pages/Brand/SearchCreators';
 import BrandDeals from './pages/Brand/Deals';
 import BrandCampaignEdit from './pages/Brand/CampaignEdit'
 import CreateDeal from './pages/Brand/CreateDeal';
+import BrandCreatorProfile from './pages/Brand/CreatorProfile';
 import BrandDealDetails from './pages/Brand/DealDetails';
 import BrandAnalytics from './pages/Brand/Analytics';
 import BrandPayments from './pages/Brand/Payments';
@@ -59,6 +62,7 @@ import CreatorProfile from './pages/Creator/Profile';
 import CreatorSettings from './pages/Creator/Settings';
 import CreatorInbox from './pages/Creator/Inbox';
 import CreatorGrowthOS from './pages/Creator/GrowthOS';
+import BrandProfileView from './pages/Creator/BrandProfileView';
 
 // Admin Pages
 import AdminDashboard from './pages/Admin/Dashboard';
@@ -76,9 +80,10 @@ import AdminLogin from './pages/Admin/AdminLogin';
 // Common Pages
 import Notifications from './components/Common/Notifications';
 import Disputes from './components/Common/Disputes';
-import HelpCenter from './components/Common/HelpCenter';
 import Contracts from './components/Common/Contracts';
-import Pricing from './pages/Pricing';
+import FAQs from './pages/FAQs';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import SubscriptionManager from './pages/Common/SubscriptionManager';
 
 const normalizePlanId = (value) => {
@@ -105,109 +110,100 @@ function App() {
   const isCypressRun = typeof window !== 'undefined' && Boolean(window.Cypress);
 
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <SocketProvider>            
-          <NotificationProvider>     
-            <CampaignProvider>
-              <DealProvider>
-                <MessageProvider>
-                  <PaymentProvider>
-                    <SubscriptionProvider>
-                    <SearchProvider>
-                        {!isCypressRun && (
-                          <Toaster
-                            position="top-right"
-                            toastOptions={{
-                              duration: 4000,
-                              style: {
-                                background: '#363636',
-                                color: '#fff',
-                              },
-                              success: {
-                                duration: 3000,
-                                iconTheme: {
-                                  primary: '#10b981',
-                                  secondary: '#fff',
-                                },
-                              },
-                              error: {
-                                duration: 4000,
-                                iconTheme: {
-                                  primary: '#ef4444',
-                                  secondary: '#fff',
-                                },
-                              },
-                            }}
-                          />
-                        )}
+    <ErrorBoundary>
+      <GlobalSettingsProvider>
+        <FeeProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              <SocketProvider>            
+                <NotificationProvider>     
+                  <CampaignProvider>
+                    <DealProvider>
+                      <MessageProvider>
+                        <PaymentProvider>
+                          <SubscriptionProvider>
+                            <SearchProvider>
+                            
+                            {!isCypressRun && (
+                              <Toaster
+                                position="top-right"
+                                toastOptions={{
+                                  duration: 4000,
+                                  style: { background: '#363636', color: '#fff' },
+                                }}
+                              />
+                            )}
 
-                        <Routes>
-                          {/* Public Routes */}
-                          <Route path="/" element={<Home />} />
-                          <Route path="/login" element={<Login />} />
-                          <Route path="/signup" element={<Signup />} />
-                          <Route path="/forgot-password" element={<ForgotPassword />} />
-                          <Route path="/reset-password" element={<ResetPassword />} />
-                          <Route path="/verify-email" element={<VerifyEmail />} />
-                          <Route path="/2fa-verify" element={<Verify2FA />} />
-                          <Route path="/pricing" element={<Pricing />} />
-                         <Route path="/admin/login" element={<AdminLogin />} />
+                            <Routes>
+                              {/* Public Routes */}
+                              <Route path="/" element={<Home />} />
+                              <Route path="/login" element={<Login />} />
+                              <Route path="/signup" element={<Signup />} />
+                              <Route path="/forgot-password" element={<ForgotPassword />} />
+                              <Route path="/reset-password" element={<ResetPassword />} />
+                              <Route path="/verify-email" element={<VerifyEmail />} />
+                              <Route path="/2fa-verify" element={<Verify2FA />} />
+                              <Route path="/search" element={<SearchResults />} />
+                              <Route path="/faqs" element={<FAQs />} />
+                              <Route path="/privacypolicy" element={<PrivacyPolicy />} />
+                              <Route path="/terms" element={<TermsOfService />} />
+                              <Route path="/admin/login" element={<AdminLogin />} />
 
-                          {/* Brand Routes */}
-                          <Route path="/brand" element={
-                            <ProtectedRoute allowedRoles={['brand']}>
-                              <Layout />
-                            </ProtectedRoute>
-                          }>
-                            <Route index element={<Navigate to="dashboard" replace />} />
-                            <Route path="dashboard" element={<BrandDashboard />} />
-                            <Route path="campaigns" element={<BrandCampaigns />} />
-                            <Route path="campaigns/new" element={<BrandCampaignBuilder />} />
-                            <Route path="campaigns/:id" element={<BrandCampaignDetails />} />
-                            <Route path="search" element={<BrandSearchCreators />} />
-                            <Route path="deals" element={<BrandDeals />} />
-                            <Route path="deals/:id" element={<BrandDealDetails />} />
-                            <Route path="creators/:id" element={<BrandCreatorProfile />} />
-                            <Route path="analytics" element={<BrandAnalytics />} />
-                            <Route path="payments" element={<BrandPayments />} />
-                            <Route path="createdeal" element={<CreateDeal />} />
-                            <Route path="profile" element={<BrandProfile />} />
-                            <Route path="settings" element={<BrandSettings />} />
-                            <Route path="subscription" element={<SubscriptionManager />} />
-                             <Route path="campaigns/:id/edit" element={<BrandCampaignEdit />} />
-                            <Route path="inbox" element={<BrandInbox />} />
-                            <Route path="notifications" element={<Notifications />} />
-                            <Route path="disputes" element={<Disputes />} />
-                            <Route path="contracts" element={<Contracts />} />
-                          </Route>
+                              {/* Brand Routes */}
+                              <Route path="/brand" element={
+                                <ProtectedRoute allowedRoles={['brand']}>
+                                  <Layout />
+                                </ProtectedRoute>
+                              }>
+                                <Route index element={<Navigate to="dashboard" replace />} />
+                                <Route path="dashboard" element={<BrandDashboard />} />
+                                <Route path="campaigns" element={<BrandCampaigns />} />
+                                <Route path="campaigns/new" element={<BrandCampaignBuilder />} />
+                                <Route path="campaigns/:id" element={<BrandCampaignDetails />} />
+                                <Route path="search" element={<BrandSearchCreators />} />
+                                <Route path="creators/:id" element={<BrandCreatorProfile />} />
+                                <Route path="deals" element={<BrandDeals />} />
+                                <Route path="deals/:id" element={<BrandDealDetails />} />
+                                <Route path="analytics" element={<BrandAnalytics />} />
+                                <Route path="payments" element={<BrandPayments />} />
+                                <Route path="createdeal" element={<CreateDeal />} />
+                                <Route path="profile" element={<BrandProfile />} />
+                                <Route path="settings" element={<BrandSettings />} />
+                                <Route path="subscription" element={<SubscriptionManager />} />
+                                 <Route path="campaigns/:id/edit" element={<BrandCampaignEdit />} />
+                                <Route path="inbox" element={<BrandInbox />} />
+                                <Route path="notifications" element={<Notifications />} />
+                                <Route path="disputes" element={<Disputes />} />
+                                <Route path="contracts" element={<Contracts />} />
+                              </Route>
 
-                          {/* Creator Routes */}
-                          <Route path="/creator" element={
-                            <ProtectedRoute allowedRoles={['creator']}>
-                              <Layout />
-                            </ProtectedRoute>
-                          }>
-                            <Route index element={<Navigate to="dashboard" replace />} />
-                            <Route path="dashboard" element={<CreatorDashboard />} />
-                            <Route path="available-deals" element={<CreatorAvailableDeals />} />
-                            <Route path="deals" element={<CreatorDeals />} />
-                            <Route path="deals/:id" element={<CreatorDealDetails />} />
-                            <Route path="deliverables/:dealId" element={<CreatorDeliverables />} />
-                            <Route path="analytics" element={<CreatorAnalytics />} />
-                            <Route path="growth-os" element={<CreatorGrowthOSGate><CreatorGrowthOS /></CreatorGrowthOSGate>} />
-                            <Route path="earnings" element={<CreatorEarnings />} />
-                            <Route path="withdrawals" element={<CreatorWithdrawals />} />
-                            <Route path="profile" element={<CreatorProfile />} />
-                            <Route path="settings" element={<CreatorSettings />} />
-                            <Route path="subscription" element={<SubscriptionManager />} />
-                            <Route path="inbox" element={<CreatorInbox />} />
-                            <Route path="notifications" element={<Notifications />} />
-                            <Route path="disputes" element={<Disputes />} />
-                            <Route path="contracts" element={<Contracts />} />
-                          </Route>
+                              {/* Creator Routes */}
+                              <Route path="/creator" element={
+                                <ProtectedRoute allowedRoles={['creator']}>
+                                  <Layout />
+                                </ProtectedRoute>
+                              }>
+                                <Route index element={<Navigate to="dashboard" replace />} />
+                                <Route path="dashboard" element={<CreatorDashboard />} />
+                                <Route path="available-deals" element={<CreatorAvailableDeals />} />
+                                <Route path="deals" element={<CreatorDeals />} />
+                                <Route path="deals/:id" element={<CreatorDealDetails />} />
+                                <Route path="deliverables/:dealId" element={<CreatorDeliverables />} />
+                                <Route path="brands/:id" element={<BrandProfileView />} />
+                                <Route path="analytics" element={<CreatorAnalytics />} />
+                                <Route path="growth-os" element={<CreatorGrowthOSGate><CreatorGrowthOS /></CreatorGrowthOSGate>} />
+                                <Route path="earnings" element={<CreatorEarnings />} />
+                                <Route path="withdrawals" element={<CreatorWithdrawals />} />
+                                <Route path="profile" element={<CreatorProfile />} />
+                                <Route path="settings" element={<CreatorSettings />} />
+                                <Route path="subscription" element={<SubscriptionManager />} />
+                                <Route path="inbox" element={<CreatorInbox />} />
+                                <Route path="notifications" element={<Notifications />} />
+                                <Route path="disputes" element={<Disputes />} />
+                                <Route path="contracts" element={<Contracts />} />
+                              </Route>
 
-                          {/* Admin Routes */}
+                              {/* Admin Routes */}
 
 <Route path="/admin" element={
   <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
@@ -229,19 +225,22 @@ function App() {
   <Route path="notifications" element={<Notifications />} />
 </Route>
 
-                          {/* 404 */}
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                     </SearchProvider>
-                    </SubscriptionProvider>
-                  </PaymentProvider>
-                </MessageProvider>
-              </DealProvider>
-            </CampaignProvider>
-          </NotificationProvider>
-        </SocketProvider>
-      </ThemeProvider>
-      </AuthProvider>
+                              {/* 404 */}
+                              <Route path="*" element={<NotFound />} />
+                            </Routes>
+                           </SearchProvider>
+                          </SubscriptionProvider>
+                        </PaymentProvider>
+                      </MessageProvider>
+                    </DealProvider>
+                  </CampaignProvider>
+                </NotificationProvider>
+              </SocketProvider>
+            </ThemeProvider>
+          </AuthProvider>
+        </FeeProvider>
+      </GlobalSettingsProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -20,12 +20,10 @@ const {
 // ==================== PUBLIC/OPTIONAL ROUTES ====================
 router.get('/suggestions', optionalAuth, getSuggestions);
 router.get('/trending', getTrendingSearches);
+router.get('/creators', optionalAuth, searchCreators);
 
 // ==================== PROTECTED ROUTES ====================
 router.use(protect);
-
-// Search
-router.get('/creators', searchCreators);
 router.get('/campaigns', searchCampaigns);
 
 // Saved searches

@@ -27,14 +27,7 @@ const brandSchema = new mongoose.Schema({
   
   website: {
     type: String,
-    validate: {
-      validator: function(v) {
-        if (!v) return true;
-        return /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/.test(v);
-      },
-      message: 'Please enter a valid website URL'
-    },
-    default: ''
+    trim: true
   },
   
   description: {

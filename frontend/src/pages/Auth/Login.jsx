@@ -1,12 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef,useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import ReCAPTCHA from "react-google-recaptcha";
 import { Mail, Lock, ArrowRight, Eye, EyeOff, User, Shield, Briefcase, Pen } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
+import WireframeSphere from '../../components/WireframeSphere';
 import toast from 'react-hot-toast';
+import { motion,useMotionValue, useSpring, useTransform } from 'framer-motion';
 
 const Login = () => {
+  // Inside the Login component:
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  // Smooth out the movement
+  const mouseXSpring = useSpring(x);
+  const mouseYSpring = useSpring(y);
+
+  // Map mouse position to rotation (subtle 3D tilt)
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["10deg", "-10deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-10deg", "10deg"]);
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Calculate position as a decimal from -0.5 to 0.5
+    const xPct = mouseX / width - 0.5;
+    const yPct = mouseY / height - 0.5;
+
+    x.set(xPct);
+    y.set(yPct);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -26,8 +59,7 @@ const Login = () => {
 
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    userType: 'brand'
+    password: ''
   });
 
   const [errors, setErrors] = useState({});
@@ -50,7 +82,6 @@ const Login = () => {
     if (!formData.email) newErrors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email';
     if (!formData.password) newErrors.password = 'Password is required';
-    if (!formData.userType) newErrors.userType = 'Select account type';
     if (showCaptcha && !captchaToken) newErrors.captcha = 'Please verify reCAPTCHA';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -67,9 +98,8 @@ const Login = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      console.log('🔑 Login attempt:', {
+      console.log('Login attempt:', {
         email: formData.email,
-        userType: formData.userType,
         loginAttempts,
         showCaptcha,
         hasCaptcha: !!captchaToken
@@ -77,8 +107,7 @@ const Login = () => {
 
       const payload = {
         email: formData.email,
-        password: formData.password,
-        userType: formData.userType
+        password: formData.password
       };
 
       if (showCaptcha && captchaToken) payload.captchaToken = captchaToken;
@@ -86,7 +115,7 @@ const Login = () => {
       const result = await login(
         payload.email,
         payload.password,
-        payload.userType,
+        null, // userType will be auto-detected
         payload.captchaToken || null
       );
 
@@ -135,270 +164,50 @@ const Login = () => {
 
   return (
     <div
-      className="min-h-screen flex"
+      className="min-h-screen flex items-center justify-center relative"
       style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: '#18181b',
       }}
     >
-      {/* ── Left decorative panel ── */}
-      <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden">
-        {/* floating blobs */}
-        <div
-          style={{
-            position: 'absolute', width: 340, height: 340, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.08)', top: -80, left: -80,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute', width: 220, height: 220, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)', bottom: 80, right: -40,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute', width: 140, height: 140, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)', top: '45%', left: '60%',
-          }}
-        />
+      {/* Wireframe Sphere Background Animation */}
+      <div className="absolute inset-0 overflow-hidden">
+        <WireframeSphere />
+      </div>
+      
+      <motion.div 
+        className="relative z-10"
+                  style={{ maxWidth: '480px', width: '100%', margin: '0 24px' }}
 
-        {/* brand mark */}
-        <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div
-              style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: 'rgba(255,255,255,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              <Shield className="text-white" size={22} />
-            </div>
-            <span style={{ color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px' }}>
-              InfluenceX
-            </span>
-          </div>
-        </div>
+      >
+        <div className="w-full p-4 sm:p-6 md:p-8" style={{ maxWidth: 490 }}>
 
-        {/* hero copy */}
-        <div className="relative z-10">
-          <h1
+        {/* heading */}
+        <div className="mb-8">
+          <h2
+            className="font-['Playfair_Display']"
             style={{
-              color: '#fff', fontSize: 42, fontWeight: 800,
-              lineHeight: 1.15, letterSpacing: '-1px', marginBottom: 20,
+              fontSize: 'clamp(24px, 5vw, 28px)', fontWeight: 700, letterSpacing: '-0.02em',
+              color: '#f4f4f5', marginBottom: 8,
             }}
           >
-            Connect brands<br />with creators.
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 17, lineHeight: 1.7, maxWidth: 360 }}>
-            The all-in-one platform where brands discover authentic creators and
-            creators grow meaningful partnerships.
+            Sign in to your account
+          </h2>
+          <p style={{ color: '#a1a1aa', fontSize: 'clamp(14px, 3vw, 15px)', lineHeight: 1.5 }}>
+            Welcome back! Please enter your details.
           </p>
-
-          {/* stats row */}
-          <div className="flex gap-10 mt-10">
-            {[
-              { n: '12K+', label: 'Creators' },
-              { n: '3K+', label: 'Brands' },
-              { n: '98%', label: 'Satisfaction' },
-            ].map(({ n, label }) => (
-              <div key={label}>
-                <p style={{ color: '#fff', fontSize: 26, fontWeight: 800 }}>{n}</p>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{label}</p>
-              </div>
-            ))}
-          </div>
         </div>
-
-        {/* bottom tag */}
-        <div
-          className="relative z-10 flex items-center gap-2"
-          style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}
-        >
-          <Shield size={13} />
-          <span>Your data is always secure and encrypted</span>
-        </div>
-      </div>
-
-      {/* ── Right form panel ── */}
-      <div
-        className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-10"
-        style={{
-          background: '#fff',
-          borderRadius: '0',
-        }}
-      >
-        <div className="w-full" style={{ maxWidth: 420 }}>
-
-          {/* mobile logo */}
-          <div className="flex lg:hidden items-center gap-2 mb-8">
-            <div
-              style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'linear-gradient(135deg,#667eea,#764ba2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Shield className="text-white" size={18} />
-            </div>
-            <span
-              style={{
-                fontSize: 18, fontWeight: 700,
-                color: '#111827',
-              }}
-            >
-              InfluenceX
-            </span>
-          </div>
-
-          {/* heading */}
-          <div className="mb-8">
-            <h2
-              style={{
-                fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px',
-                color: '#111827', marginBottom: 6,
-              }}
-            >
-              Welcome back
-            </h2>
-            <p style={{ color: '#6b7280', fontSize: 15 }}>
-              Sign in to your account to continue
-            </p>
-          </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* ── Account type selector ── */}
-            <div>
-              <label
-                style={{
-                  display: 'block', fontSize: 11, fontWeight: 700,
-                  letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: '#9ca3af', marginBottom: 10,
-                }}
-              >
-                Sign in as
-              </label>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {/* Brand */}
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, userType: 'brand' })}
-                  style={{
-                    padding: '14px 12px',
-                    borderRadius: 12,
-                    border: formData.userType === 'brand'
-                      ? '2px solid #667eea'
-                      : '2px solid #e5e7eb',
-                    background: formData.userType === 'brand'
-                      ? '#f5f3ff'
-                      : '#fff',
-                    cursor: 'pointer',
-                    transition: 'all 0.18s ease',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', gap: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: formData.userType === 'brand'
-                        ? 'linear-gradient(135deg,#667eea,#764ba2)'
-                        : '#f3f4f6',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.18s ease',
-                    }}
-                  >
-                    <Briefcase
-                      size={18}
-                      style={{ color: formData.userType === 'brand' ? '#fff' : '#6b7280' }}
-                    />
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <p
-                      style={{
-                        fontSize: 14, fontWeight: 600,
-                        color: formData.userType === 'brand'
-                          ? '#667eea'
-                          : '#374151',
-                      }}
-                    >
-                      Brand
-                    </p>
-                    <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
-                      Run campaigns
-                    </p>
-                  </div>
-                </button>
-
-                {/* Creator */}
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, userType: 'creator' })}
-                  style={{
-                    padding: '14px 12px',
-                    borderRadius: 12,
-                    border: formData.userType === 'creator'
-                      ? '2px solid #667eea'
-                      : '2px solid #e5e7eb',
-                    background: formData.userType === 'creator'
-                      ? '#f5f3ff'
-                      : '#fff',
-                    cursor: 'pointer',
-                    transition: 'all 0.18s ease',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', gap: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: formData.userType === 'creator'
-                        ? 'linear-gradient(135deg,#667eea,#764ba2)'
-                        : '#f3f4f6',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.18s ease',
-                    }}
-                  >
-                    <Pen
-                      size={18}
-                      style={{ color: formData.userType === 'creator' ? '#fff' : '#6b7280' }}
-                    />
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <p
-                      style={{
-                        fontSize: 14, fontWeight: 600,
-                        color: formData.userType === 'creator'
-                          ? '#667eea'
-                          : '#374151',
-                      }}
-                    >
-                      Creator
-                    </p>
-                    <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
-                      Grow & earn
-                    </p>
-                  </div>
-                </button>
-              </div>
-
-              {errors.userType && (
-                <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.userType}</p>
-              )}
-            </div>
 
             {/* ── Email ── */}
             <div>
               <label
                 style={{
-                  display: 'block', fontSize: 13, fontWeight: 600,
-                  color: '#374151', marginBottom: 6,
+                  display: 'block', fontSize: 14, fontWeight: 600,
+                  color: '#ffffff', marginBottom: 8,
                 }}
               >
-                Email address
+                Email
               </label>
               <div style={{ position: 'relative' }}>
                 <Mail
@@ -406,12 +215,12 @@ const Login = () => {
                   style={{
                     position: 'absolute', left: 14, top: '50%',
                     transform: 'translateY(-50%)',
-                    color: errors.email ? '#ef4444' : '#9ca3af',
+                    color: errors.email ? '#ff4444' : '#cccccc',
                   }}
                 />
                 <input
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="Enter your email"
                   value={formData.email}
                   onChange={(e) => {
                     setFormData({ ...formData, email: e.target.value });
@@ -419,22 +228,22 @@ const Login = () => {
                   }}
                   style={{
                     width: '100%',
-                    padding: '12px 14px 12px 40px',
+                    padding: '14px 16px 14px 42px',
                     borderRadius: 10,
-                    border: `1.5px solid ${errors.email ? '#ef4444' : '#e5e7eb'}`,
-                    background: '#f9fafb',
-                    color: '#111827',
+                    border: `1.5px solid ${errors.email ? '#ff4444' : '#333333'}`,
+                    background: '#1a1a1a',
+                    color: '#ffffff',
                     fontSize: 14,
                     outline: 'none',
                     transition: 'border-color 0.15s',
                     boxSizing: 'border-box',
                   }}
-                  onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = errors.email ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
+                  onFocus={(e) => { e.target.style.borderColor = '#666666'; e.target.style.background = '#1a1a1a'; }}
+                  onBlur={(e) => { e.target.style.borderColor = errors.email ? '#ff4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
                 />
               </div>
               {errors.email && (
-                <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.email}</p>
+                <p style={{ marginTop: 5, fontSize: 12, color: '#ff4444' }}>{errors.email}</p>
               )}
             </div>
 
@@ -443,8 +252,8 @@ const Login = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label
                   style={{
-                    fontSize: 13, fontWeight: 600,
-                    color: '#374151',
+                    fontSize: 14, fontWeight: 600,
+                    color: '#ffffff',
                   }}
                 >
                   Password
@@ -453,7 +262,7 @@ const Login = () => {
                   to="/forgot-password"
                   style={{
                     fontSize: 12, fontWeight: 600,
-                    color: '#667eea', textDecoration: 'none',
+                    color: '#ffffff', textDecoration: 'none',
                   }}
                 >
                   Forgot password?
@@ -466,7 +275,7 @@ const Login = () => {
                   style={{
                     position: 'absolute', left: 14, top: '50%',
                     transform: 'translateY(-50%)',
-                    color: errors.password ? '#ef4444' : '#9ca3af',
+                    color: errors.password ? '#ff4444' : '#cccccc',
                   }}
                 />
                 <input
@@ -479,18 +288,18 @@ const Login = () => {
                   }}
                   style={{
                     width: '100%',
-                    padding: '12px 44px 12px 40px',
+                    padding: '14px 46px 14px 42px',
                     borderRadius: 10,
-                    border: `1.5px solid ${errors.password ? '#ef4444' : '#e5e7eb'}`,
-                    background: '#f9fafb',
-                    color: '#111827',
+                    border: `1.5px solid ${errors.password ? '#ff4444' : '#333333'}`,
+                    background: '#1a1a1a',
+                    color: '#ffffff',
                     fontSize: 14,
                     outline: 'none',
                     transition: 'border-color 0.15s',
                     boxSizing: 'border-box',
                   }}
-                  onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = errors.password ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
+                  onFocus={(e) => { e.target.style.borderColor = '#666666'; e.target.style.background = '#1a1a1a'; }}
+                  onBlur={(e) => { e.target.style.borderColor = errors.password ? '#ff4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
                 />
                 <button
                   type="button"
@@ -499,7 +308,7 @@ const Login = () => {
                     position: 'absolute', right: 14, top: '50%',
                     transform: 'translateY(-50%)',
                     background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                    color: '#9ca3af',
+                    color: '#cccccc',
                   }}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -507,31 +316,38 @@ const Login = () => {
               </div>
 
               {errors.password && (
-                <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.password}</p>
+                <p style={{ marginTop: 5, fontSize: 12, color: '#ff4444' }}>{errors.password}</p>
               )}
             </div>
 
             {/* ── Smart CAPTCHA ── */}
             {showCaptcha && RECAPTCHA_SITE_KEY && (
               <div
+                className="recaptcha-container"
                 style={{
                   padding: '14px 16px',
                   borderRadius: 10,
-                  border: `1.5px solid ${errors.captcha ? '#ef4444' : '#f59e0b'}`,
-                  background: '#fffbeb',
+                  border: `1.5px solid ${errors.captcha ? '#ff4444' : '#666666'}`,
+                  background: '#1a1a1a',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <Shield size={15} style={{ color: '#f59e0b' }} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+                  <Shield size={15} style={{ color: '#ffffff' }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>
                     Security verification required
                   </span>
                 </div>
-                <ReCAPTCHA ref={captchaRef} sitekey={RECAPTCHA_SITE_KEY} onChange={handleCaptchaChange} />
+                <ReCAPTCHA 
+                  ref={captchaRef} 
+                  sitekey={RECAPTCHA_SITE_KEY} 
+                  onChange={handleCaptchaChange}
+                  theme="dark"
+                  size="normal"
+                />
                 {errors.captcha && (
-                  <p style={{ marginTop: 8, fontSize: 12, color: '#ef4444' }}>{errors.captcha}</p>
+                  <p style={{ marginTop: 8, fontSize: 12, color: '#ff4444' }}>{errors.captcha}</p>
                 )}
-                <p style={{ marginTop: 8, fontSize: 11, color: '#78716c' }}>
+                <p style={{ marginTop: 8, fontSize: 11, color: '#cccccc' }}>
                   Multiple login attempts detected. Please verify you're not a robot.
                 </p>
               </div>
@@ -542,74 +358,112 @@ const Login = () => {
               <div
                 style={{
                   padding: '8px 12px', borderRadius: 8, textAlign: 'center',
-                  fontSize: 11, background: '#f3f4f6',
-                  color: '#6b7280',
+                  fontSize: 11, background: '#1a1a1a',
+                  color: '#cccccc',
                 }}
               >
                 🔍 Login attempts: {loginAttempts}
               </div>
             )}
 
-            {/* ── Submit ── */}
-            <button
-              type="submit"
-              disabled={loading || authLoading || (showCaptcha && !captchaToken)}
-              style={{
-                width: '100%',
-                padding: '13px 20px',
-                borderRadius: 10,
-                border: 'none',
-                background: (loading || authLoading || (showCaptcha && !captchaToken))
-                  ? '#a5b4fc'
-                  : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: '#fff',
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: (loading || authLoading || (showCaptcha && !captchaToken)) ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'opacity 0.2s, transform 0.1s',
-                letterSpacing: '0.01em',
-              }}
-              onMouseEnter={(e) => { if (!loading && !authLoading) e.target.style.opacity = '0.92'; }}
-              onMouseLeave={(e) => { e.target.style.opacity = '1'; }}
-            >
-              {loading || authLoading ? (
-                <div
-                  style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    border: '2px solid rgba(255,255,255,0.4)',
-                    borderTopColor: '#fff',
-                    animation: 'spin 0.7s linear infinite',
-                  }}
-                />
-              ) : (
-                <>
-                  Sign In
-                  <ArrowRight size={17} />
-                </>
-              )}
-            </button>
+      <div style={{ perspective: '1000px' }}>
+  <motion.button
+    type="submit"
+    onMouseMove={handleMouseMove}
+    onMouseLeave={handleMouseLeave}
+    disabled={loading || authLoading || (showCaptcha && !captchaToken)}
+    style={{
+      rotateX,
+      rotateY,
+      transformStyle: "preserve-3d",
+      width: '100%',
+      padding: '16px 20px',
+      borderRadius: 12,
+      background: '#ffffff', // Professional clean white
+      color: '#000000',
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: (loading || authLoading || (showCaptcha && !captchaToken)) ? 'not-allowed' : 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      position: 'relative',
+      overflow: 'hidden',
+      border: 'none',
+      boxShadow: '0 10px 20px -5px rgba(255, 255, 255, 0.2)',
+    }}
+    whileTap={{ scale: 0.98 }}
+  >
+    {/* Animated Shine/Spotlight effect */}
+    <motion.div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'radial-gradient(circle at var(--x) var(--y), rgba(0,0,0,0.08) 0%, transparent 70%)',
+        opacity: 0,
+      }}
+      whileHover={{ opacity: 1 }}
+    />
 
-            {/* ── Footer links ── */}
-            <p style={{ textAlign: 'center', fontSize: 14, color: '#6b7280' }}>
-              Don't have an account?{' '}
+    {/* Content with 3D Pop */}
+    <span style={{ transform: "translateZ(20px)", display: 'flex', alignItems: 'center', gap: 8 }}>
+      {loading || authLoading ? (
+        <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+      ) : (
+        <>
+          Continue
+          <motion.span
+            animate={{ x: [0, 4, 0] }}
+            transition={{ repeat: Infinity, duration: 1.5 }}
+          >
+            <ArrowRight size={16} />
+          </motion.span>
+        </>
+      )}
+    </span>
+
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: 12,
+        padding: 1,
+        background: 'linear-gradient(135deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)',
+        mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        maskComposite: 'exclude',
+        pointerEvents: 'none'
+      }}
+    />
+  </motion.button>
+</div>
+
+            <div style={{ textAlign: 'center', marginTop: 24 }}>
+              <span style={{ fontSize: 13, color: '#cccccc' }}>
+                Don't have an account?{' '}
+              </span>
               <Link
                 to="/signup"
-                style={{ fontWeight: 700, color: '#667eea', textDecoration: 'none' }}
+                style={{
+                  fontSize: 13, fontWeight: 600,
+                  color: '#ffffff', textDecoration: 'none',
+                }}
+                onMouseEnter={(e) => { e.target.style.color = '#cccccc'; }}
+                onMouseLeave={(e) => { e.target.style.color = '#ffffff'; }}
               >
-                Create account
+                Sign up
               </Link>
-            </p>
+            </div>
 
             <div style={{ textAlign: 'center' }}>
               <Link
                 to="/admin/login"
                 style={{
-                  fontSize: 12, color: '#9ca3af',
+                  fontSize: 12, color: '#cccccc',
                   textDecoration: 'none', transition: 'color 0.15s',
                 }}
-                onMouseEnter={(e) => { e.target.style.color = '#6b7280'; }}
-                onMouseLeave={(e) => { e.target.style.color = '#9ca3af'; }}
+                onMouseEnter={(e) => { e.target.style.color = '#ffffff'; }}
+                onMouseLeave={(e) => { e.target.style.color = '#cccccc'; }}
               >
                 Admin Login →
               </Link>
@@ -621,21 +475,16 @@ const Login = () => {
                 gap: 6, paddingTop: 4,
               }}
             >
-              <Shield size={11} style={{ color: '#d1d5db' }} />
-              <span style={{ fontSize: 11, color: '#9ca3af' }}>
+              <Shield size={11} style={{ color: '#cccccc' }} />
+              <span style={{ fontSize: 11, color: '#cccccc' }}>
                 Your information is secure and encrypted
               </span>
             </div>
 
+
           </form>
         </div>
-      </div>
-
-      {/* spin keyframe injected inline */}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        input::placeholder { color: #9ca3af; }
-      `}</style>
+      </motion.div>
     </div>
   );
 };

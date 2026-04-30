@@ -39,6 +39,10 @@ export const PaymentProvider = ({ children }) => {
   const fetchBalance = useCallback(async (options = {}) => {
     const { silent = false } = options;
     if (!isBillingUser) return;
+    
+    // Additional token check to prevent race condition
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
     try {
       const response = await api.get('/payments/balance');
@@ -61,6 +65,10 @@ export const PaymentProvider = ({ children }) => {
   const fetchTransactions = useCallback(async (page = 1, options = {}) => {
     const { silent = false } = options;
     if (!isBillingUser) return;
+    
+    // Additional token check to prevent race condition
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
     try {
       setLoading(true);
@@ -98,6 +106,10 @@ export const PaymentProvider = ({ children }) => {
   const fetchPaymentMethods = useCallback(async (options = {}) => {
     const { silent = false } = options;
     if (!isBillingUser) return;
+    
+    // Additional token check to prevent race condition
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
     try {
       const response = await api.get('/payments/methods');

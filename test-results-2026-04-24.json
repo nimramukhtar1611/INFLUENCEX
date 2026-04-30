@@ -1,0 +1,292 @@
+[
+  {
+    "timestamp": "2026-04-24T05:47:46.139Z",
+    "message": "🚀 Starting Dynamic Verification Flow and Session Management Test Suite",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:46.141Z",
+    "message": "================================================================",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:46.142Z",
+    "message": "\n=== Testing Security Settings Endpoint ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:46.356Z",
+    "message": "✅ Public security settings endpoint accessible",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:46.358Z",
+    "message": "Response: {\n  \"success\": true,\n  \"data\": {\n    \"emailVerification\": true,\n    \"phoneVerification\": true,\n    \"passwordMinLength\": 8,\n    \"passwordRequireUppercase\": true,\n    \"passwordRequireLowercase\": true,\n    \"passwordRequireNumbers\": true,\n    \"passwordRequireSymbols\": false\n  }\n}",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:46.366Z",
+    "message": "✅ Admin security settings properly protected",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:46.366Z",
+    "message": "\n=== Testing Password Policies for Email Verification Only ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:52.678Z",
+    "message": "✅ Valid password test: Valid password accepted",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:52.782Z",
+    "message": "❌ Too short (8 required): Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:52.888Z",
+    "message": "❌ Missing uppercase: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:53.009Z",
+    "message": "❌ Missing lowercase: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:53.114Z",
+    "message": "❌ Missing numbers: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:53.115Z",
+    "message": "\n=== Testing Password Policies for Phone Verification Only ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:57.893Z",
+    "message": "✅ Valid password test: Valid password accepted",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:58.010Z",
+    "message": "❌ Too short (10 required): Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:58.121Z",
+    "message": "❌ Missing lowercase: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:47:58.241Z",
+    "message": "❌ Missing numbers: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:03.056Z",
+    "message": "❌ Missing symbols: Invalid password incorrectly accepted",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:03.060Z",
+    "message": "\n=== Testing Password Policies for Both Email and Phone Verification ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:08.482Z",
+    "message": "✅ Valid password test: Valid password accepted",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:08.614Z",
+    "message": "❌ Too short (12 required): Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:08.736Z",
+    "message": "❌ Missing uppercase: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:08.858Z",
+    "message": "❌ Missing lowercase: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:08.980Z",
+    "message": "❌ Missing numbers: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:13.830Z",
+    "message": "❌ Missing symbols: Invalid password incorrectly accepted",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:13.830Z",
+    "message": "\n=== Testing Password Policies for No Verification Required ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:13.949Z",
+    "message": "❌ Valid password test: Password validation test failed - Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:13.953Z",
+    "message": "\n=== Testing Verification Flow: Email Verification Only ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:19.405Z",
+    "message": "✅ User registration successful",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:23.409Z",
+    "message": "✅ Email OTP sent successfully",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:23.410Z",
+    "message": "\n=== Testing Verification Flow: Email Verification Only ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:23.614Z",
+    "message": "❌ Verification flow test failed: Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:23.615Z",
+    "message": "\n=== Testing Verification Flow: Phone Verification Only ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:23.817Z",
+    "message": "❌ Verification flow test failed: Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:23.818Z",
+    "message": "\n=== Testing Verification Flow: Phone Verification Only ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.026Z",
+    "message": "❌ Verification flow test failed: Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.027Z",
+    "message": "\n=== Testing Verification Flow: Both Email and Phone Verification ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.232Z",
+    "message": "❌ Verification flow test failed: Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.232Z",
+    "message": "\n=== Testing Verification Flow: Both Email and Phone Verification ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.441Z",
+    "message": "❌ Verification flow test failed: Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.441Z",
+    "message": "\n=== Testing Verification Flow: No Verification Required ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.648Z",
+    "message": "❌ Verification flow test failed: Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.649Z",
+    "message": "\n=== Testing Verification Flow: No Verification Required ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.860Z",
+    "message": "❌ Verification flow test failed: Request failed with status code 400",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:24.861Z",
+    "message": "\n=== Testing Login Attempts Lockout (7 attempts) ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:25.635Z",
+    "message": "⏳ Attempt 1: Login failed as expected",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:26.422Z",
+    "message": "⏳ Attempt 2: Login failed as expected",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:27.232Z",
+    "message": "⏳ Attempt 3: Login failed as expected",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:28.010Z",
+    "message": "⏳ Attempt 4: Login failed as expected",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:28.885Z",
+    "message": "⏳ Attempt 5: Login failed as expected",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.107Z",
+    "message": "✅ Account locked after 6 attempts",
+    "type": "success"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.108Z",
+    "message": "\n=== Test Summary ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.108Z",
+    "message": "Total Tests: 52",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.108Z",
+    "message": "✅ Success: 8",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.109Z",
+    "message": "❌ Errors: 21",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.109Z",
+    "message": "ℹ️  Info: 23",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.109Z",
+    "message": "Success Rate: 14.3%",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T05:48:29.109Z",
+    "message": "⚠️  Some tests failed. Please review the errors above.",
+    "type": "error"
+  }
+]

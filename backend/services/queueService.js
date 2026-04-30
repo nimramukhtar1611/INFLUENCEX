@@ -16,6 +16,7 @@ class QueueService {
     
     this.fallbackQueue = {
       jobs: [],
+      maxJobs: 1000, // Limit queue size to prevent memory leaks
       
       async add(jobData, options = {}) {
         const job = {
@@ -27,6 +28,19 @@ class QueueService {
           maxAttempts: options.attempts || 3
         };
         
+        // Clean up old completed/failed jobs to prevent memory leaks
+        this.cleanupOldJobs();
+        
+        // Check queue size limit
+        if (this.jobs.length >= this.maxJobs) {
+          console.warn(`⚠️ Queue is full (${this.jobs.length}/${this.maxJobs}). Dropping oldest pending jobs.`);
+          this.jobs = this.jobs.filter(job => 
+            job.status === 'processing' || 
+            job.status === 'completed' || 
+            (job.status === 'pending' && this.jobs.indexOf(job) >= this.jobs.length - 100)
+          );
+        }
+        
         this.jobs.push(job);
         
         // Process after a small delay
@@ -37,6 +51,11 @@ class QueueService {
 
       async processJob(job) {
         try {
+          // Prevent processing if already completed or failed
+          if (job.status === 'completed' || (job.status === 'failed' && job.attempts >= job.maxAttempts)) {
+            return;
+          }
+          
           job.status = 'processing';
           job.startedAt = new Date();
           
@@ -57,10 +76,12 @@ class QueueService {
           job.attempts++;
           
           if (job.attempts < job.maxAttempts) {
-            console.log(`🔄 Retrying job ${job.id} (attempt ${job.attempts})`);
-            setTimeout(() => this.processJob(job), 5000 * job.attempts);
+            console.log(`🔄 Retrying job ${job.id} (attempt ${job.attempts}/${job.maxAttempts})`);
+            // Add maximum delay cap to prevent infinite waits
+            const delay = Math.min(5000 * job.attempts, 30000); // Max 30 second delay
+            setTimeout(() => this.processJob(job), delay);
           } else {
-            console.error(`❌ Job ${job.id} failed:`, error.message);
+            console.error(`❌ Job ${job.id} permanently failed after ${job.maxAttempts} attempts:`, error.message);
           }
         }
       },
@@ -68,6 +89,24 @@ class QueueService {
       async processEmail(data) {
         console.log(`📧 Sending email to: ${data.to || data.email}`);
         await sendEmail(data);
+      },
+
+      cleanupOldJobs() {
+        const now = Date.now();
+        const maxAge = 60 * 60 * 1000; // 1 hour
+        
+        // Remove old completed/failed jobs
+        const initialLength = this.jobs.length;
+        this.jobs = this.jobs.filter(job => {
+          const jobAge = now - new Date(job.createdAt).getTime();
+          return job.status === 'pending' || 
+                 job.status === 'processing' || 
+                 (jobAge < maxAge);
+        });
+        
+        if (this.jobs.length !== initialLength) {
+          console.log(`🧹 Cleaned up ${initialLength - this.jobs.length} old jobs`);
+        }
       },
 
       getJobCounts() {

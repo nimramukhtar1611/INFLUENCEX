@@ -1,0 +1,16 @@
+{
+  "frontendBackend": {
+    "responseTime": 7
+  },
+  "aiServices": {},
+  "errorHandling": {},
+  "environment": {
+    "frontendConfig": "complete"
+  },
+  "summary": {
+    "totalTests": 10,
+    "passed": 2,
+    "failed": 8,
+    "criticalIssues": []
+  }
+}

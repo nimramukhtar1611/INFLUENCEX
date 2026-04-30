@@ -24,6 +24,7 @@ const {
   unpinConversation,
   searchMessages,
   getUnreadCount,
+  getConversationUnreadCount,
   blockUser,
   unblockUser,
   getBlockedUsers
@@ -36,6 +37,7 @@ router.use(protect);
 router.get('/conversations', getConversations);
 router.post('/conversations', createConversation);
 router.get('/conversations/:conversationId', getMessages);
+router.get('/conversations/:conversationId/unread-count', getConversationUnreadCount);
 router.post('/conversations/:conversationId', sendMessage);
 router.put('/conversations/:conversationId/read', markAsRead);
 router.put('/conversations/:conversationId/archive', archiveConversation);

@@ -194,7 +194,7 @@ const ChartCard = ({
   if (loading) {
     return (
       <div className={`p-6 rounded-xl shadow-sm animate-pulse ${
-        isDark ? 'bg-gray-800' : 'bg-white'
+        isDark ? 'bg-zinc-900/50' : 'bg-white'
       }`}>
         <div className={`h-6 rounded w-1/3 mb-4 ${
           isDark ? 'bg-gray-700' : 'bg-gray-200'
@@ -209,7 +209,7 @@ const ChartCard = ({
   return (
     <div
       className={`rounded-xl shadow-sm overflow-hidden transition-all ${
-        isDark ? 'bg-gray-800' : 'bg-white'
+        isDark ? 'bg-zinc-900/50' : 'bg-white'
       } ${
         isExpanded ? 'fixed inset-4 z-50 overflow-auto' : ''
       } ${className}`}
@@ -239,7 +239,7 @@ const ChartCard = ({
                     onClick={() => onChartTypeChange(type.value)}
                     className={`p-1.5 rounded-lg transition-colors ${
                       chartType === type.value
-                        ? isDark ? 'bg-gray-800 text-indigo-400 shadow-sm' : 'bg-white text-indigo-600 shadow-sm'
+                        ? isDark ? 'bg-zinc-900/50 text-indigo-400 shadow-sm' : 'bg-white text-indigo-600 shadow-sm'
                         : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
                     }`}
                     title={type.label}
@@ -328,7 +328,7 @@ const ChartCard = ({
 
               {showMenu && (
                 <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg border py-1 z-10 ${
-                  isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  isDark ? 'bg-zinc-900/50 border-gray-700' : 'bg-white border-gray-200'
                 }`}>
                   <button
                     onClick={exportAsPNG}
@@ -422,7 +422,7 @@ const ChartCard = ({
       {/* Footer for expanded view */}
       {isExpanded && (
         <div className={`px-6 py-4 border-t ${
-          isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+          isDark ? 'border-gray-700 bg-zinc-900/50' : 'border-gray-200 bg-gray-50'
         }`}>
           <button
             onClick={handleExpand}

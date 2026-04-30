@@ -143,7 +143,10 @@ const Deliverables = () => {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <Loader className="w-12 h-12 animate-spin text-indigo-600" />
+      <div className="text-center">
+        <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+        <p className="text-zinc-500 text-xs font-medium">Loading deliverables...</p>
+      </div>
     </div>
   );
   if (!deal) return null;
@@ -202,7 +205,7 @@ const Deliverables = () => {
 
           {/* Requirements */}
           {d.requirements && (
-            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
+            <div className="px-5 py-3 bg-white border-b border-gray-100">
               <p className="text-xs font-medium text-gray-500 uppercase mb-1">Requirements</p>
               <p className="text-sm text-gray-700">{d.requirements}</p>
             </div>
@@ -255,7 +258,7 @@ const Deliverables = () => {
                     accept="image/*,video/*,.pdf,.doc,.docx" />
                   <label htmlFor={`file-${d._id}`} className="cursor-pointer">
                     {submissions[d._id].uploading ? (
-                      <Loader className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-2" />
+                      <Loader className="w-8 h-8 text-zinc-500 animate-spin mx-auto mb-2" />
                     ) : (
                       <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     )}
@@ -268,7 +271,7 @@ const Deliverables = () => {
                 {submissions[d._id].files.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {submissions[d._id].files.map((f, fi) => (
-                      <div key={fi} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div key={fi} className="flex items-center justify-between p-2 bg-white rounded">
                         <div className="flex items-center gap-2 text-sm text-gray-700">
                           {f.type.startsWith('image/') ? <Image className="w-4 h-4 text-blue-500" /> :
                            f.type.startsWith('video/') ? <Video className="w-4 h-4 text-purple-500" /> :
@@ -328,7 +331,7 @@ const Deliverables = () => {
           <div className="space-y-2">
             {deal.campaignId.brandAssets.map((asset, i) => (
               <a key={i} href={asset.fileUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-white">
                 <div className="flex items-center gap-3">
                   <FileText className="w-5 h-5 text-gray-400" />
                   <div>

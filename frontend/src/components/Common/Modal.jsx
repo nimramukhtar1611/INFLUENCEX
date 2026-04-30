@@ -197,7 +197,7 @@ const Modal = ({
             ${animClasses.content}
             ${contentClassName}
             ${isDark 
-              ? 'bg-slate-800 border border-slate-700 shadow-xl' 
+              ? 'bg-zinc-900/50 border border-slate-700 shadow-xl' 
               : 'bg-white border border-gray-200 shadow-xl'
             }
           `}
@@ -207,7 +207,7 @@ const Modal = ({
           {(title || showCloseButton) && (
             <div className={`relative px-8 py-6 border-b flex justify-between items-center ${
               isDark 
-                ? 'bg-slate-900 border-b-slate-700' 
+                ? 'bg-zinc-900/50 border-b-slate-700' 
                 : 'bg-gray-50 border-b-gray-200'
             }`}>
               {title && (
@@ -236,15 +236,15 @@ const Modal = ({
           {/* Body */}
           <div className={`relative px-8 py-6 overflow-y-auto max-h-[60vh] ${className} ${
             isDark 
-              ? 'bg-slate-800' 
+              ? 'bg-zinc-900/50' 
               : 'bg-white'
-          }`}>{children}</div>
+          }`}>{children || <div className="text-center py-8">Loading...</div>}</div>
 
           {/* Footer */}
           {footer && (
             <div className={`relative px-8 py-6 border-t ${
               isDark 
-                ? 'bg-slate-900 border-t-slate-700' 
+                ? 'bg-zinc-900/50 border-t-slate-700' 
                 : 'bg-gray-50 border-t-gray-200'
             }`}>
               {footer}
@@ -261,7 +261,7 @@ Modal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
   title: PropTypes.node,
-  children: PropTypes.node.isRequired,
+  children: PropTypes.node,
   size: PropTypes.oneOf(['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', 'full']),
   showCloseButton: PropTypes.bool,
   closeOnClickOutside: PropTypes.bool,
@@ -411,12 +411,12 @@ export const DrawerModal = ({
           ${sizes[size]}
           ${getPositionClasses()}
           ${className}
-          ${isDark ? 'bg-slate-800 border-l border-slate-700' : 'bg-white border-l border-gray-200'}
+          ${isDark ? 'bg-zinc-900/50 border-l border-slate-700' : 'bg-white border-l border-gray-200'}
         `}
       >
         {/* Header */}
         <div className={`px-6 py-4 border-b flex justify-between items-center ${
-          isDark ? 'bg-slate-900 border-b-slate-700' : 'bg-gray-50 border-b-gray-200'
+          isDark ? 'bg-zinc-900/50 border-b-slate-700' : 'bg-gray-50 border-b-gray-200'
         }`}>
           <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h3>
           <button
@@ -432,7 +432,7 @@ export const DrawerModal = ({
 
         {/* Body */}
         <div className={`p-6 overflow-y-auto ${
-          isDark ? 'bg-slate-800' : 'bg-white'
+          isDark ? 'bg-zinc-900/50' : 'bg-white'
         }`} style={{ maxHeight: 'calc(100vh - 8rem)' }}>
           {children}
         </div>

@@ -57,7 +57,7 @@ const campaignSchema = new mongoose.Schema({
     },
     platform: {
       type: String,
-      enum: ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook', 'linkedin', 'website', 'other'],
+      enum: ['instagram', 'youtube', 'tiktok', 'facebook', 'website', 'other'],
       required: true
     },
     quantity: {
@@ -154,7 +154,7 @@ const campaignSchema = new mongoose.Schema({
     niches: [String],
     platforms: [{
       type: String,
-      enum: ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook', 'linkedin']
+      enum: ['instagram', 'youtube', 'tiktok', 'facebook']
     }]
   },
 

@@ -30,7 +30,13 @@ const protect = async (req, res, next) => {
     }
 
     try {
+      console.log("🔍 Auth middleware - verifying token:", token.substring(0, 20) + "...");
+      console.log("🔍 Auth middleware - JWT_SECRET length:", process.env.JWT_SECRET?.length);
+      console.log("🔍 Auth middleware - JWT_SECRET exists:", !!process.env.JWT_SECRET);
+      
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log("🔍 Auth middleware - token decoded successfully:", decoded.id || decoded.userId);
+      
       const user = await User.findById(decoded.id || decoded.userId).select('-password -refreshToken');
 
       if (!user) {
@@ -40,7 +46,8 @@ const protect = async (req, res, next) => {
         });
       }
 
-      // Check if account is active (allow 'pending' as well? Only block suspended/deleted)
+      // Check if account is active - allow pending users to access their dashboards
+      // Only block suspended/deleted users
       if (user.status === 'suspended' || user.status === 'deleted') {
         return res.status(403).json({
           success: false,
@@ -52,12 +59,18 @@ const protect = async (req, res, next) => {
       req.token = token;
       next();
     } catch (error) {
+      console.log("🔍 Auth middleware - JWT verification failed:", error.name);
+      console.log("🔍 Auth middleware - Error message:", error.message);
+      
       if (error.name === 'JsonWebTokenError') {
+        console.log("🔍 Auth middleware - Invalid token error");
         return res.status(401).json({ success: false, error: 'Invalid token' });
       }
       if (error.name === 'TokenExpiredError') {
+        console.log("🔍 Auth middleware - Token expired error");
         return res.status(401).json({ success: false, error: 'Token expired', expired: true });
       }
+      console.log("🔍 Auth middleware - Unexpected error:", error);
       throw error;
     }
   } catch (error) {
@@ -99,7 +112,8 @@ const adminProtect = async (req, res, next) => {
     // If not found, check if user has admin role in User model
     if (!admin) {
       const user = await User.findById(decoded.id).select('-password');
-      if (user && (user.userType === 'admin' || user.role === 'admin' || user.role === 'super_admin')) {
+      // 🔒 STANDARDIZED RBAC: Use only userType field for consistency
+      if (user && user.userType === 'admin') {
         admin = user;
       }
     }
@@ -139,8 +153,9 @@ const superAdminProtect = async (req, res, next) => {
     return;
   }
 
-  const role = req.user?.role || req.user?.userType;
-  if (role !== 'super_admin') {
+  // 🔒 STANDARDIZED RBAC: Use only userType field for consistency
+  const userRole = req.user?.userType;
+  if (userRole !== 'admin') {
     return res.status(403).json({ success: false, error: 'Super admin access required' });
   }
 
@@ -158,8 +173,9 @@ const authorize = (...roles) => {
       return res.status(401).json({ success: false, error: 'Not authorized' });
     }
 
-    const userRole = req.user.userType || req.user.role;
-    if (!roles.includes(userRole)) {
+    // 🔒 STANDARDIZED RBAC: Use only userType field for consistency
+    const userRole = req.user?.userType;
+    if (!userRole || !roles.includes(userRole)) {
       return res.status(403).json({
         success: false,
         error: `User role ${userRole} is not authorized to access this resource`,
@@ -208,8 +224,9 @@ const hasPermission = (permission) => {
         return res.status(401).json({ success: false, error: 'Not authorized' });
       }
 
+      // 🔒 STANDARDIZED RBAC: Use only userType field for consistency
       // Admins have all permissions
-      if (req.user.userType === 'admin' || req.user.role === 'admin' || req.user.role === 'super_admin') {
+      if (req.user?.userType === 'admin') {
         return next();
       }
 
@@ -331,7 +348,8 @@ const checkOwnership = (resourceModel, idParam = 'id', ownerFields = ['userId', 
         return res.status(404).json({ success: false, error: 'Resource not found' });
       }
 
-      if (req.user.userType === 'admin' || req.user.role === 'admin') {
+      // 🔒 STANDARDIZED RBAC: Use only userType field for consistency
+      if (req.user?.userType === 'admin') {
         req.resource = resource;
         return next();
       }

@@ -1,9 +1,7 @@
-// pages/Admin/Campaigns.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useAdminData } from '../../hooks/useAdminData';
 import {
   Search,
-  Filter,
   CheckCircle,
   XCircle,
   Clock,
@@ -18,13 +16,15 @@ import {
   AlertCircle,
   Pause,
   Play,
-  Archive
+  Archive,
+  ArrowUpRight,
+  Briefcase
 } from 'lucide-react';
 import Button from '../../components/UI/Button';
-import StatsCard from '../../components/Common/StatsCard';
 import Modal from '../../components/Common/Modal';
 import Loader from '../../components/Common/Loader';
-import { formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
+import { formatCurrency, formatDate } from '../../utils/helpers';
+import { getStatusColor, getStatusIconColor } from '../../utils/colorScheme';
 import adminService from '../../services/adminService';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
@@ -37,7 +37,6 @@ const Campaigns = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -71,6 +70,10 @@ const Campaigns = () => {
       setFilteredCampaigns(filtered);
     }
   }, [campaigns, searchQuery, statusFilter, categoryFilter]);
+
+  const activeCampaigns = Number(campaigns?.filter(c => c.status === 'active').length || 0);
+  const pendingCampaigns = Number(campaigns?.filter(c => c.status === 'pending').length || 0);
+  const totalBudget = Number(campaigns?.reduce((sum, c) => sum + (c.budget || 0), 0) || 0);
 
   // ==================== HANDLE VIEW DETAILS ====================
   const handleViewDetails = (campaign) => {
@@ -123,270 +126,387 @@ const Campaigns = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  // ==================== STATUS COLOR & ICON ====================
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'paused': return 'bg-orange-100 text-orange-800';
-      case 'archived': return 'bg-gray-100 text-gray-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+  // ==================== STATUS CONFIGURATION ====================
+  // Using consistent color scheme from colorScheme.js
 
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'active': return <CheckCircle className="w-4 h-4" />;
-      case 'pending': return <Clock className="w-4 h-4" />;
-      case 'draft': return <Edit className="w-4 h-4" />;
-      case 'completed': return <Award className="w-4 h-4" />;
-      case 'paused': return <Pause className="w-4 h-4" />;
-      case 'archived': return <Archive className="w-4 h-4" />;
-      case 'rejected': return <XCircle className="w-4 h-4" />;
-      default: return <AlertCircle className="w-4 h-4" />;
-    }
-  };
-
+  const statusOptions = ['all', 'active', 'pending', 'draft', 'completed', 'paused', 'archived', 'rejected'];
   const categories = [...new Set(campaigns?.map(c => c.category).filter(Boolean))];
 
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader size="large" color="purple" />
+        <div className="text-center">
+          <div className="w-8 h-8 animate-spin border-2 border-zinc-300 border-t-zinc-500 rounded-full mx-auto mb-4"></div>
+          <p className="text-zinc-500 text-xs font-medium">Loading campaigns...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Campaign Management</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Monitor and manage all campaigns on the platform</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" icon={Download} onClick={handleExport}>
-            Export
-          </Button>
+          <h1 className="text-3xl font-light tracking-tight font-semibold">Admin <span className="font-bold">Campaigns</span></h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Monitor and manage all platform campaigns and brand partnerships.</p>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard
-          title="Total Campaigns"
-          value={stats.totalCampaigns?.toLocaleString() || '0'}
-          icon={Target}
-          color="bg-blue-500"
-        />
-        <StatsCard
-          title="Active Campaigns"
-          value={campaigns?.filter(c => c.status === 'active').length || 0}
-          icon={TrendingUp}
-          color="bg-green-500"
-        />
-        <StatsCard
-          title="Pending Approval"
-          value={campaigns?.filter(c => c.status === 'pending').length || 0}
-          icon={Clock}
-          color="bg-yellow-500"
-        />
-        <StatsCard
-          title="Total Budget"
-          value={formatCurrency(campaigns?.reduce((sum, c) => sum + (c.budget || 0), 0) || 0)}
-          icon={DollarSign}
-          color="bg-purple-500"
-        />
-      </div>
+      {/* Stats Cards - Brand Dashboard Style */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-zinc-400 group-hover:bg-white group-hover:text-black' 
+                : 'bg-zinc-50 text-zinc-600 group-hover:bg-black group-hover:text-white shadow-sm'}
+            `}>
+              <Target size={18} strokeWidth={2.5} />
+            </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white p-4 rounded-xl shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search campaigns by title, brand, or category..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            {/* Dynamic Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-blue-500 bg-blue-500/5
+            `}>
+              Total
+            </span>
           </div>
-          
-          <div className="flex gap-2 flex-wrap">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="pending">Pending</option>
-              <option value="draft">Draft</option>
-              <option value="completed">Completed</option>
-              <option value="paused">Paused</option>
-              <option value="archived">Archived</option>
-              <option value="rejected">Rejected</option>
-            </select>
 
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Categories</option>
-              {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Campaigns
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {campaigns?.length || 0}
+            </p>
+          </div>
 
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white' 
+                : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white shadow-sm'}
+            `}>
+              <CheckCircle size={18} strokeWidth={2.5} />
+            </div>
+
+            {/* Dynamic Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-emerald-500 bg-emerald-500/5
+            `}>
+              Active
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Running
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {activeCampaigns}
+            </p>
+          </div>
+
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-amber-400 group-hover:bg-amber-500 group-hover:text-black' 
+                : 'bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white shadow-sm'}
+            `}>
+              <Clock size={18} strokeWidth={2.5} />
+            </div>
+
+            {/* Dynamic Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-amber-500 bg-amber-500/5
+            `}>
+              Pending
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Approval
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {pendingCampaigns}
+            </p>
+          </div>
+
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-green-400 group-hover:bg-green-500 group-hover:text-white' 
+                : 'bg-green-50 text-green-600 group-hover:bg-green-500 group-hover:text-white shadow-sm'}
+            `}>
+              <DollarSign size={18} strokeWidth={2.5} />
+            </div>
+
+            {/* Dynamic Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-green-500 bg-green-500/5
+            `}>
+              Budget
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Total Budget
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {formatCurrency(totalBudget)}
+            </p>
+          </div>
+
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+      </div>
+
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar w-full lg:w-auto">
+          {statusOptions.map(s => (
             <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`px-4 py-2 border rounded-lg flex items-center gap-2 ${
-                showFilters ? 'bg-indigo-50 border-indigo-600 text-indigo-600' : 'border-gray-300'
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border shrink-0 ${
+                statusFilter === s 
+                  ? (isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-black border-black text-white')
+                  : (isDark ? 'border-zinc-800 text-zinc-500 hover:border-zinc-600' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400')
               }`}
             >
-              <Filter className="w-4 h-4" />
-              More Filters
+              {s}
             </button>
-          </div>
+          ))}
         </div>
 
-        {/* Advanced Filters */}
-        {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Min. Budget ($)
-                </label>
-                <input
-                  type="number"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  placeholder="e.g., 1000"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Max. Budget ($)
-                </label>
-                <input
-                  type="number"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  placeholder="e.g., 10000"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date Range
-                </label>
-                <select className="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                  <option value="">All Time</option>
-                  <option value="today">Today</option>
-                  <option value="week">This Week</option>
-                  <option value="month">This Month</option>
-                  <option value="year">This Year</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="secondary" size="sm">Clear</Button>
-              <Button variant="primary" size="sm">Apply</Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Campaigns Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto overflow-y-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Campaign
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Brand
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Category
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Budget
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Spent
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Creators
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Created
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCampaigns.length > 0 ? (
-                filteredCampaigns.map((campaign) => (
-                  <tr 
-                    key={campaign._id} 
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => handleViewDetails(campaign)}
-                  >
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{campaign.title}</div>
-                      <div className="text-xs text-gray-500">ID: {campaign._id?.slice(-8)}</div>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 truncate max-w-[120px]">{campaign.brandId?.brandName}</td>
-                    <td className="px-4 py-4 text-sm text-gray-500 truncate max-w-[100px]">{campaign.category}</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        campaign.status === 'active' ? 'bg-green-100 text-green-800' :
-                        campaign.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        campaign.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                        campaign.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {campaign.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">
-                      {formatCurrency(campaign.budget || 0)}
-                    </td>
-                    <td className="px-4 py-4 text-sm font-medium text-green-600 whitespace-nowrap">
-                      {formatCurrency(campaign.spent || 0)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
-                      {campaign.selectedCreators?.length || 0}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-500 whitespace-nowrap">
-                      <div className="text-xs">
-                        {campaign.createdAt && formatDate(campaign.createdAt)}
-                        <div className="text-xs text-gray-400">{timeAgo(campaign.createdAt)}</div>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="8" className="px-4 py-12 text-center text-gray-500">
-                    No campaigns found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="relative w-full lg:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="Search campaign, brand or category..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`w-full pl-10 pr-4 py-2 text-xs rounded-full border focus:outline-none transition-all ${
+              isDark ? 'bg-zinc-900 border-zinc-800 focus:border-zinc-600' : 'bg-zinc-50 border-zinc-200 focus:border-black'
+            }`}
+          />
         </div>
       </div>
+
+      {/* Table Interface */}
+    <div className="relative overflow-hidden">
+  {filteredCampaigns.length > 0 ? (
+    <div className="space-y-4">
+      {/* Header Row - Minimalist & High Tracking */}
+      <div className={`hidden md:grid grid-cols-12 px-8 py-3 text-[10px] font-black uppercase tracking-[0.25em] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+        <div className="col-span-4">Strategic Initiative</div>
+        <div className="col-span-2 text-center">Category</div>
+        <div className="col-span-3 text-center">Current Phase</div>
+        <div className="col-span-2 text-center">Allocation</div>
+        <div className="col-span-1 text-right">Explore</div>
+      </div>
+
+      {/* Campaign Rows */}
+      {filteredCampaigns.map(campaign => {
+        const status = String(campaign.status || 'unknown').toLowerCase();
+        
+        return (
+          <div 
+            key={campaign._id}
+            onClick={() => handleViewDetails(campaign)}
+            className={`
+              group relative grid grid-cols-1 md:grid-cols-12 items-center px-8 py-6 rounded-[2rem] border 
+              transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer
+              ${isDark 
+                ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)]' 
+                : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]'}
+            `}
+          >
+            {/* Primary Info: Campaign & Brand */}
+            <div className="col-span-4 flex items-center gap-5">
+              <div className={`
+                w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 border transition-all duration-500
+                ${isDark ? 'bg-zinc-800 border-zinc-700 group-hover:bg-zinc-700' : 'bg-zinc-50 border-zinc-100 group-hover:bg-zinc-100 group-hover:border-zinc-200'}
+              `}>
+                <Target className={`w-5 h-5 transition-transform duration-500 group-hover:scale-110 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`} />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className={`font-bold text-[15px] tracking-tight truncate leading-none mb-1 transition-colors ${isDark ? 'text-zinc-100 group-hover:text-white' : 'text-zinc-900'}`}>
+                  {campaign.title || 'Untitled Campaign'}
+                </span>
+                <span className={`text-[11px] font-semibold uppercase tracking-widest opacity-50`}>
+                  {campaign.brandId?.brandName || campaign.brandId?.fullName || 'Internal'}
+                </span>
+              </div>
+            </div>
+
+            {/* Category: Minimalist Ghost Badge */}
+            <div className="col-span-2 mt-4 md:mt-0 flex justify-center">
+              <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${
+                isDark ? 'bg-zinc-800/30 border-zinc-700/50 text-zinc-500' : 'bg-zinc-50 border-zinc-100 text-zinc-400'
+              }`}>
+                {campaign.category || 'N/A'}
+              </span>
+            </div>
+
+            {/* Status: Glassmorphic Dot Pill */}
+            <div className="col-span-3 mt-4 md:mt-0 flex justify-center">
+              <span className={`
+                inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border
+                transition-all duration-300 ${getStatusColor(status, 'status', isDark)}
+              `}>
+                <span className={`w-1.5 h-1.5 rounded-full bg-current mr-2.5 ${status === 'active' ? 'animate-pulse' : 'opacity-50'}`} />
+                {status}
+              </span>
+            </div>
+
+            {/* Allocation: Bold Modern Metric */}
+            <div className="col-span-2 mt-4 md:mt-0 flex flex-col items-center">
+              <span className={`text-lg font-bold tracking-tighter ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                {formatCurrency(campaign.budget || 0)}
+              </span>
+              <span className="text-[9px] uppercase font-black tracking-widest text-zinc-500 opacity-60">
+                Budget
+              </span>
+            </div>
+
+            {/* Action: Hover-Reveal Arrow */}
+            <div className="col-span-1 hidden md:flex justify-end">
+              <div className={`
+                w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500
+                ${isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-50 text-zinc-400'}
+                group-hover:translate-x-1 group-hover:bg-black group-hover:text-white
+              `}>
+                <ArrowUpRight className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ) : (
+    /* Empty State: Premium Minimalist */
+    <div className={`
+      flex flex-col items-center justify-center py-32 rounded-[3rem] border-2 border-dashed transition-all
+      ${isDark ? 'border-zinc-800 bg-zinc-900/10' : 'border-zinc-100 bg-zinc-50/50'}
+    `}>
+      <div className={`p-6 rounded-[2rem] mb-6 shadow-inner ${isDark ? 'bg-zinc-800/50' : 'bg-white'}`}>
+        <Target className="w-12 h-12 text-zinc-500 opacity-20 stroke-[1.5px]" />
+      </div>
+      <h3 className={`text-lg font-bold tracking-tight ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+        No Initiatives Found
+      </h3>
+      <p className="text-[12px] text-zinc-500 mt-2 max-w-[240px] text-center leading-relaxed font-medium">
+        Your search parameters yielded no results. Try adjusting filters or creating a new campaign.
+      </p>
+    </div>
+  )}
+</div>
 
       {/* Campaign Details Modal */}
       <Modal
@@ -398,51 +518,54 @@ const Campaigns = () => {
         {selectedCampaign && (
           <div className="space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">{selectedCampaign.title}</h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <h3 className={`text-xl font-semibold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedCampaign.title}</h3>
+              <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mt-1`}>
                 Brand: {selectedCampaign.brandId?.brandName} • Category: {selectedCampaign.category}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">Budget</p>
-                <p className="text-xl font-bold text-gray-900">{formatCurrency(selectedCampaign.budget || 0)}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Budget</p>
+                <p className={`text-lg sm:text-xl font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{formatCurrency(selectedCampaign.budget || 0)}</p>
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">Spent</p>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(selectedCampaign.spent || 0)}</p>
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Status</p>
+                <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColor(selectedCampaign.status, 'status', isDark)}`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current mr-2" />
+                  {selectedCampaign.status}
+                </span>
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">Start Date</p>
-                <p className="font-medium">{selectedCampaign.startDate ? formatDate(selectedCampaign.startDate) : 'N/A'}</p>
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Brand</p>
+                <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedCampaign.brandId?.brandName || selectedCampaign.brandId?.fullName || 'Unknown brand'}</p>
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">End Date</p>
-                <p className="font-medium">{selectedCampaign.endDate ? formatDate(selectedCampaign.endDate) : 'N/A'}</p>
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Category</p>
+                <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedCampaign.category || 'N/A'}</p>
               </div>
             </div>
 
             {selectedCampaign.description && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-2">Description</p>
-                <p className="text-gray-700">{selectedCampaign.description}</p>
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-2`}>Description</p>
+                <p className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{selectedCampaign.description}</p>
               </div>
             )}
 
             {/* Deliverables */}
             {selectedCampaign.deliverables?.length > 0 && (
               <div>
-                <h4 className="font-medium text-gray-900 mb-3">Deliverables</h4>
+                <h4 className={`font-medium mb-3 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Deliverables</h4>
                 <div className="space-y-2">
                   {selectedCampaign.deliverables.map((del, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-lg">
+                    <div key={index} className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
                       <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-medium capitalize">{del.type} on {del.platform}</p>
-                          {del.description && <p className="text-sm text-gray-600">{del.description}</p>}
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-sm font-medium capitalize ${isDark ? 'text-zinc-100' : 'text-zinc-900'} truncate`}>{del.type} on {del.platform}</p>
+                          {del.description && <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-600'} truncate`}>{del.description}</p>}
                         </div>
-                        <span className="text-sm font-semibold">Qty: {del.quantity || 1}</span>
+                        <span className={`text-xs sm:text-sm font-semibold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Qty: {del.quantity || 1}</span>
                       </div>
                     </div>
                   ))}
@@ -453,33 +576,33 @@ const Campaigns = () => {
             {/* Target Audience */}
             {selectedCampaign.targetAudience && (
               <div>
-                <h4 className="font-medium text-gray-900 mb-3">Target Audience</h4>
-                <div className="grid grid-cols-2 gap-4">
+                <h4 className={`font-medium mb-3 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Target Audience</h4>
+                <div className="grid grid-cols-2 gap-3">
                   {selectedCampaign.targetAudience.minFollowers && (
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-xs text-gray-500">Min Followers</p>
-                      <p className="font-medium">{selectedCampaign.targetAudience.minFollowers}</p>
+                    <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                      <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Min Followers</p>
+                      <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedCampaign.targetAudience.minFollowers}</p>
                     </div>
                   )}
                   {selectedCampaign.targetAudience.maxFollowers && (
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-xs text-gray-500">Max Followers</p>
-                      <p className="font-medium">{selectedCampaign.targetAudience.maxFollowers}</p>
+                    <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                      <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Max Followers</p>
+                      <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedCampaign.targetAudience.maxFollowers}</p>
                     </div>
                   )}
                   {selectedCampaign.targetAudience.minEngagement && (
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-xs text-gray-500">Min Engagement</p>
-                      <p className="font-medium">{selectedCampaign.targetAudience.minEngagement}%</p>
+                    <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                      <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Min Engagement</p>
+                      <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedCampaign.targetAudience.minEngagement}%</p>
                     </div>
                   )}
                 </div>
                 {selectedCampaign.targetAudience.niches?.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-sm text-gray-500 mb-2">Niches</p>
-                    <div className="flex flex-wrap gap-2">
+                    <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-2`}>Niches</p>
+                    <div className="flex flex-wrap gap-1 sm:gap-2">
                       {selectedCampaign.targetAudience.niches.map((niche, i) => (
-                        <span key={i} className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs">
+                        <span key={i} className={`px-1 sm:px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs`}>
                           {niche}
                         </span>
                       ))}
@@ -492,15 +615,15 @@ const Campaigns = () => {
             {/* Applications */}
             {selectedCampaign.applications?.length > 0 && (
               <div>
-                <h4 className="font-medium text-gray-900 mb-3">Applications ({selectedCampaign.applications.length})</h4>
+                <h4 className={`font-medium mb-3 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Applications ({selectedCampaign.applications.length})</h4>
                 <div className="space-y-2">
                   {selectedCampaign.applications.slice(0, 3).map((app, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
-                      <div>
-                        <p className="font-medium">{app.creatorId?.displayName || 'Creator'}</p>
-                        <p className="text-xs text-gray-500">Applied {timeAgo(app.appliedAt)}</p>
+                    <div key={index} className={`p-3 rounded-lg flex justify-between items-center ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'} truncate`}>{app.creatorId?.displayName || 'Creator'}</p>
+                        <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Applied {formatDate(app.appliedAt)}</p>
                       </div>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
+                      <span className={`px-1 sm:px-2 py-1 text-xs rounded-full ${
                         app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                         app.status === 'accepted' ? 'bg-green-100 text-green-800' :
                         'bg-red-100 text-red-800'
@@ -510,7 +633,7 @@ const Campaigns = () => {
                     </div>
                   ))}
                   {selectedCampaign.applications.length > 3 && (
-                    <p className="text-xs text-gray-500 text-center">+{selectedCampaign.applications.length - 3} more</p>
+                    <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} text-center`}>+{selectedCampaign.applications.length - 3} more</p>
                   )}
                 </div>
               </div>
@@ -553,27 +676,31 @@ const Campaigns = () => {
       >
         {selectedCampaign && (
           <div className="space-y-4">
-            <p className="text-gray-600">
-              Are you sure you want to {statusAction.status === 'active' ? 'approve' : 'reject'} the campaign "{selectedCampaign.title}"?
+            <p className={`${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}>
+              Are you sure you want to {statusAction.status === 'active' ? 'approve' : 'reject'} campaign "{selectedCampaign.title}"?
             </p>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
                 Reason (Optional)
               </label>
               <textarea
                 rows="3"
                 value={statusAction.reason}
                 onChange={(e) => setStatusAction({ ...statusAction, reason: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  isDark 
+                    ? 'bg-zinc-800/50 border-zinc-700/50 text-zinc-100 placeholder:text-zinc-500'
+                    : 'bg-zinc-50 border-zinc-300 text-zinc-900 placeholder:text-zinc-400'
+                }`}
                 placeholder="Enter reason for this action..."
               />
             </div>
 
             {statusAction.status === 'rejected' && (
-              <div className="bg-red-50 p-4 rounded-lg">
-                <p className="text-sm text-red-800">
-                  <strong>Note:</strong> The brand will be notified and the campaign will be moved to rejected status.
+              <div className={`p-4 rounded-lg ${isDark ? 'bg-red-900/30 border border-red-700/30' : 'bg-red-50'}`}>
+                <p className={`text-sm ${isDark ? 'text-red-300' : 'text-red-800'}`}>
+                  <strong>Note:</strong> The brand will be notified and campaign will be moved to rejected status.
                 </p>
               </div>
             )}

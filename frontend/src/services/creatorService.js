@@ -37,7 +37,7 @@ class CreatorService {
 
   /**
    * Verify social media account by handle
-   * @param {string} platform - 'instagram', 'youtube', 'tiktok', 'twitter'
+   * @param {string} platform - 'instagram', 'youtube', 'tiktok'
    * @param {string} handle - Username/handle
    * @returns {Promise<Object>}
    */
@@ -239,6 +239,24 @@ class CreatorService {
     } catch (error) {
       console.error('Delete portfolio item error:', error);
       return this._handleError(error, 'Failed to delete portfolio item');
+    }
+  }
+
+  // ==================== BRAND INTERACTIONS ====================
+
+  /**
+   * Get brand details by ID (for creator viewing)
+   * @param {string} brandId - Brand ID
+   * @returns {Promise<Object>} { success, brand, stats }
+   */
+  async getBrandDetails(brandId) {
+    try {
+      // Use the new public global endpoint
+      const response = await api.get(`/global/brands/${brandId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get brand details error:', error);
+      return this._handleError(error, 'Failed to load brand details');
     }
   }
 

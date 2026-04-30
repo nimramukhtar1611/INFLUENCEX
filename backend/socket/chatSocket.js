@@ -1,17 +1,48 @@
 const Message      = require('../models/Message');
 const { Conversation } = require('../models/Conversation');
 const User         = require('../models/User');
+const jwtService   = require('../services/jwtService');
 
 let io;
+
+// ==================== JWT VERIFICATION MIDDLEWARE ====================
+const verifySocketToken = async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
+    
+    console.log('Socket token received:', token ? 
+      token.substring(0, 20) + '...' : 'NO TOKEN');
+    
+    if (!token) {
+      return next(new Error('Authentication token required'));
+    }
+
+    // Verify JWT token using secure JWT service
+    const user = await jwtService.getUserFromToken(token);
+    
+    // Attach user to socket
+    socket.user = user;
+    socket.userId = user._id.toString();
+    socket.tokenJti = jwtService.decodeToken(token)?.jti; // Store for potential blacklisting
+    
+    console.log(`🔐 Socket authenticated: user=${user.email} (${user.userType})`);
+    next();
+  } catch (error) {
+    console.error('Socket JWT verification error:', error.message);
+    return next(new Error(error.message || 'Authentication failed'));
+  }
+};
 
 // ==================== INITIALIZE ====================
 const initializeSocket = (socketIo) => {
   io = socketIo;
 
-  io.on('connection', async (socket) => {
-    const userId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
-    if (!userId) return socket.disconnect();
+  // Apply JWT verification middleware to all connections
+  io.use(verifySocketToken);
 
+  io.on('connection', async (socket) => {
+    const userId = socket.userId; // Get from verified socket
+    
     console.log(`✅ Socket connected: user=${userId} socket=${socket.id}`);
 
     // Join user's personal room
@@ -270,10 +301,28 @@ const initializeSocket = (socketIo) => {
 
     // ==================== DISCONNECT ====================
     socket.on('disconnect', async () => {
-      console.log(`❌ Socket disconnected: user=${userId} socket=${socket.id}`);
-      await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() })
-        .catch(err => console.error('User offline update error:', err.message));
-      socket.broadcast.emit('user:offline', { userId, lastSeen: new Date() });
+      try {
+        console.log(`❌ Socket disconnected: user=${userId} socket=${socket.id}`);
+        
+        // Update user offline status with error handling
+        await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() })
+          .catch(err => console.error('User offline update error:', err.message));
+        
+        // Notify other users
+        socket.broadcast.emit('user:offline', { userId, lastSeen: new Date() });
+        
+        // Clean up any user-specific data if needed
+        // Leave all conversation rooms
+        const rooms = Array.from(socket.rooms);
+        rooms.forEach(room => {
+          if (room.startsWith('conversation_')) {
+            socket.leave(room);
+          }
+        });
+        
+      } catch (error) {
+        console.error('Socket disconnect error:', error);
+      }
     });
 
     // ==================== PING (keep-alive) ====================

@@ -1,6 +1,6 @@
 const { featureFlags } = require('../config/featureFlags');
 
-const TRUSTED_SOURCES = new Set(['oauth', 'youtube-api', 'rapidapi', 'tikwm', 'twitter-api']);
+const TRUSTED_SOURCES = new Set(['oauth', 'youtube-api', 'rapidapi', 'tikwm']);
 
 class FraudDetectionService {
   isEnabled() {
@@ -182,15 +182,6 @@ class FraudDetectionService {
         verified: Boolean(social.tiktok?.verified),
         lastSynced: social.tiktok?.lastSynced || creator.lastSocialSync || null
       },
-      {
-        platform: 'twitter',
-        followers: Number(social.twitter?.followers || 0),
-        following: Number(social.twitter?.following || 0),
-        engagement: Number(social.twitter?.engagement || 0),
-        source: social.twitter?.source || '',
-        verified: Boolean(social.twitter?.verified),
-        lastSynced: social.twitter?.lastSynced || creator.lastSocialSync || null
-      }
     ];
 
     return platforms.filter((p) => p.followers >= minFollowersForScoring);

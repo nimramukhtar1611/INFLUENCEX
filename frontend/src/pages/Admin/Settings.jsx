@@ -22,18 +22,31 @@ import {
   Loader,
   Smartphone,
   Monitor,
-  HelpCircle
+  HelpCircle,
+  Zap,
+  Database,
+  Key,
+  Clock,
+  FileText,
+  ShieldCheck,
+  UserCheck,
+  Ban,
+  AlertCircle,
+  Settings2,
+  MessageSquare
 } from 'lucide-react';
 import { useAdminData } from '../../hooks/useAdminData';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
-import api from '../../services/api';
+import { useGlobalSettings } from '../../context/GlobalSettingsContext';
+import { useFees } from '../../context/FeeContext';
+import adminService from '../../services/adminService';
 import Button from '../../components/UI/Button';
 import Input from '../../components/UI/Input';
 import Modal from '../../components/Common/Modal';
 import toast from 'react-hot-toast';
 
-const ProfilePictureUpload = ({ currentImage, onUpload, fullName, email }) => {
+const ProfilePictureUpload = ({ currentImage, onUpload, fullName, isDark }) => {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(currentImage || '');
   const fileInputRef = useRef(null);
@@ -46,6 +59,48 @@ const ProfilePictureUpload = ({ currentImage, onUpload, fullName, email }) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Enhanced file validation
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Invalid file type. Please upload JPG, PNG, or WEBP images only.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > maxSize) {
+      toast.error('File too large. Please upload an image smaller than 5MB.');
+      event.target.value = '';
+      return;
+    }
+
+    // Validate image dimensions
+    const img = new Image();
+    const validateImage = new Promise((resolve, reject) => {
+      img.onload = () => {
+        if (img.width < 100 || img.height < 100) {
+          reject(new Error('Image too small. Minimum size is 100x100 pixels.'));
+        } else if (img.width > 4000 || img.height > 4000) {
+          reject(new Error('Image too large. Maximum size is 4000x4000 pixels.'));
+        } else {
+          resolve();
+        }
+      };
+      img.onerror = () => reject(new Error('Invalid image file.'));
+      img.src = URL.createObjectURL(file);
+    });
+
+    try {
+      await validateImage;
+      URL.revokeObjectURL(img.src); // Clean up object URL
+    } catch (validationError) {
+      toast.error(validationError.message);
+      event.target.value = '';
+      return;
+    }
+
+    // Show preview
     const previewReader = new FileReader();
     previewReader.onloadend = () => setPreview(previewReader.result);
     previewReader.readAsDataURL(file);
@@ -55,24 +110,42 @@ const ProfilePictureUpload = ({ currentImage, onUpload, fullName, email }) => {
       const formData = new FormData();
       formData.append('profilePicture', file);
 
-      const response = await api.post('/upload/profile-picture', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const response = await adminService.uploadProfilePicture(formData);
 
-      if (!response.data?.success) {
-        throw new Error(response.data?.error || 'Upload failed');
+      if (!response?.success) {
+        throw new Error(response?.error || 'Upload failed');
       }
 
-      const uploadedUrl = response.data.profilePicture || response.data.file?.url;
+      const uploadedUrl = response?.profilePicture || response?.profileImage || response?.file?.url;
+      
+      // Enhanced URL validation
+      console.log('🔍 Frontend upload debug:', {
+        response: response,
+        profilePicture: response?.profilePicture,
+        profileImage: response?.profileImage,
+        fileUrl: response?.file?.url,
+        finalUrl: uploadedUrl,
+        debug: response?.debug
+      });
+      
       if (!uploadedUrl) {
-        throw new Error('Upload succeeded but no image URL was returned');
+        console.error('❌ No URL found in response:', response);
+        throw new Error('Upload succeeded but no image URL was returned. Check server logs for details.');
+      }
+      
+      // Validate URL format
+      if (typeof uploadedUrl !== 'string' || uploadedUrl.trim() === '') {
+        console.error('❌ Invalid URL format:', uploadedUrl);
+        throw new Error('Invalid image URL format received from server');
       }
 
       onUpload(uploadedUrl);
-      toast.success('Profile picture updated');
+      toast.success('Profile picture updated successfully!');
     } catch (error) {
+      console.error('Profile picture upload error:', error);
       setPreview(currentImage || '');
-      toast.error(error.response?.data?.error || error.message || 'Failed to upload profile picture');
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to upload profile picture';
+      toast.error(errorMessage);
     } finally {
       setUploading(false);
       event.target.value = '';
@@ -80,25 +153,19 @@ const ProfilePictureUpload = ({ currentImage, onUpload, fullName, email }) => {
   };
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <img
-              src={preview || 'https://via.placeholder.com/96?text=Admin'}
-              alt={fullName || 'Admin'}
-              className="w-20 h-20 rounded-full object-cover border-2 border-white shadow"
-            />
-            {uploading && (
-              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
-                <Loader size="small" color="white" />
-              </div>
-            )}
-          </div>
-          <div>
-            <p className="font-medium text-gray-900">{fullName || 'Admin User'}</p>
-            <p className="text-sm text-gray-500">{email || 'No email available'}</p>
-          </div>
+    <div className={`p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-100'} rounded-2xl border`}>
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <img
+            src={preview || 'https://via.placeholder.com/96?text=Admin'}
+            alt={fullName || 'Admin'}
+            className="w-24 h-24 rounded-full object-cover border-2 border-white shadow"
+          />
+          {uploading && (
+            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+              <Loader className="w-5 h-5 text-white animate-spin" />
+            </div>
+          )}
         </div>
 
         <div>
@@ -111,14 +178,15 @@ const ProfilePictureUpload = ({ currentImage, onUpload, fullName, email }) => {
           />
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             icon={Camera}
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
+            className={`border-zinc-600 !bg-black text-white ${isDark ? '!bg-zinc-800' : ''}`}
           >
             {uploading ? 'Uploading...' : 'Change Photo'}
           </Button>
-          <p className="text-xs text-gray-500 mt-2">JPG, PNG, WEBP up to 5MB.</p>
+          <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mt-2`}>JPG, PNG, WEBP up to 5MB.</p>
         </div>
       </div>
     </div>
@@ -128,26 +196,21 @@ const ProfilePictureUpload = ({ currentImage, onUpload, fullName, email }) => {
 const AdminSettings = () => {
   const { user, refreshUser, updateUser } = useAuth();
   const { theme } = useTheme();
+  const { refreshSecuritySettings } = useGlobalSettings();
+  const { refreshFees } = useFees();
   const isDark = theme === 'dark';
   const {
     settings,
-    fees,
     updateSettings,
-    updateFees,
-    clearCache,
-    refreshData,
-    get2FAStatus,
-    generate2FA,
-    verify2FA,
-    disable2FA
   } = useAdminData();
-  
+
   const [activeTab, setActiveTab] = useState('general');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({});
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
-  
+
   // 2FA State
   const [twoFactorStatus, setTwoFactorStatus] = useState(null);
   const [show2FAModal, setShow2FAModal] = useState(false);
@@ -160,30 +223,69 @@ const AdminSettings = () => {
   const [formData, setFormData] = useState({
     // General
     platformName: 'InfluenceX',
-    supportEmail: 'support@influencex.com',
-    supportPhone: '+1 (555) 123-4567',
+    platformDescription: 'Influencer Deal Marketplace',
+    supportEmail: 'snimramukhtar321@gmail.com',
+    supportHours: 'Mon-Fri, 9am-5pm EST',
     timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
+    timeFormat: '12h',
     currency: 'USD',
-    
+    language: 'en',
+
+    // Profile Picture
+    profilePicture: '',
+    profileImage: '',
+
     // Platform Fees
     commissionRate: 10,
     creatorPayoutMin: 50,
     brandEscrowMin: 100,
+    escrowFee: 0,
+    featuredListingFee: 50,
+    taxRate: 0,
+    taxInclusive: false,
+    withdrawalFeeType: 'fixed',
     withdrawalFee: 0,
-    
-    // Security
+
+    // Security - Email verification toggle removed from admin settings
     twoFactorRequired: false,
-    emailVerification: true,
-    phoneVerification: false,
+    // emailVerification removed - now optional in signup flow
+    // phoneVerification removed - now optional in signup flow
     maxLoginAttempts: 5,
-    sessionTimeout: 30,
-    
+        lockoutDuration: 30,
+    passwordMinLength: 8,
+    passwordRequireUppercase: true,
+    passwordRequireLowercase: true,
+    passwordRequireNumbers: true,
+    passwordRequireSymbols: false,
+    passwordExpiryDays: 90,
+    passwordHistoryCount: 5,
+    jwtExpiry: '7d',
+    refreshTokenExpiry: '30d',
+
+    // OTP and verification expiry times
+    otpExpiryMinutes: 10,
+    emailVerificationExpiryHours: 24,
+    passwordResetExpiryHours: 1,
+    twoFactorCodeExpiryMinutes: 5,
+
     // Email Settings
     senderEmail: 'noreply@influencex.com',
     senderName: 'InfluenceX',
-    emailFooter: '© 2024 InfluenceX. All rights reserved.',
-    
+    emailFooter: ' 2024 InfluenceX. All rights reserved.',
+
+    // Message templates
+    messageTemplates: {
+      otpSms: 'Your {platformName} verification code: {otp}. Valid for {expiryMinutes} minutes. Do not share this code.',
+      otpEmail: 'Your verification code is: {otp}. This code will expire in {expiryMinutes} minutes.',
+      passwordResetSms: '{platformName}: Use this link to reset your password: {resetLink}. Valid for {expiryHours} hour.',
+      twoFactorSms: '{platformName}: Your 2FA code is {code}. Valid for {expiryMinutes} minutes. Do not share.',
+      dealOfferSms: '{platformName}: New deal offer from {brandName} for ${budget}. View: {dealUrl}',
+      paymentReceivedSms: '{platformName}: Payment of ${amount} received. View details in your dashboard.',
+      deadlineReminderSms: '{platformName}: Deal deadline in {days} days. Submit deliverables in your dashboard.',
+      accountLockedSms: '{platformName}: Account locked due to failed attempts. Reset your password to continue.'
+    },
+
     // Notification Settings
     emailNotifications: {
       newUser: true,
@@ -192,18 +294,80 @@ const AdminSettings = () => {
       disputeRaised: true,
       reportGenerated: true
     },
-    
-    // Moderation
-    autoApproveBrands: false,
-    autoApproveCreators: false,
-    requireVerification: true,
-    contentModeration: 'ai',
-    
-    // Limits
+    smsNotifications: {
+      enabled: false,
+      provider: 'twilio',
+      accountSid: '',
+      authToken: '',
+      phoneNumber: ''
+    },
+    pushNotifications: {
+      enabled: true,
+      vapidPublicKey: '',
+      vapidPrivateKey: '',
+      vapidEmail: ''
+    },
+    inAppNotifications: {
+      enabled: true,
+      types: {
+        newMessage: true,
+        dealUpdate: true,
+        paymentReceived: true,
+        deadlineReminder: true
+      }
+    },
+
+    // Content Moderation
+    autoModeration: {
+      enabled: true,
+      profanityFilter: true,
+      spamFilter: true,
+      duplicateContentFilter: true
+    },
+
+    // User Approval
+    autoApproveBrands: true,
+    autoApproveCreators: true,
+    requireVerification: false,
+
+    // Usage Limits
     maxCampaignsPerBrand: 50,
     maxActiveDealsPerCreator: 20,
     maxFileSize: 100,
-    allowedFileTypes: ['jpg', 'png', 'mp4', 'pdf', 'doc', 'docx'],
+    maxFilesPerUpload: 10,
+    dailyUploadLimit: 100,
+    storageQuotaPerUser: 1000,
+
+    // File Upload Settings
+    allowedFileTypes: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx', 'xls', 'zip'],
+    imageOptimization: {
+      enabled: true,
+      maxWidth: 1920,
+      maxHeight: 1080,
+      quality: 80
+    },
+    videoOptimization: {
+      enabled: true,
+      maxDuration: 300,
+      maxBitrate: 5000
+    },
+    storage: {
+      provider: 'local'
+    },
+    apiRateLimit: 100,
+    apiRateWindow: 15,
+    authRateLimit: 10,
+    authRateWindow: 60,
+    maxImageWidth: 1920,
+    maxImageHeight: 1080,
+    imageQuality: 80,
+    maxVideoDuration: 300,
+    maxVideoBitrate: 5000,
+    storageProvider: 'local',
+    s3Bucket: '',
+    s3Region: '',
+    s3AccessKey: '',
+    s3SecretKey: '',
 
     // Payment Gateway
     paymentProvider: 'stripe',
@@ -214,21 +378,191 @@ const AdminSettings = () => {
     autoCapturePayments: false,
     allowApplePay: false,
     allowGooglePay: false,
-    invoicePrefix: 'INV'
+    invoicePrefix: 'INV',
+
+    // Advanced
+    maintenanceMode: false,
+    maintenanceMessage: 'We are currently undergoing maintenance. Please check back soon.',
+    maintenanceAllowedIPs: '',
+    maintenanceAllowedPaths: '',
+    dataRetentionNotifications: 90,
+    dataRetentionAuditLogs: 90,
+    dataRetentionTempData: 24,
+    dataRetentionCache: 1,
+    gdprCookieConsent: true,
+    gdprCookieLifetime: 365,
+    gdprDataRetentionDays: 2555,
+    gdprAnonymizeData: true,
+    gdprExportFormat: 'zip',
+    apiRateLimitEnabled: true,
+    apiRateLimitMaxRequests: 100,
+    apiRateLimitWindowMs: 900000,
+    corsEnabled: true,
+    corsAllowedOrigins: ['*'],
+    corsAllowedMethods: ['GET', 'POST', 'PUT', 'DELETE'],
+    corsAllowedHeaders: ['Content-Type', 'Authorization'],
+    corsExposedHeaders: ['X-Total-Count'],
+    corsMaxAge: 86400,
+    cacheEnabled: true,
+    cacheTtl: 3600,
+    redisHost: '',
+    redisPort: 6379,
+    redisPassword: '',
+
+    // Admin Account Settings
+    newEmail: '',
+    confirmNewEmail: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmNewPassword: ''
   });
 
+  // Use settings from useAdminData hook as single source of truth
   useEffect(() => {
     if (settings) {
-      setFormData(prev => ({
-        ...prev,
-        ...settings
-      }));
+      console.log('=== FRONTEND SETTINGS DEBUG ===');
+      console.log('Settings from useAdminData:', settings);
+
+      // Update formData with settings from useAdminData hook
+      setFormData(prev => {
+        const merged = { ...prev, ...settings };
+
+        // Ensure nested objects are properly merged
+        if (settings.messageTemplates) {
+          merged.messageTemplates = { ...prev.messageTemplates, ...settings.messageTemplates };
+        }
+
+        console.log('FormData updated with useAdminData settings:', merged);
+        return merged;
+      });
+
+      setLoading(false);
     }
   }, [settings]);
 
+  // Load usage limits and file upload settings separately
   useEffect(() => {
-    setProfileImage(user?.profilePicture || '');
-  }, [user?.profilePicture]);
+    const loadUsageAndFileSettings = async () => {
+      try {
+        // Load usage limits
+        const usageLimitsResponse = await adminService.getUsageLimits();
+        if (usageLimitsResponse.success) {
+          const usageLimits = usageLimitsResponse.data;
+          setFormData(prev => ({
+            ...prev,
+            ...usageLimits
+          }));
+        }
+
+        // Load file upload settings
+        const fileUploadResponse = await adminService.getFileUploadSettings();
+        if (fileUploadResponse.success) {
+          const fileSettings = fileUploadResponse.data;
+          setFormData(prev => ({
+            ...prev,
+            allowedFileTypes: fileSettings.allowedFileTypes,
+            imageOptimization: fileSettings.imageOptimization,
+            videoOptimization: fileSettings.videoOptimization,
+            storage: fileSettings.storage
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load usage/file settings:', error);
+      }
+    };
+
+    // Add delay to ensure main settings are loaded first
+    setTimeout(loadUsageAndFileSettings, 1000);
+  }, []);
+
+  // Real-time settings update listener
+  useEffect(() => {
+    // Listen for real-time settings updates via WebSocket if available
+    const socket = window.socket; // Assuming socket is available globally
+
+    if (socket) {
+      const handleSettingsUpdate = (data) => {
+        console.log('Real-time settings update received:', data);
+
+        if (data.type === 'SETTINGS_UPDATED' && data.settings) {
+          setFormData(prev => ({
+            ...prev,
+            ...data.settings
+          }));
+
+          toast.success('Settings updated in real-time!');
+        }
+      };
+
+      socket.on('settings_updated', handleSettingsUpdate);
+      socket.on('current_settings', (data) => {
+        if (data.settings) {
+          setFormData(prev => ({
+            ...prev,
+            ...data.settings
+          }));
+        }
+      });
+
+      return () => {
+        socket.off('settings_updated', handleSettingsUpdate);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    // First try to get from current user context
+    if (user?.profilePicture || user?.profileImage) {
+      const imageUrl = user?.profilePicture || user?.profileImage;
+      console.log('🔍 Setting profile image from user context:', imageUrl);
+      setProfileImage(imageUrl);
+      return;
+    }
+
+    // Fallback to localStorage
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        const imageUrl = parsedUser?.profilePicture || parsedUser?.profileImage;
+        console.log('🔍 Setting profile image from localStorage:', imageUrl);
+        setProfileImage(imageUrl || '');
+      } catch (error) {
+        console.error('Error parsing stored user data:', error);
+        setProfileImage('');
+      }
+    } else {
+      console.log('🔍 No user data found, setting empty profile image');
+      setProfileImage('');
+    }
+  }, [user]); // Depend on entire user object, not just profilePicture
+
+  // Add separate useEffect to handle profile image updates from localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          const imageUrl = parsedUser?.profilePicture || parsedUser?.profileImage;
+          if (imageUrl && imageUrl !== profileImage) {
+            console.log('🔍 Profile image updated in localStorage, refreshing UI:', imageUrl);
+            setProfileImage(imageUrl);
+          }
+        } catch (error) {
+          console.error('Error parsing stored user data in storage change:', error);
+        }
+      }
+    };
+
+    // Check localStorage immediately
+    handleStorageChange();
+
+    // Set up interval to check for localStorage changes (fallback)
+    const interval = setInterval(handleStorageChange, 1000);
+    
+    return () => clearInterval(interval);
+  }, [profileImage]); // Include profileImage to prevent infinite loops
 
   useEffect(() => {
     if (activeTab === 'security') {
@@ -237,19 +571,26 @@ const AdminSettings = () => {
   }, [activeTab]);
 
   const fetch2FAStatus = async () => {
-    const status = await get2FAStatus();
-    if (status?.success) {
-      setTwoFactorStatus(status.data);
+    try {
+      const status = await adminService.get2FAStatus();
+      if (status?.success) {
+        setTwoFactorStatus(status.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch 2FA status:', error);
     }
   };
 
   const handleStart2FASetup = async () => {
     setLoading(true);
-    const result = await generate2FA();
-    if (result?.success) {
-      setQrCodeData(result.data);
-      setTwoFactorStep('setup');
-      setShow2FAModal(true);
+    try {
+      const result = await adminService.generate2FA();
+      if (result?.success) {
+        setQrCodeData(result.data);
+        setTwoFactorStep('setup');
+      }
+    } catch (error) {
+      console.error('Failed to generate 2FA:', error);
     }
     setLoading(false);
   };
@@ -257,11 +598,15 @@ const AdminSettings = () => {
   const handleVerify2FA = async () => {
     if (verificationCode.length !== 6) return;
     setSaving(true);
-    const result = await verify2FA(verificationCode);
-    if (result?.success) {
-      setBackupCodes(result.data.backupCodes || []);
-      setTwoFactorStep('success');
-      fetch2FAStatus();
+    try {
+      const result = await adminService.verify2FA(verificationCode);
+      if (result?.success) {
+        setBackupCodes(result.data.backupCodes || []);
+        setTwoFactorStep('success');
+        fetch2FAStatus();
+      }
+    } catch (error) {
+      console.error('Failed to verify 2FA:', error);
     }
     setSaving(false);
   };
@@ -269,20 +614,100 @@ const AdminSettings = () => {
   const handleDisable2FA = async () => {
     const code = prompt('Enter 2FA code to disable:');
     if (!code) return;
-    
+
     setDisabling2FA(true);
-    const success = await disable2FA(code);
-    if (success) {
-      fetch2FAStatus();
+    try {
+      const success = await adminService.disable2FA(code);
+      if (success) {
+        fetch2FAStatus();
+      }
+    } catch (error) {
+      console.error('Failed to disable 2FA:', error);
     }
     setDisabling2FA(false);
+  };
+
+  const handleEmailChange = async () => {
+    if (!formData.newEmail || formData.newEmail !== formData.confirmNewEmail) {
+      toast.error('Email addresses do not match');
+      return;
+    }
+
+    if (!validateEmail(formData.newEmail)) {
+      toast.error('Invalid email format');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await adminService.updateAdminEmail({
+        newEmail: formData.newEmail,
+        confirmNewEmail: formData.confirmNewEmail
+      });
+
+      if (response?.success) {
+        toast.success('Email updated successfully! Please check your new email for verification.');
+        setFormData(prev => ({
+          ...prev,
+          newEmail: '',
+          confirmNewEmail: ''
+        }));
+        
+        // Refresh user data to get updated email
+        if (refreshUser) {
+          await refreshUser();
+        }
+      } else {
+        toast.error(response?.error || 'Failed to update email');
+      }
+    } catch (error) {
+      console.error('Email change error:', error);
+      toast.error(error.response?.data?.error || error.message || 'Failed to update email');
+    }
+    setSaving(false);
+  };
+
+  const handlePasswordChange = async () => {
+    if (!formData.currentPassword || !formData.newPassword || formData.newPassword !== formData.confirmNewPassword) {
+      toast.error('Passwords do not match or missing required fields');
+      return;
+    }
+
+    if (formData.newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters long');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await adminService.updateAdminPassword({
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword,
+        confirmNewPassword: formData.confirmNewPassword
+      });
+
+      if (response?.success) {
+        toast.success('Password updated successfully!');
+        setFormData(prev => ({
+          ...prev,
+          currentPassword: '',
+          newPassword: '',
+          confirmNewPassword: ''
+        }));
+      } else {
+        toast.error(response?.error || 'Failed to update password');
+      }
+    } catch (error) {
+      console.error('Password change error:', error);
+      toast.error(error.response?.data?.error || error.message || 'Failed to update password');
+    }
+    setSaving(false);
   };
 
   const tabs = [
     { id: 'general', label: 'General', icon: Globe },
     { id: 'fees', label: 'Fees & Payouts', icon: DollarSign },
     { id: 'security', label: 'Security', icon: Shield },
-    { id: 'email', label: 'Email', icon: Mail },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'moderation', label: 'Moderation', icon: Users },
     { id: 'limits', label: 'Limits', icon: Lock },
@@ -290,497 +715,1752 @@ const AdminSettings = () => {
     { id: 'advanced', label: 'Advanced', icon: SettingsIcon }
   ];
 
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validateField = (name, value) => {
+    const errors = { ...validationErrors };
+
+    switch (name) {
+      case 'platformName':
+        if (!value || value.trim().length === 0) {
+          errors.platformName = 'Platform Name is required';
+        } else if (value.length > 100) {
+          errors.platformName = 'Platform Name must be less than 100 characters';
+        } else {
+          delete errors.platformName;
+        }
+        break;
+      
+      case 'supportEmail':
+        if (value && !validateEmail(value)) {
+          errors.supportEmail = 'Invalid email format';
+        } else {
+          delete errors.supportEmail;
+        }
+        break;
+      
+      // Fee validation - more permissive ranges
+      case 'commissionRate': {
+        const commissionRate = parseFloat(value);
+        if (isNaN(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+          errors.commissionRate = 'Commission Rate must be between 0 and 100%';
+        } else {
+          delete errors.commissionRate;
+        }
+        break;
+      }
+      
+      case 'withdrawalFee': {
+        const withdrawalFee = parseFloat(value);
+        if (isNaN(withdrawalFee) || withdrawalFee < 0 || withdrawalFee > 1000) {
+          errors.withdrawalFee = 'Withdrawal Fee must be between $0 and $1000';
+        } else {
+          delete errors.withdrawalFee;
+        }
+        break;
+      }
+      
+      case 'escrowFee': {
+        const escrowFee = parseFloat(value);
+        if (isNaN(escrowFee) || escrowFee < 0 || escrowFee > 100) {
+          errors.escrowFee = 'Escrow Fee must be between 0 and 100%';
+        } else {
+          delete errors.escrowFee;
+        }
+        break;
+      }
+      
+      case 'featuredListingFee': {
+        const featuredListingFee = parseFloat(value);
+        if (isNaN(featuredListingFee) || featuredListingFee < 0 || featuredListingFee > 10000) {
+          errors.featuredListingFee = 'Featured Listing Fee must be between $0 and $10,000';
+        } else {
+          delete errors.featuredListingFee;
+        }
+        break;
+      }
+      
+      case 'taxRate': {
+        const taxRate = parseFloat(value);
+        if (isNaN(taxRate) || taxRate < 0 || taxRate > 100) {
+          errors.taxRate = 'Tax Rate must be between 0 and 100%';
+        } else {
+          delete errors.taxRate;
+        }
+        break;
+      }
+      
+      case 'creatorPayoutMin': {
+        const creatorPayoutMin = parseFloat(value);
+        if (isNaN(creatorPayoutMin) || creatorPayoutMin < 0.01) {
+          errors.creatorPayoutMin = 'Minimum Creator Payout must be at least $0.01';
+        } else {
+          delete errors.creatorPayoutMin;
+        }
+        break;
+      }
+      
+      case 'brandEscrowMin': {
+        const brandEscrowMin = parseFloat(value);
+        if (isNaN(brandEscrowMin) || brandEscrowMin < 0.01) {
+          errors.brandEscrowMin = 'Minimum Brand Escrow must be at least $0.01';
+        } else {
+          delete errors.brandEscrowMin;
+        }
+        break;
+      }
+      
+      // Security settings validation
+      case 'maxLoginAttempts': {
+        const maxAttempts = parseInt(value);
+        if (isNaN(maxAttempts) || maxAttempts < 1 || maxAttempts > 20) {
+          errors.maxLoginAttempts = 'Max login attempts must be between 1 and 20';
+        } else {
+          delete errors.maxLoginAttempts;
+        }
+        break;
+      }
+      
+            
+      case 'passwordMinLength': {
+        const passwordMinLength = parseInt(value);
+        if (isNaN(passwordMinLength) || passwordMinLength < 4 || passwordMinLength > 128) {
+          errors.passwordMinLength = 'Password length must be between 4 and 128 characters';
+        } else {
+          delete errors.passwordMinLength;
+        }
+        break;
+      }
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSave = async () => {
+    // Clear any existing validation errors first
+    setValidationErrors({});
+    
+    // Only validate critical required fields
+    let isValid = true;
+    
+    // Only validate platform name as it's truly required
+    if (!formData.platformName || formData.platformName.trim().length === 0) {
+      setValidationErrors(prev => ({ ...prev, platformName: 'Platform Name is required' }));
+      isValid = false;
+    }
+    
+    // Validate email format if provided
+    if (formData.supportEmail && !validateEmail(formData.supportEmail)) {
+      setValidationErrors(prev => ({ ...prev, supportEmail: 'Invalid email format' }));
+      isValid = false;
+    }
+    
+    // Only validate numeric fields if they have values and are clearly invalid
+    const numericFields = ['commissionRate', 'withdrawalFee', 'escrowFee', 'featuredListingFee', 'taxRate', 'creatorPayoutMin', 'brandEscrowMin'];
+    for (const field of numericFields) {
+      const value = formData[field];
+      if (value !== undefined && value !== '' && value !== null) {
+        const numValue = parseFloat(value);
+        if (isNaN(numValue) || numValue < 0) {
+          setValidationErrors(prev => ({ ...prev, [field]: 'Must be a valid positive number' }));
+          isValid = false;
+        }
+      }
+    }
+    
+    if (!isValid) {
+      toast.error('Please fix validation errors before saving');
+      return;
+    }
+    
     setSaving(true);
     try {
-      if (activeTab === 'fees') {
-        await updateFees({
-          commissionRate: formData.commissionRate,
-          creatorPayoutMin: formData.creatorPayoutMin,
-          brandEscrowMin: formData.brandEscrowMin,
-          withdrawalFee: formData.withdrawalFee
-        });
+      // DEBUG: Log what's being sent
+      console.log('=== FRONTEND SAVE DEBUG ===');
+      console.log('Form data being sent:', formData);
+      console.log('Profile picture in form data:', formData.profilePicture || formData.profileImage);
+      
+      // Handle usage limits and file upload settings separately
+      if (activeTab === 'limits') {
+        // Save usage limits
+        const usageLimitsData = {
+          maxCampaignsPerBrand: parseInt(formData.maxCampaignsPerBrand) || 50,
+          maxActiveDealsPerCreator: parseInt(formData.maxActiveDealsPerCreator) || 20,
+          maxFileSize: parseInt(formData.maxFileSize) || 100,
+          maxFilesPerUpload: parseInt(formData.maxFilesPerUpload) || 10,
+          dailyUploadLimit: parseInt(formData.dailyUploadLimit) || 100,
+          storageQuotaPerUser: parseInt(formData.storageQuotaPerUser) || 1000
+        };
+        
+        console.log('Saving usage limits:', usageLimitsData);
+        await adminService.updateUsageLimits(usageLimitsData);
+        
+        // Save file upload settings
+        const fileUploadData = {
+          allowedFileTypes: formData.allowedFileTypes || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
+          imageOptimization: {
+            enabled: formData.imageOptimization?.enabled ?? true,
+            maxWidth: parseInt(formData.imageOptimization?.maxWidth) || 1920,
+            maxHeight: parseInt(formData.imageOptimization?.maxHeight) || 1080,
+            quality: parseInt(formData.imageOptimization?.quality) || 80
+          },
+          videoOptimization: {
+            enabled: formData.videoOptimization?.enabled ?? true,
+            maxDuration: parseInt(formData.videoOptimization?.maxDuration) || 300,
+            maxBitrate: parseInt(formData.videoOptimization?.maxBitrate) || 5000
+          },
+          storage: {
+            provider: formData.storage?.provider || 'local'
+          }
+        };
+        
+                await adminService.updateFileUploadSettings(fileUploadData);
+        
+        // Refresh both usage limits and file upload settings after successful update
+        setTimeout(async () => {
+          try {
+            // Refresh usage limits
+            const usageLimitsResponse = await adminService.getUsageLimits();
+            if (usageLimitsResponse.success) {
+              setFormData(prev => ({
+                ...prev,
+                ...usageLimitsResponse.data
+              }));
+            }
+
+            // Refresh file upload settings
+            const fileUploadResponse = await adminService.getFileUploadSettings();
+            if (fileUploadResponse.success) {
+              const fileSettings = fileUploadResponse.data;
+              setFormData(prev => ({
+                ...prev,
+                allowedFileTypes: fileSettings.allowedFileTypes,
+                imageOptimization: fileSettings.imageOptimization,
+                videoOptimization: fileSettings.videoOptimization,
+                storage: fileSettings.storage
+              }));
+            }
+            
+            toast.success('Settings updated successfully!');
+          } catch (error) {
+            console.error('Failed to refresh settings:', error);
+            toast.error('Settings saved but failed to refresh. Please refresh the page.');
+          }
+        }, 500);
       } else {
-        await updateSettings(formData);
+        // Create clean payload for other settings - only send fields that have values
+        const cleanFormData = {
+          ...formData,
+          // Only include notification credentials if they have values
+          notifications: {
+            ...(formData.notifications?.email?.smtp?.host || formData.notifications?.email?.smtp?.auth?.user || formData.notifications?.email?.smtp?.auth?.pass ? {
+              email: {
+                smtp: {
+                  host: formData.notifications?.email?.smtp?.host || '',
+                  port: formData.notifications?.email?.smtp?.port || 587,
+                  secure: formData.notifications?.email?.smtp?.secure || false,
+                  auth: {
+                    user: formData.notifications?.email?.smtp?.auth?.user || '',
+                    pass: formData.notifications?.email?.smtp?.auth?.pass || ''
+                  }
+                }
+              }
+            } : {}),
+            ...(formData.notifications?.sms?.twilio?.accountSid || formData.notifications?.sms?.twilio?.authToken || formData.notifications?.sms?.twilio?.phoneNumber ? {
+              sms: {
+                twilio: {
+                  accountSid: formData.notifications?.sms?.twilio?.accountSid || '',
+                  authToken: formData.notifications?.sms?.twilio?.authToken || '',
+                  phoneNumber: formData.notifications?.sms?.twilio?.phoneNumber || ''
+                }
+              }
+            } : {})
+          }
+        };
+        
+        // Remove empty notification objects if no credentials provided
+        if (!cleanFormData.notifications.email || !cleanFormData.notifications.email.smtp.host) {
+          delete cleanFormData.notifications.email;
+        }
+        if (!cleanFormData.notifications.sms || !cleanFormData.notifications.sms.twilio.accountSid) {
+          delete cleanFormData.notifications.sms;
+        }
+        if (Object.keys(cleanFormData.notifications).length === 0) {
+          delete cleanFormData.notifications;
+        }
+        
+        console.log('Clean form data being sent:', cleanFormData);
+        const response = await updateSettings(cleanFormData);
+      
+        // DEBUG: Log response
+        console.log('=== FRONTEND RESPONSE DEBUG ===');
+        console.log('Response from server:', response);
+        console.log('Response withdrawalFee:', response.settings?.withdrawalFee);
+        console.log('Current formData withdrawalFee before update:', formData.withdrawalFee);
+        console.log('=== END FRONTEND RESPONSE DEBUG ===');
+        
+        // Enhanced response validation with comprehensive checking
+        if (response && response.success === true && response.settings) {
+          // Success case - all required fields present
+          toast.success('Settings saved successfully!');
+          setShowConfirmModal(false);
+          
+          // Update local form data with server response to ensure sync
+          // Update all fee-related, security-related, notification-related, moderation, and payment fields to ensure they're in sync
+          const updatedFormData = { ...formData };
+          Object.keys(response.settings).forEach(key => {
+            // Always update fee-related fields to ensure they're in sync
+            const feeFields = ['commissionRate', 'creatorPayoutMin', 'brandEscrowMin', 'withdrawalFee', 'withdrawalFeeType', 'escrowFee', 'featuredListingFee', 'taxRate', 'taxInclusive'];
+            // Always update security-related fields to ensure they're in sync
+            const securityFields = ['maxLoginAttempts', 'lockoutDuration', 'passwordMinLength', 'passwordRequireUppercase', 'passwordRequireLowercase', 'passwordRequireNumbers', 'passwordRequireSymbols', 'twoFactorRequired', 'emailVerification'];
+            // Always update notification-related fields to ensure they're in sync
+            const notificationFields = ['emailNotifications', 'smsNotifications', 'pushNotifications', 'inAppNotifications'];
+            // Always update moderation-related fields to ensure they're in sync
+            const moderationFields = ['contentModeration', 'autoApproveContent', 'autoFlagContent', 'flagThreshold', 'manualReviewRequired', 'profanityFilter', 'spamFilter', 'duplicateContentFilter', 'bannedWords', 'bannedPhrases', 'allowedDomains', 'blockedDomains'];
+            // Always update usage limits fields to ensure they're in sync
+            const limitsFields = ['maxCampaignsPerBrand', 'maxActiveDealsPerCreator', 'maxFileSize', 'allowedFileTypes'];
+            // Always update payment gateway fields to ensure they're in sync
+            const paymentFields = ['paymentProvider', 'stripePublishableKey', 'stripeSecretKeyMasked', 'stripeWebhookSecretMasked', 'paymentTestMode', 'autoCapturePayments', 'allowApplePay', 'allowGooglePay'];
+            
+            if (feeFields.includes(key) || securityFields.includes(key) || notificationFields.includes(key) || moderationFields.includes(key) || limitsFields.includes(key) || paymentFields.includes(key) || key === 'platformName' || key === 'supportEmail') {
+              updatedFormData[key] = response.settings[key];
+            }
+          });
+          setFormData(updatedFormData);
+          
+          // Force refresh admin data to get updated profile picture
+          if (refreshUser) {
+            try {
+              await refreshUser();
+              console.log('Admin data refreshed after settings save');
+            } catch (refreshError) {
+              console.error('Failed to refresh admin data:', refreshError);
+            }
+          }
+          
+          // Refresh global fee context to update all components
+          try {
+            await refreshFees();
+            console.log('Global fees refreshed after settings save');
+          } catch (feeRefreshError) {
+            console.error('Failed to refresh global fees:', feeRefreshError);
+          }
+          
+          // Refresh security settings to update signup flow
+          try {
+            await refreshSecuritySettings();
+            console.log('Security settings refreshed after settings save');
+          } catch (securityRefreshError) {
+            console.error('Failed to refresh security settings:', securityRefreshError);
+          }
+          
+          // Verify settings were actually saved by re-fetching after a short delay
+          setTimeout(async () => {
+            try {
+              // Force refresh settings from server
+              await settings;
+              console.log('Settings verification: Save confirmed and synced');
+            } catch (verifyError) {
+              console.error('Settings verification failed:', verifyError);
+              toast.warning('Settings saved but verification failed. Please refresh to confirm.');
+            }
+          }, 1500);
+        } else if (response && response.success === false) {
+          // API explicitly returned failure with proper error message
+          const errorMessage = response.error || 'Failed to save settings';
+          toast.error(errorMessage);
+          console.error('API returned failure:', response);
+        } else if (response && typeof response === 'object' && Object.keys(response).length === 1 && response.success === true) {
+          // Handle case where only { success: true } is returned
+          toast.success('Settings saved successfully!');
+          setShowConfirmModal(false);
+          
+          // Re-fetch settings to get updated values
+          setTimeout(async () => {
+            try {
+              await settings;
+              console.log('Settings verification: Save confirmed');
+            } catch (verifyError) {
+              console.error('Settings verification failed:', verifyError);
+            }
+          }, 1500);
+        } else if (response === true || response === 'true') {
+          // Handle case where response is literally true (string or boolean)
+          toast.success('Settings saved successfully!');
+          setShowConfirmModal(false);
+          
+          // Re-fetch settings to get updated values
+          setTimeout(async () => {
+            try {
+              await settings;
+              console.log('Settings verification: Save confirmed');
+            } catch (verifyError) {
+              console.error('Settings verification failed:', verifyError);
+            }
+          }, 1500);
+        } else {
+          // Log detailed response information for debugging
+          console.error('Unexpected response format:', {
+            response,
+            responseType: typeof response,
+            responseKeys: response ? Object.keys(response) : 'null/undefined',
+            hasSuccess: response ? 'success' in response : false,
+            successValue: response ? response.success : 'N/A'
+          });
+          
+          // Show user-friendly error
+          toast.error('Invalid response from server. Please try again.');
+        }
       }
-      toast.success('Settings saved successfully');
     } catch (error) {
-      toast.error('Failed to save settings');
+      console.error('Settings save error:', error);
+      
+      // Enhanced error handling with specific status code handling
+      const errorMessage = error?.response?.data?.error || error?.message || 'Failed to save settings. Please try again.';
+      const statusCode = error?.response?.status;
+      
+      if (!error?.response) {
+        toast.error('Network error. Please check your connection.');
+      } else if (statusCode >= 500) {
+        toast.error('Server error. Please try again later.');
+      } else if (statusCode === 400) {
+        toast.error(errorMessage || 'Invalid settings data provided.');
+      } else if (statusCode === 503) {
+        toast.error('Database temporarily unavailable. Please try again.');
+      } else if (statusCode === 401) {
+        toast.error('Authorization expired. Please login again.');
+      } else if (statusCode === 403) {
+        toast.error('Insufficient permissions to update settings.');
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const handleClearCache = async () => {
-    const success = await clearCache();
-    if (success) {
-      setShowConfirmModal(false);
-    }
-  };
-
-  const handleAddFileType = () => {
+  const handleAddFileType = async () => {
     const newType = prompt('Enter file extension (e.g., mp4)');
     if (newType && !formData.allowedFileTypes.includes(newType)) {
-      setFormData({
-        ...formData,
-        allowedFileTypes: [...formData.allowedFileTypes, newType]
-      });
+      try {
+        await adminService.addFileType(newType);
+        setFormData({
+          ...formData,
+          allowedFileTypes: [...formData.allowedFileTypes, newType]
+        });
+        toast.success('File type added successfully');
+      } catch (error) {
+        toast.error(error.message || 'Failed to add file type');
+      }
     }
   };
 
-  const handleRemoveFileType = (type) => {
-    setFormData({
-      ...formData,
-      allowedFileTypes: formData.allowedFileTypes.filter(t => t !== type)
-    });
+  const handleRemoveFileType = async (type) => {
+    try {
+      await adminService.removeFileType(type);
+      setFormData({
+        ...formData,
+        allowedFileTypes: formData.allowedFileTypes.filter(t => t !== type)
+      });
+      toast.success('File type removed successfully');
+    } catch (error) {
+      toast.error(error.message || 'Failed to remove file type');
+    }
+  };
+
+  // Missing handler functions that were causing undefined errors
+  const handleClearCache = async () => {
+    try {
+      setLoading(true);
+      const response = await adminService.clearCache();
+      if (response?.success) {
+        toast.success('Cache cleared successfully!');
+        setShowConfirmModal(false);
+        setConfirmAction(null);
+      } else {
+        toast.error(response?.error || 'Failed to clear cache');
+      }
+    } catch (error) {
+      console.error('Clear cache error:', error);
+      toast.error('Failed to clear cache. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRotateLogs = async () => {
+    try {
+      setLoading(true);
+      const response = await adminService.rotateLogs();
+      if (response?.success) {
+        toast.success('Logs rotated successfully!');
+        setShowConfirmModal(false);
+        setConfirmAction(null);
+      } else {
+        toast.error(response?.error || 'Failed to rotate logs');
+      }
+    } catch (error) {
+      console.error('Rotate logs error:', error);
+      toast.error('Failed to rotate logs. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    try {
+      setLoading(true);
+      const response = await adminService.createBackup();
+      if (response?.success) {
+        toast.success('Backup created successfully!');
+        setShowConfirmModal(false);
+        setConfirmAction(null);
+      } else {
+        toast.error(response?.error || 'Failed to create backup');
+      }
+    } catch (error) {
+      console.error('Create backup error:', error);
+      toast.error('Failed to create backup. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEnableMaintenance = async () => {
+    try {
+      setLoading(true);
+      const response = await adminService.setMaintenanceMode(true);
+      if (response?.success) {
+        toast.success('Maintenance mode enabled!');
+        setFormData({ ...formData, maintenanceMode: true });
+        setShowConfirmModal(false);
+        setConfirmAction(null);
+      } else {
+        toast.error(response?.error || 'Failed to enable maintenance mode');
+      }
+    } catch (error) {
+      console.error('Enable maintenance error:', error);
+      toast.error('Failed to enable maintenance mode. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Platform Settings</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Configure platform-wide settings and preferences</p>
+          <h1 className="text-3xl md:text-4xl font-light tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
+            Admin <span className="font-semibold">Settings</span>
+          </h1>
+          <p className={`text-sm mt-2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Manage platform configuration and administrative preferences.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" icon={RefreshCw} onClick={refreshData}>
-            Refresh
-          </Button>
+        
+        <div className="flex items-center gap-3">
+         <Button
+  onClick={handleSave}
+  variant="secondary"
+  loading={saving}
+  disabled={Object.keys(validationErrors).length > 0}
+  className={`
+    flex items-center gap-2 px-6 py-2.5 
+    bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full 
+    transition-all duration-300 ease-out shadow-lg
+    
+    /* Hover & Active States */
+    hover:bg-zinc-800 hover:shadow-xl hover:-translate-y-0.5
+    active:scale-95 active:translate-y-0
+    disabled:opacity-70 disabled:cursor-not-allowed
+    
+    /* Shine Effect (Optional) */
+    relative overflow-hidden group
+ ${isDark ? 'bg-zinc-900' : 'bg-zinc-700'} ${
+    Object.keys(validationErrors).length > 0 ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+>
+  {/* Icon Animation */}
+  <Save 
+    className={`w-4 h-4 transition-all duration-500 ${
+      saving ? 'opacity-0 scale-50' : 'opacity-100 scale-100 group-hover:rotate-12'
+    }`} 
+  />
+
+  {/* Text Transition */}
+  <span className="relative">
+    {saving ? (
+      <span className="flex items-center gap-2">
+        <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        Saving...
+      </span>
+    ) : Object.keys(validationErrors).length > 0 ? (
+      'Fix Errors to Save'
+    ) : (
+      'Save Changes'
+    )}
+  </span>
+
+  {/* Background Shine (Premium Touch) */}
+  <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] transition-transform" />
+</Button>
         </div>
       </div>
 
-      {/* Settings Layout */}
-      <div className={`${isDark ? 'bg-gray-900' : 'bg-white'} rounded-xl shadow-sm overflow-hidden`}>
-        <div className="flex flex-col lg:flex-row">
-          {/* Sidebar */}
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'} lg:w-64 border-r overflow-x-auto`}>
-            <nav className="p-2 lg:p-4 space-y-1">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-2 lg:gap-3 px-2 lg:px-4 py-2 lg:py-3 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
-                      activeTab === tab.id
-                        ? 'bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 text-[#667eea]'
-                        : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 lg:w-5 lg:h-5 flex-shrink-0" />
-                    <span className="truncate">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+      {/* Tab Filters - Matching Brand Settings Style */}
+      <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 w-full lg:w-auto no-scrollbar">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border whitespace-nowrap ${
+                  activeTab === tab.id 
+                    ? (isDark ? 'bg-black border-white text-gray-800' : 'bg-black border-black text-white')
+                    : (isDark ? 'border-zinc-800 text-zinc-400 hover:border-zinc-600' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400')
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-          {/* Content */}
-          <div className="flex-1 p-3 lg:p-6 overflow-x-hidden">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 capitalize">
-              {tabs.find(t => t.id === activeTab)?.label} Settings
-            </h2>
+      {/* Content Area */}
+      <div >
+        <div className="p-6 md:p-8">
+      <h2 
+  className="text-2xl md:text-3xl italic font-semibold mb-6 capitalize transition-all duration-300 tracking-normal hover:tracking-widest" 
+  style={{ fontFamily: 'Playfair Display, serif' }}
+>
+  {tabs.find(t => t.id === activeTab)?.label}
+</h2>
 
-            {activeTab === 'general' && (
-              <div className="space-y-6">
+          {activeTab === 'general' && (
+            <div className="space-y-6">
+              {/* Profile Section */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <UserCheck className="w-5 h-5" />
+                  Administrator Profile
+                </h3>
                 <ProfilePictureUpload
                   currentImage={profileImage}
                   fullName={user?.fullName}
-                  email={user?.email}
-                  onUpload={(imageUrl) => {
+                  isDark={isDark}
+                  onUpload={async (imageUrl) => {
+                    console.log('🔍 Profile picture uploaded successfully:', imageUrl);
+                    
+                    // Immediately update local state
                     setProfileImage(imageUrl);
+                    
+                    // Update formData to include the new profile picture
+                    setFormData(prev => ({
+                      ...prev,
+                      profilePicture: imageUrl,
+                      profileImage: imageUrl
+                    }));
+                    
+                    // Immediately update localStorage to ensure persistence
+                    try {
+                      const storedUser = localStorage.getItem('user');
+                      if (storedUser) {
+                        const parsedUser = JSON.parse(storedUser);
+                        parsedUser.profilePicture = imageUrl;
+                        parsedUser.profileImage = imageUrl;
+                        localStorage.setItem('user', JSON.stringify(parsedUser));
+                        console.log('🔍 Profile picture updated in localStorage immediately:', imageUrl);
+                        
+                        // Force a storage event to trigger the useEffect
+                        window.dispatchEvent(new StorageEvent('storage', {
+                          key: 'user',
+                          newValue: JSON.stringify(parsedUser)
+                        }));
+                      }
+                    } catch (error) {
+                      console.error('Error updating localStorage:', error);
+                    }
+                    
+                    // Update both profilePicture and profileImage fields for consistency
                     if (updateUser) {
-                      updateUser({ profilePicture: imageUrl, profileImage: imageUrl });
+                      console.log('🔍 Updating user context with new profile picture');
+                      updateUser({ 
+                        profilePicture: imageUrl, 
+                        profileImage: imageUrl 
+                      });
                     }
-                    if (refreshUser) {
-                      refreshUser();
-                    }
+                    
+                    // Small delay to ensure state updates, then refresh
+                    setTimeout(async () => {
+                      // Refresh user data from server to ensure consistency
+                      if (refreshUser) {
+                        try {
+                          await refreshUser();
+                          console.log('🔍 User data refreshed from server');
+                        } catch (error) {
+                          console.error('Error refreshing user data:', error);
+                        }
+                      }
+                    }, 500);
                   }}
                 />
+              </div>
 
-                <Input
-                  label="Platform Name"
-                  value={formData.platformName}
-                  onChange={(e) => setFormData({...formData, platformName: e.target.value})}
-                />
+              {/* Platform Configuration */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Globe className="w-5 h-5" />
+                  Platform Configuration
+                </h3>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+                <div className="space-y-4">
+                  <Input
+                    label="Platform Name"
+                    value={formData.platformName}
+                    onChange={(e) => {
+                      setFormData({...formData, platformName: e.target.value});
+                      validateField('platformName', e.target.value);
+                    }}
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.platformName}
+                    required
+                  />
+                  
+                  {validationErrors.platformName && (
+                    <p className="text-red-500 text-sm mt-1">{validationErrors.platformName}</p>
+                  )}
+                  
                   <Input
                     label="Support Email"
                     type="email"
-                    value={formData.supportEmail}
-                    onChange={(e) => setFormData({...formData, supportEmail: e.target.value})}
+                    value={formData.supportEmail || ''}
+                    onChange={(e) => {
+                      setFormData({...formData, supportEmail: e.target.value});
+                      validateField('supportEmail', e.target.value);
+                    }}
+                    placeholder="support@influencex.com"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.supportEmail}
                   />
-                  <Input
-                    label="Support Phone"
-                    value={formData.supportPhone}
-                    onChange={(e) => setFormData({...formData, supportPhone: e.target.value})}
-                  />
+                  
+                  {validationErrors.supportEmail && (
+                    <p className="text-red-500 text-sm mt-1">{validationErrors.supportEmail}</p>
+                  )}
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+              {/* Email & SMS Configuration */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <MessageSquare className="w-5 h-5" />
+                  Email & SMS Configuration
+                </h3>
+                
+                <div className="space-y-6">
+                  {/* SMTP Email Settings */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Timezone
-                    </label>
-                    <select
-                      value={formData.timezone}
-                      onChange={(e) => setFormData({...formData, timezone: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea]"
-                    >
-                      <option value="America/New_York">Eastern Time</option>
-                      <option value="America/Chicago">Central Time</option>
-                      <option value="America/Denver">Mountain Time</option>
-                      <option value="America/Los_Angeles">Pacific Time</option>
-                      <option value="Europe/London">London (GMT)</option>
-                      <option value="Europe/Paris">Paris (CET)</option>
-                      <option value="Asia/Tokyo">Tokyo (JST)</option>
-                      <option value="Australia/Sydney">Sydney (AEST)</option>
-                    </select>
+                    <h4 className={`text-md font-medium mb-3 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>SMTP Email Settings</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="SMTP Host"
+                        value={formData.notifications?.email?.smtp?.host || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          notifications: {
+                            ...formData.notifications,
+                            email: {
+                              ...formData.notifications?.email,
+                              smtp: {
+                                ...formData.notifications?.email?.smtp,
+                                host: e.target.value
+                              }
+                            }
+                          }
+                        })}
+                        placeholder="smtp.gmail.com"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                      
+                      <Input
+                        label="SMTP Port"
+                        type="number"
+                        value={formData.notifications?.email?.smtp?.port || 587}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          notifications: {
+                            ...formData.notifications,
+                            email: {
+                              ...formData.notifications?.email,
+                              smtp: {
+                                ...formData.notifications?.email?.smtp,
+                                port: parseInt(e.target.value) || 587
+                              }
+                            }
+                          }
+                        })}
+                        placeholder="587"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                      
+                      <Input
+                        label="SMTP Email"
+                        type="email"
+                        value={formData.notifications?.email?.smtp?.auth?.user || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          notifications: {
+                            ...formData.notifications,
+                            email: {
+                              ...formData.notifications?.email,
+                              smtp: {
+                                ...formData.notifications?.email?.smtp,
+                                auth: {
+                                  ...formData.notifications?.email?.smtp?.auth,
+                                  user: e.target.value
+                                }
+                              }
+                            }
+                          }
+                        })}
+                        placeholder="your-email@gmail.com"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                      
+                      <Input
+                        label="App Password"
+                        type="password"
+                        value={formData.notifications?.email?.smtp?.auth?.pass || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          notifications: {
+                            ...formData.notifications,
+                            email: {
+                              ...formData.notifications?.email,
+                              smtp: {
+                                ...formData.notifications?.email?.smtp,
+                                auth: {
+                                  ...formData.notifications?.email?.smtp?.auth,
+                                  pass: e.target.value
+                                }
+                              }
+                            }
+                          }
+                        })}
+                        placeholder="••••••••••••••••"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                    </div>
+                    
+                    <div className="mt-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={formData.notifications?.email?.smtp?.secure || false}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            notifications: {
+                              ...formData.notifications,
+                              email: {
+                                ...formData.notifications?.email,
+                                smtp: {
+                                  ...formData.notifications?.email?.smtp,
+                                  secure: e.target.checked
+                                }
+                              }
+                            }
+                          })}
+                          className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                        />
+                        <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Use SSL/TLS</span>
+                      </label>
+                    </div>
                   </div>
 
+                  {/* Email Sender Details */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date Format
-                    </label>
-                    <select
-                      value={formData.dateFormat}
-                      onChange={(e) => setFormData({...formData, dateFormat: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea]"
-                    >
-                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                      <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                    </select>
+                    <h4 className={`text-md font-medium mb-3 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>Email Sender Details</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Sender Name"
+                        value={formData.senderName || ''}
+                        onChange={(e) => setFormData({...formData, senderName: e.target.value})}
+                        placeholder="Your Platform Name"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                      
+                      <Input
+                        label="Email Footer"
+                        value={formData.emailFooter || ''}
+                        onChange={(e) => setFormData({...formData, emailFooter: e.target.value})}
+                        placeholder="© 2024 Your Platform. All rights reserved."
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                    </div>
                   </div>
 
+                  {/* Twilio SMS Settings */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Default Currency
-                    </label>
-                    <select
-                      value={formData.currency}
-                      onChange={(e) => setFormData({...formData, currency: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea]"
-                    >
-                      <option value="USD">USD ($)</option>
-                      <option value="EUR">EUR (€)</option>
-                      <option value="GBP">GBP (£)</option>
-                      <option value="INR">INR (₹)</option>
-                    </select>
+                    <h4 className={`text-md font-medium mb-3 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>Twilio SMS Settings</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Account SID"
+                        value={formData.smsNotifications?.accountSid || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          smsNotifications: {
+                            ...formData.smsNotifications,
+                            accountSid: e.target.value
+                          }
+                        })}
+                        placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                      
+                      <Input
+                        label="Auth Token"
+                        type="password"
+                        value={formData.smsNotifications?.authToken || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          smsNotifications: {
+                            ...formData.smsNotifications,
+                            authToken: e.target.value
+                          }
+                        })}
+                        placeholder="•••••••••••••••••••••••••••••••••"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                      
+                      <Input
+                        label="Twilio Phone Number"
+                        value={formData.smsNotifications?.phoneNumber || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          smsNotifications: {
+                            ...formData.smsNotifications,
+                            phoneNumber: e.target.value
+                          }
+                        })}
+                        placeholder="+1234567890"
+                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
             )}
 
-            {activeTab === 'fees' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+          {activeTab === 'fees' && (
+            <div className="space-y-6">
+              {/* Fee Configuration */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <DollarSign className="w-5 h-5" />
+                  Fee Configuration
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Commission Rate (%)"
                     type="number"
                     value={formData.commissionRate}
-                    onChange={(e) => setFormData({...formData, commissionRate: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      setFormData({...formData, commissionRate: parseFloat(e.target.value) || 0});
+                      validateField('commissionRate', e.target.value);
+                    }}
                     min="0"
                     max="100"
                     step="0.1"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.commissionRate}
                   />
+                  
                   <Input
                     label="Withdrawal Fee ($)"
                     type="number"
                     value={formData.withdrawalFee}
-                    onChange={(e) => setFormData({...formData, withdrawalFee: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      setFormData({...formData, withdrawalFee: parseFloat(e.target.value) || 0});
+                      validateField('withdrawalFee', e.target.value);
+                    }}
                     min="0"
                     step="0.01"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.withdrawalFee}
                   />
+                  
+                  <Input
+                    label="Escrow Fee (%)"
+                    type="number"
+                    value={formData.escrowFee}
+                    onChange={(e) => {
+                      setFormData({...formData, escrowFee: parseFloat(e.target.value) || 0});
+                      validateField('escrowFee', e.target.value);
+                    }}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.escrowFee}
+                  />
+                  
+                  <Input
+                    label="Featured Listing Fee ($)"
+                    type="number"
+                    value={formData.featuredListingFee}
+                    onChange={(e) => {
+                      setFormData({...formData, featuredListingFee: parseFloat(e.target.value) || 0});
+                      validateField('featuredListingFee', e.target.value);
+                    }}
+                    min="0"
+                    step="0.01"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.featuredListingFee}
+                  />
+                  
+                  <Input
+                    label="Tax Rate (%)"
+                    type="number"
+                    value={formData.taxRate}
+                    onChange={(e) => {
+                      setFormData({...formData, taxRate: parseFloat(e.target.value) || 0});
+                      validateField('taxRate', e.target.value);
+                    }}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.taxRate}
+                  />
+                  
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.taxInclusive}
+                        onChange={(e) => setFormData({...formData, taxInclusive: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Tax Inclusive</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div className="mt-6">
+                  <h4 className={`text-md font-medium mb-3 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>Withdrawal Fee Type</h4>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="fixed"
+                        checked={formData.withdrawalFeeType === 'fixed'}
+                        onChange={(e) => setFormData({...formData, withdrawalFeeType: e.target.value})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Fixed Amount</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="percentage"
+                        checked={formData.withdrawalFeeType === 'percentage'}
+                        onChange={(e) => setFormData({...formData, withdrawalFeeType: e.target.value})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Percentage</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payout Limits */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <CreditCard className="w-5 h-5" />
+                  Payout Limits
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Minimum Creator Payout ($)"
                     type="number"
                     value={formData.creatorPayoutMin}
-                    onChange={(e) => setFormData({...formData, creatorPayoutMin: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      setFormData({...formData, creatorPayoutMin: parseFloat(e.target.value) || 0});
+                      validateField('creatorPayoutMin', e.target.value);
+                    }}
                     min="1"
+                    step="0.01"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.creatorPayoutMin}
                   />
+                  
                   <Input
                     label="Minimum Brand Escrow ($)"
                     type="number"
                     value={formData.brandEscrowMin}
-                    onChange={(e) => setFormData({...formData, brandEscrowMin: parseFloat(e.target.value)})}
+                    onChange={(e) => {
+                      setFormData({...formData, brandEscrowMin: parseFloat(e.target.value) || 0});
+                      validateField('brandEscrowMin', e.target.value);
+                    }}
                     min="1"
+                    step="0.01"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                    error={validationErrors.brandEscrowMin}
                   />
                 </div>
+              </div>
 
-                <div className="bg-yellow-50 p-4 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+              {/* Fee Summary */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <FileText className="w-5 h-5" />
+                  Fee Summary
+                </h3>
+                
+                <div className={`p-4 ${isDark ? 'bg-zinc-900/50' : 'bg-zinc-100'} rounded-lg`}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="font-medium text-yellow-800">Fee changes take effect immediately</p>
-                      <p className="text-sm text-yellow-700 mt-1">
-                        Changes to commission rates will apply to all new deals created after the update. Existing deals will maintain their original terms.
-                      </p>
+                      <span className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Commission:</span>
+                      <span className={`ml-2 font-medium ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>{formData.commissionRate}%</span>
+                    </div>
+                    <div>
+                      <span className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Withdrawal:</span>
+                      <span className={`ml-2 font-medium ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>${formData.withdrawalFee}</span>
+                    </div>
+                    <div>
+                      <span className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Escrow:</span>
+                      <span className={`ml-2 font-medium ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>{formData.escrowFee}%</span>
+                    </div>
+                    <div>
+                      <span className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Featured:</span>
+                      <span className={`ml-2 font-medium ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>${formData.featuredListingFee}</span>
                     </div>
                   </div>
-                </div>
-
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-blue-800 mb-2">Current Fee Structure</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-blue-700">Platform Commission:</span>
-                      <span className="ml-2 font-semibold">{fees?.commissionRate || 10}%</span>
-                    </div>
-                    <div>
-                      <span className="text-blue-700">Stripe Fee:</span>
-                      <span className="ml-2 font-semibold">2.9% + $0.30</span>
-                    </div>
-                    <div>
-                      <span className="text-blue-700">Creator Payout Min:</span>
-                      <span className="ml-2 font-semibold">${fees?.creatorPayoutMin || 50}</span>
-                    </div>
-                    <div>
-                      <span className="text-blue-700">Withdrawal Fee:</span>
-                      <span className="ml-2 font-semibold">${fees?.withdrawalFee || 0}</span>
-                    </div>
-                  </div>
+                  <p className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-500'} mt-4`}>
+                    Fee changes take effect immediately. Changes to commission rates will apply to all new deals created after the update. Existing deals will maintain their original terms.
+                  </p>
                 </div>
               </div>
+            </div>
             )}
 
-            {activeTab === 'security' && (
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Require 2FA for Admins</span>
-                      <p className="text-sm text-gray-500">All admin accounts must have 2FA enabled</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.twoFactorRequired}
-                      onChange={(e) => setFormData({...formData, twoFactorRequired: e.target.checked})}
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Email Verification</span>
-                      <p className="text-sm text-gray-500">Require email verification for new accounts</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.emailVerification}
-                      onChange={(e) => setFormData({...formData, emailVerification: e.target.checked})}
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Phone Verification</span>
-                      <p className="text-sm text-gray-500">Require phone verification for new accounts</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.phoneVerification}
-                      onChange={(e) => setFormData({...formData, phoneVerification: e.target.checked})}
-                    />
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              {/* Login Management */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Shield className="w-5 h-5" />
+                  Login Management
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Max Login Attempts"
                     type="number"
                     value={formData.maxLoginAttempts}
-                    onChange={(e) => setFormData({...formData, maxLoginAttempts: parseInt(e.target.value)})}
+                    onChange={(e) => setFormData({...formData, maxLoginAttempts: parseInt(e.target.value) || 5})}
                     min="1"
-                    max="10"
+                    max="20"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
                   />
+                  
                   <Input
-                    label="Session Timeout (minutes)"
+                    label="Lockout Duration (minutes)"
                     type="number"
-                    value={formData.sessionTimeout}
-                    onChange={(e) => setFormData({...formData, sessionTimeout: parseInt(e.target.value)})}
-                    min="5"
-                    max="120"
+                    value={formData.lockoutDuration}
+                    onChange={(e) => setFormData({...formData, lockoutDuration: parseInt(e.target.value) || 30})}
+                    min="1"
+                    max="1440"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                  />
+                  
+                  <Input
+                    label="OTP Expiry (minutes)"
+                    type="number"
+                    value={formData.otpExpiryMinutes}
+                    onChange={(e) => setFormData({...formData, otpExpiryMinutes: parseInt(e.target.value) || 10})}
+                    min="1"
+                    max="60"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
                   />
                 </div>
+              </div>
 
-                <div className="pt-6 border-t border-gray-200">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">My Two-Factor Authentication</h3>
-                  <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-xl p-4 lg:p-6`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                      <div className="flex items-center gap-3 lg:gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          twoFactorStatus?.enabled ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                        }`}>
-                          <Smartphone className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            Status: {twoFactorStatus?.enabled ? 'Enabled' : 'Disabled'}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {twoFactorStatus?.enabled 
-                              ? 'Your account is protected with an additional layer of security.' 
-                              : 'Add an extra layer of security to your account.'}
-                          </p>
-                        </div>
+              {/* Password Requirements */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Lock className="w-5 h-5" />
+                  Password Requirements
+                </h3>
+                
+                <div className="space-y-4">
+                  <Input
+                    label="Password Min Length"
+                    type="number"
+                    value={formData.passwordMinLength}
+                    onChange={(e) => setFormData({...formData, passwordMinLength: parseInt(e.target.value) || 8})}
+                    min="4"
+                    max="128"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                  />
+                  
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.passwordRequireUppercase}
+                        onChange={(e) => setFormData({...formData, passwordRequireUppercase: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Require Uppercase</span>
+                    </label>
+                  </div>
+                  
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.passwordRequireLowercase}
+                        onChange={(e) => setFormData({...formData, passwordRequireLowercase: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Require Lowercase</span>
+                    </label>
+                  </div>
+                  
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.passwordRequireNumbers}
+                        onChange={(e) => setFormData({...formData, passwordRequireNumbers: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Require Numbers</span>
+                    </label>
+                  </div>
+                  
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.passwordRequireSymbols}
+                        onChange={(e) => setFormData({...formData, passwordRequireSymbols: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Require Symbols</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Admin Account Settings */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <UserCheck className="w-5 h-5" />
+                  Admin Account Settings
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Email Change */}
+                  <div className={`p-4 ${isDark ? 'bg-zinc-900/50' : 'bg-zinc-100'} rounded-lg`}>
+                    <div className="mb-4">
+                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                        Current Email
+                      </label>
+                      <input
+                        type="email"
+                        value={user?.email || ''}
+                        disabled
+                        className={`w-full px-4 py-2 border rounded-lg bg-opacity-50 ${
+                          isDark ? 'bg-zinc-800 border-zinc-600 text-zinc-400' : 'bg-gray-100 border-gray-300 text-gray-500'
+                        }`}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          New Email
+                        </label>
+                        <input
+                          type="email"
+                          value={formData.newEmail || ''}
+                          onChange={(e) => setFormData({...formData, newEmail: e.target.value})}
+                          placeholder="Enter new email"
+                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                          }`}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          Confirm New Email
+                        </label>
+                        <input
+                          type="email"
+                          value={formData.confirmNewEmail || ''}
+                          onChange={(e) => setFormData({...formData, confirmNewEmail: e.target.value})}
+                          placeholder="Confirm new email"
+                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    
+                 <div className="mt-4">
+  <Button
+    variant="secondry" 
+    onClick={handleEmailChange}
+    loading={saving}
+    disabled={!formData.newEmail || formData.newEmail !== formData.confirmNewEmail}
+    className="
+      relative overflow-hidden
+      bg-blue-600 text-white
+      px-8 py-2.5 rounded-lg
+      font-medium tracking-wide
+      transition-all duration-300 ease-in-out
+      
+      /* Hover: Lift effect and soft blue glow */
+      hover:bg-blue-500 
+      hover:-translate-y-0.5 
+      hover:shadow-[0_10px_20px_-10px_rgba(37,99,235,0.5)]
+      
+      /* Active: Physical press sensation */
+      active:scale-95 active:translate-y-0
+      
+      /* Disabled state: Clean and muted */
+      disabled:opacity-40 disabled:grayscale-[0.5] 
+      disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none
+    "
+  >
+    <span className="relative z-10 flex items-center gap-2">
+      Update Email
+    </span>
+    
+    {/* Subtle Inner Highlight for a 'Glass' feel */}
+    <div className="absolute inset-0 bg-gradient-to-t from-white/0 to-white/10 opacity-0 hover:opacity-100 transition-opacity duration-300" />
+  </Button>
+</div>
+                  </div>
+
+                  {/* Password Change */}
+                  <div className={`p-4 ${isDark ? 'bg-zinc-900/50' : 'bg-zinc-100'} rounded-lg`}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          Current Password
+                        </label>
+                        <input
+                          type="password"
+                          value={formData.currentPassword || ''}
+                          onChange={(e) => setFormData({...formData, currentPassword: e.target.value})}
+                          placeholder="Enter current password"
+                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                          }`}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          New Password
+                        </label>
+                        <input
+                          type="password"
+                          value={formData.newPassword || ''}
+                          onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
+                          placeholder="Enter new password"
+                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                          }`}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          Confirm New Password
+                        </label>
+                        <input
+                          type="password"
+                          value={formData.confirmNewPassword || ''}
+                          onChange={(e) => setFormData({...formData, confirmNewPassword: e.target.value})}
+                          placeholder="Confirm new password"
+                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    
+                  <div className="mt-4">
+  <Button
+    variant="secondry"
+    onClick={handlePasswordChange}
+    loading={saving}
+    disabled={!formData.currentPassword || !formData.newPassword || formData.newPassword !== formData.confirmNewPassword}
+    // Added: smooth transitions, scale on tap, and refined shadows
+    className="
+      relative overflow-hidden
+      bg-green-600 hover:bg-green-500 
+      text-white font-medium
+      px-6 py-2 rounded-lg
+      transition-all duration-300 ease-out
+      hover:shadow-[0_0_20px_rgba(22,163,74,0.4)]
+      active:scale-95
+      disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none
+    "
+  >
+    <span className="relative z-10">Update Password</span>
+  </Button>
+</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two-Factor Authentication */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <ShieldCheck className="w-5 h-5" />
+                  Two-Factor Authentication
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className={`p-4 ${isDark ? 'bg-zinc-900/50' : 'bg-zinc-100'} rounded-lg`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Status: {twoFactorStatus?.enabled ? 'Enabled' : 'Disabled'}</p>
+                        <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                          {twoFactorStatus?.enabled ? '2FA is active on your account' : 'Enable 2FA for enhanced security'}
+                        </p>
                       </div>
                       {twoFactorStatus?.enabled ? (
-                        <Button variant="danger" icon={XCircle} onClick={handleDisable2FA} loading={disabling2FA}>
-                          Disable 2FA
+                        <Button
+                          variant="secondary"
+                          onClick={handleDisable2FA}
+                          loading={disabling2FA}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          Disable
                         </Button>
                       ) : (
-                        <Button variant="primary" icon={Smartphone} onClick={handleStart2FASetup} loading={loading}>
-                          Enable 2FA
+                        <Button
+                          variant="secondary"
+                          onClick={handleStart2FASetup}
+                          loading={loading}
+                        >
+                          Enable
                         </Button>
                       )}
                     </div>
-
-                    {twoFactorStatus?.enabled && (
-                      <div className="bg-blue-50 p-4 rounded-lg flex items-start gap-3">
-                        <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
-                        <div>
-                          <p className="text-sm font-medium text-blue-800">2FA is active</p>
-                          <p className="text-xs text-blue-700 mt-1">
-                            You have {twoFactorStatus.backupCodesCount} backup codes remaining. Keep them in a safe place.
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
+            </div>
             )}
 
-            {activeTab === 'email' && (
-              <div className="space-y-6">
-                <Input
-                  label="Sender Email"
-                  type="email"
-                  value={formData.senderEmail}
-                  onChange={(e) => setFormData({...formData, senderEmail: e.target.value})}
-                />
-                <Input
-                  label="Sender Name"
-                  value={formData.senderName}
-                  onChange={(e) => setFormData({...formData, senderName: e.target.value})}
-                />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Footer
-                  </label>
-                  <textarea
-                    rows="3"
-                    value={formData.emailFooter}
-                    onChange={(e) => setFormData({...formData, emailFooter: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'notifications' && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Email Notifications</h3>
-                  <div className="space-y-3">
-                    {Object.entries(formData.emailNotifications).map(([key, value]) => (
-                      <label key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
-                        <span className="text-sm font-medium text-gray-700 capitalize">
-                          {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </span>
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                          checked={value}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            emailNotifications: {
-                              ...formData.emailNotifications,
-                              [key]: e.target.checked
-                            }
-                          })}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'moderation' && (
-              <div className="space-y-6">
+          {activeTab === 'notifications' && (
+            <div className="space-y-6">
+              {/* Email Notifications */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Mail className="w-5 h-5" />
+                  Email Notifications
+                </h3>
+                
                 <div className="space-y-4">
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Auto-approve Brands</span>
-                      <p className="text-sm text-gray-500">Automatically approve brand accounts</p>
+                  {Object.entries(formData.emailNotifications || {}).map(([key, value]) => (
+                    <div key={key} className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                      <div>
+                        <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
+                        <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mt-1`}>
+                          {key === 'newUser' && 'Send email when new user registers'}
+                          {key === 'newCampaign' && 'Send email when new campaign is created'}
+                          {key === 'paymentReceived' && 'Send email when payment is received'}
+                          {key === 'disputeRaised' && 'Send email when dispute is raised'}
+                          {key === 'reportGenerated' && 'Send email when report is generated'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({
+                          ...formData,
+                          emailNotifications: {
+                            ...formData.emailNotifications,
+                            [key]: !value
+                          }
+                        })}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                          value ? 'bg-zinc-600' : 'bg-zinc-200'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                            value ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.autoApproveBrands}
-                      onChange={(e) => setFormData({...formData, autoApproveBrands: e.target.checked})}
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Auto-approve Creators</span>
-                      <p className="text-sm text-gray-500">Automatically approve creator accounts</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.autoApproveCreators}
-                      onChange={(e) => setFormData({...formData, autoApproveCreators: e.target.checked})}
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Require Verification</span>
-                      <p className="text-sm text-gray-500">Require ID verification for all users</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.requireVerification}
-                      onChange={(e) => setFormData({...formData, requireVerification: e.target.checked})}
-                    />
-                  </label>
+                  ))}
                 </div>
+              </div>
+            </div>
+            )}
 
+          {activeTab === 'moderation' && (
+            <div className="space-y-6">
+              {/* User Approval Settings */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <UserCheck className="w-5 h-5" />
+                  User Approval Settings
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                    <div>
+                      <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Auto-approve Brands</span>
+                      <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Automatically approve brand accounts</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, autoApproveBrands: !formData.autoApproveBrands})}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                        formData.autoApproveBrands ? 'bg-zinc-600' : 'bg-zinc-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.autoApproveBrands ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                    <div>
+                      <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Auto-approve Creators</span>
+                      <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Automatically approve creator accounts</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, autoApproveCreators: !formData.autoApproveCreators})}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                        formData.autoApproveCreators ? 'bg-zinc-600' : 'bg-zinc-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.autoApproveCreators ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                    <div>
+                      <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Require Verification</span>
+                      <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Require ID verification for all users</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, requireVerification: !formData.requireVerification})}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                        formData.requireVerification ? 'bg-zinc-600' : 'bg-zinc-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.requireVerification ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Moderation */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Ban className="w-5 h-5" />
+                  Content Moderation
+                </h3>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Content Moderation
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    Moderation Type
                   </label>
                   <select
                     value={formData.contentModeration}
                     onChange={(e) => setFormData({...formData, contentModeration: e.target.value})}
-                    className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                      isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                    }`}
                   >
-                    <option value="ai">AI Only</option>
-                    <option value="manual">Manual Review Only</option>
-                    <option value="hybrid">AI + Manual Review</option>
+                    <option value="ai" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>AI Only</option>
+                    <option value="manual" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>Manual Review Only</option>
+                    <option value="hybrid" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>AI + Manual Review</option>
                   </select>
                 </div>
+
+                <div className="mt-4">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    User Verification Method
+                  </label>
+                  <select
+                    value={formData.verificationMethod || 'manual'}
+                    onChange={(e) => setFormData({...formData, verificationMethod: e.target.value})}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                      isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                    }`}
+                  >
+                    <option value="automatic" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>Automatic Verification</option>
+                    <option value="manual" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>Manual Admin Verification</option>
+                    <option value="hybrid" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>Automatic with Manual Review</option>
+                  </select>
+                </div>
+
+                <div className="mt-4">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    Auto-Approve Content (When Passes Moderation)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({...formData, autoApproveContent: !formData.autoApproveContent})}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                      formData.autoApproveContent ? 'bg-zinc-600' : 'bg-zinc-200'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                        formData.autoApproveContent ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="mt-4">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    AI Flag Threshold ({(formData.flagThreshold || 0.7) * 100}%)
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={formData.flagThreshold || 0.7}
+                    onChange={(e) => setFormData({...formData, flagThreshold: parseFloat(e.target.value)})}
+                    className={`w-full ${
+                      isDark ? 'bg-zinc-700' : 'bg-zinc-200'
+                    }`}
+                  />
+                  <div className={`flex justify-between text-xs mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    <span>Strict (0%)</span>
+                    <span>Balanced (70%)</span>
+                    <span>Lenient (100%)</span>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    Banned Words (one per line)
+                  </label>
+                  <textarea
+                    value={formData.bannedWords || ''}
+                    onChange={(e) => setFormData({...formData, bannedWords: e.target.value})}
+                    rows={4}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                      isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                    }`}
+                    placeholder="Enter banned words, one per line"
+                  />
+                </div>
+
+                <div className="mt-4">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    Banned Phrases (one per line)
+                  </label>
+                  <textarea
+                    value={formData.bannedPhrases || ''}
+                    onChange={(e) => setFormData({...formData, bannedPhrases: e.target.value})}
+                    rows={3}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                      isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                    }`}
+                    placeholder="Enter banned phrases, one per line"
+                  />
+                </div>
+
+                <React.Fragment>
+                <div className="mt-4">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                    Content Filters
+                  </label>
+                  <div className="space-y-2">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.profanityFilter !== false}
+                        onChange={(e) => setFormData({...formData, profanityFilter: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Profanity Filter</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.spamFilter !== false}
+                        onChange={(e) => setFormData({...formData, spamFilter: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Spam Filter</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.duplicateContentFilter !== false}
+                        onChange={(e) => setFormData({...formData, duplicateContentFilter: e.target.checked})}
+                        className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
+                      />
+                      <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Duplicate Content Filter</span>
+                    </label>
+                  </div>
+                </div>
+                </React.Fragment>
               </div>
+            </div>
             )}
 
-            {activeTab === 'limits' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {activeTab === 'limits' && (
+            <div className="space-y-6">
+              {/* Usage Limits */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Lock className="w-5 h-5" />
+                  Usage Limits
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Max Campaigns per Brand"
                     type="number"
                     value={formData.maxCampaignsPerBrand}
                     onChange={(e) => setFormData({...formData, maxCampaignsPerBrand: parseInt(e.target.value)})}
                     min="1"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
                   />
                   <Input
                     label="Max Active Deals per Creator"
@@ -788,6 +2468,7 @@ const AdminSettings = () => {
                     value={formData.maxActiveDealsPerCreator}
                     onChange={(e) => setFormData({...formData, maxActiveDealsPerCreator: parseInt(e.target.value)})}
                     min="1"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
                   />
                   <Input
                     label="Max File Size (MB)"
@@ -796,47 +2477,66 @@ const AdminSettings = () => {
                     onChange={(e) => setFormData({...formData, maxFileSize: parseInt(e.target.value)})}
                     min="1"
                     max="500"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
                   />
                 </div>
+              </div>
 
+              {/* File Upload Settings */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <FileText className="w-5 h-5" />
+                  File Upload Settings
+                </h3>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
                     Allowed File Types
                   </label>
-                  <div className="flex flex-wrap gap-2 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {formData.allowedFileTypes.map((type, index) => (
-                      <span key={index} className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm flex items-center">
+                      <span key={index} className={`${isDark ? 'bg-zinc-700 text-zinc-300' : 'bg-zinc-100 text-zinc-800'} px-3 py-1 rounded-full text-sm flex items-center`}>
                         .{type}
                         <button
                           onClick={() => handleRemoveFileType(type)}
-                          className="ml-2 text-indigo-600 hover:text-indigo-800"
+                          className={`ml-2 ${isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-600 hover:text-zinc-800'} transition-colors`}
                         >
                           ×
                         </button>
                       </span>
                     ))}
                   </div>
-                  <Button variant="outline" size="sm" onClick={handleAddFileType}>
+                  <Button variant="outline" size="sm" onClick={handleAddFileType} className={`border-zinc-300 ${isDark ? 'text-zinc-300 hover:border-zinc-500' : 'text-zinc-600 hover:border-zinc-500'}`}>
                     Add File Type
                   </Button>
                 </div>
               </div>
+            </div>
             )}
 
-            {activeTab === 'payment' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {activeTab === 'payment' && (
+            <div className="space-y-6">
+              {/* Payment Gateway Configuration */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <CreditCard className="w-5 h-5" />
+                  Payment Gateway Configuration
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
                       Gateway Provider
                     </label>
                     <select
                       value={formData.paymentProvider}
                       onChange={(e) => setFormData({ ...formData, paymentProvider: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea]"
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+                        isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
+                      }`}
                     >
-                      <option value="stripe">Stripe</option>
-                      <option value="manual">Manual (Offline)</option>
+                      <option value="stripe" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>Stripe</option>
+                      <option value="manual" className={isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-white text-zinc-900'}>Manual (Offline)</option>
                     </select>
                   </div>
 
@@ -844,144 +2544,204 @@ const AdminSettings = () => {
                     label="Invoice Prefix"
                     value={formData.invoicePrefix}
                     onChange={(e) => setFormData({ ...formData, invoicePrefix: e.target.value.toUpperCase().slice(0, 8) })}
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
                   />
                 </div>
+              </div>
 
-                <Input
-                  label="Stripe Publishable Key"
-                  value={formData.stripePublishableKey}
-                  onChange={(e) => setFormData({ ...formData, stripePublishableKey: e.target.value })}
-                  placeholder="pk_live_..."
-                />
-
-                <Input
-                  label="Stripe Secret Key (masked)"
-                  value={formData.stripeSecretKeyMasked}
-                  onChange={(e) => setFormData({ ...formData, stripeSecretKeyMasked: e.target.value })}
-                  placeholder="sk_live_************************"
-                />
-
-                <Input
-                  label="Stripe Webhook Secret (masked)"
-                  value={formData.stripeWebhookSecretMasked}
-                  onChange={(e) => setFormData({ ...formData, stripeWebhookSecretMasked: e.target.value })}
-                  placeholder="whsec_************************"
-                />
-
+              {/* Stripe Configuration */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Key className="w-5 h-5" />
+                  Stripe API Configuration
+                </h3>
+                
                 <div className="space-y-4">
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Test Mode</span>
-                      <p className="text-sm text-gray-500">Process payments in Stripe test environment</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.paymentTestMode}
-                      onChange={(e) => setFormData({ ...formData, paymentTestMode: e.target.checked })}
-                    />
-                  </label>
+                  <Input
+                    label="Stripe Publishable Key"
+                    value={formData.stripePublishableKey}
+                    onChange={(e) => setFormData({ ...formData, stripePublishableKey: e.target.value })}
+                    placeholder="pk_live_..."
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                  />
 
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Auto-capture Charges</span>
-                      <p className="text-sm text-gray-500">Capture authorized charges immediately</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.autoCapturePayments}
-                      onChange={(e) => setFormData({ ...formData, autoCapturePayments: e.target.checked })}
-                    />
-                  </label>
+                  <Input
+                    label="Stripe Secret Key (masked)"
+                    value={formData.stripeSecretKeyMasked}
+                    onChange={(e) => setFormData({ ...formData, stripeSecretKeyMasked: e.target.value })}
+                    placeholder="sk_live_************************"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                  />
 
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Enable Apple Pay</span>
-                      <p className="text-sm text-gray-500">Show Apple Pay when supported</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.allowApplePay}
-                      onChange={(e) => setFormData({ ...formData, allowApplePay: e.target.checked })}
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">Enable Google Pay</span>
-                      <p className="text-sm text-gray-500">Show Google Pay when supported</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={formData.allowGooglePay}
-                      onChange={(e) => setFormData({ ...formData, allowGooglePay: e.target.checked })}
-                    />
-                  </label>
+                  <Input
+                    label="Stripe Webhook Secret (masked)"
+                    value={formData.stripeWebhookSecretMasked}
+                    onChange={(e) => setFormData({ ...formData, stripeWebhookSecretMasked: e.target.value })}
+                    placeholder="whsec_************************"
+                    className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
+                  />
                 </div>
               </div>
-            )}
 
-            {activeTab === 'advanced' && (
-              <div className="space-y-6">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-medium text-gray-900 mb-4">System Actions</h3>
-                  <div className="space-y-3">
+              {/* Payment Options */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Settings2 className="w-5 h-5" />
+                  Payment Options
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                    <div>
+                      <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Test Mode</span>
+                      <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Process payments in Stripe test environment</p>
+                    </div>
                     <button
-                      onClick={() => {
-                        setConfirmAction('cache');
-                        setShowConfirmModal(true);
-                      }}
-                      className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+                      type="button"
+                      onClick={() => setFormData({ ...formData, paymentTestMode: !formData.paymentTestMode })}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                        formData.paymentTestMode ? 'bg-zinc-600' : 'bg-zinc-200'
+                      }`}
                     >
-                      <p className="font-medium text-gray-900">Clear Cache</p>
-                      <p className="text-sm text-gray-500">Clear all system caches to free up memory</p>
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.paymentTestMode ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
                     </button>
+                  </div>
 
+                  <div className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                    <div>
+                      <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Auto-capture Charges</span>
+                      <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Capture authorized charges immediately</p>
+                    </div>
                     <button
-                      onClick={() => {
-                        setConfirmAction('logs');
-                        setShowConfirmModal(true);
-                      }}
-                      className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+                      type="button"
+                      onClick={() => setFormData({ ...formData, autoCapturePayments: !formData.autoCapturePayments })}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                        formData.autoCapturePayments ? 'bg-zinc-600' : 'bg-zinc-200'
+                      }`}
                     >
-                      <p className="font-medium text-gray-900">Rotate Logs</p>
-                      <p className="text-sm text-gray-500">Archive and rotate system logs</p>
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.autoCapturePayments ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
                     </button>
+                  </div>
 
+                  <div className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                    <div>
+                      <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Enable Apple Pay</span>
+                      <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Show Apple Pay when supported</p>
+                    </div>
                     <button
-                      onClick={() => {
-                        setConfirmAction('backup');
-                        setShowConfirmModal(true);
-                      }}
-                      className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+                      type="button"
+                      onClick={() => setFormData({ ...formData, allowApplePay: !formData.allowApplePay })}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                        formData.allowApplePay ? 'bg-zinc-600' : 'bg-zinc-200'
+                      }`}
                     >
-                      <p className="font-medium text-gray-900">Create Backup</p>
-                      <p className="text-sm text-gray-500">Create a manual backup of the database</p>
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.allowApplePay ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className={`flex items-center justify-between p-4 ${isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-200'} rounded-lg`}>
+                    <div>
+                      <span className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Enable Google Pay</span>
+                      <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Show Google Pay when supported</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, allowGooglePay: !formData.allowGooglePay })}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 ${
+                        formData.allowGooglePay ? 'bg-zinc-600' : 'bg-zinc-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-100 shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.allowGooglePay ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+            )}
 
-                <div className="p-4 bg-red-50 rounded-lg">
-                  <h3 className="font-medium text-red-800 mb-4">Danger Zone</h3>
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => {
-                        setConfirmAction('maintenance');
-                        setShowConfirmModal(true);
-                      }}
-                      className="w-full text-left p-3 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <p className="font-medium text-red-600">Enable Maintenance Mode</p>
-                      <p className="text-sm text-gray-600">Temporarily disable the platform for maintenance</p>
-                    </button>
-                  </div>
+          {activeTab === 'advanced' && (
+            <div className="space-y-6">
+              {/* System Actions */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <Zap className="w-5 h-5" />
+                  System Actions
+                </h3>
+                
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      setConfirmAction('cache');
+                      setShowConfirmModal(true);
+                    }}
+                    className={`w-full text-left p-4 ${isDark ? 'bg-zinc-900/50 hover:bg-zinc-800/50 border-zinc-600' : 'bg-white hover:bg-zinc-50 border-zinc-200'} rounded-lg border transition-colors`}
+                  >
+                    <p className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Clear Cache</p>
+                    <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Clear all system caches to free up memory</p>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setConfirmAction('logs');
+                      setShowConfirmModal(true);
+                    }}
+                    className={`w-full text-left p-4 ${isDark ? 'bg-zinc-900/50 hover:bg-zinc-800/50 border-zinc-600' : 'bg-white hover:bg-zinc-50 border-zinc-200'} rounded-lg border transition-colors`}
+                  >
+                    <p className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Rotate Logs</p>
+                    <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Archive and rotate system logs</p>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setConfirmAction('backup');
+                      setShowConfirmModal(true);
+                    }}
+                    className={`w-full text-left p-4 ${isDark ? 'bg-zinc-900/50 hover:bg-zinc-800/50 border-zinc-600' : 'bg-white hover:bg-zinc-50 border-zinc-200'} rounded-lg border transition-colors`}
+                  >
+                    <p className={`font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Create Backup</p>
+                    <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Create a manual backup of the database</p>
+                  </button>
                 </div>
               </div>
+
+              {/* Danger Zone */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-red-900/20 border-red-700/50' : 'bg-red-50 border-red-200'}`}>
+                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+                  <AlertCircle className="w-5 h-5" />
+                  Danger Zone
+                </h3>
+                
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      setConfirmAction('maintenance');
+                      setShowConfirmModal(true);
+                    }}
+                    className={`w-full text-left p-4 ${isDark ? 'bg-zinc-800/50 border-red-700/50 hover:bg-red-900/30' : 'bg-white border-red-200 hover:bg-red-50'} rounded-lg border transition-colors`}
+                  >
+                    <p className={`font-medium ${isDark ? 'text-red-400' : 'text-red-600'}`}>Enable Maintenance Mode</p>
+                    <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-gray-600'}`}>Temporarily disable the platform for maintenance</p>
+                  </button>
+                </div>
+              </div>
+            </div>
             )}
-          </div>
         </div>
       </div>
 
@@ -1015,8 +2775,16 @@ const AdminSettings = () => {
             Cancel
           </Button>
           <Button 
-            variant={confirmAction === 'maintenance' ? 'danger' : 'primary'}
-            onClick={confirmAction === 'cache' ? handleClearCache : () => setShowConfirmModal(false)}
+            variant="secondary"
+            onClick={
+              confirmAction === 'cache' ? handleClearCache :
+              confirmAction === 'logs' ? handleRotateLogs :
+              confirmAction === 'backup' ? handleCreateBackup :
+              confirmAction === 'maintenance' ? handleEnableMaintenance :
+              () => setShowConfirmModal(false)
+            }
+            loading={loading}
+            className=''
           >
             Confirm
           </Button>
@@ -1052,13 +2820,17 @@ const AdminSettings = () => {
               </div>
               <div className="text-left bg-gray-50 p-3 rounded-lg border">
                 <p className="text-xs text-gray-500 font-medium uppercase mb-1">Manual Entry Key</p>
-                <code className="text-sm font-mono break-all text-indigo-600">
+                <code className="text-sm font-mono break-all text-indigo-500">
                   {qrCodeData?.secret}
                 </code>
               </div>
-              <Button className="w-full" onClick={() => setTwoFactorStep('verify')}>
-                I've scanned it, continue
-              </Button>
+<Button 
+  variant="secondary" 
+  className="w-full" 
+  onClick={() => setTwoFactorStep('verify')}
+>
+  I've scanned it, continue
+</Button>
             </div>
           )}
 
@@ -1077,11 +2849,11 @@ const AdminSettings = () => {
                 onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
               />
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setTwoFactorStep('setup')}>
+                <Button variant="secondary" className="flex-1" onClick={() => setTwoFactorStep('setup')}>
                   Back
                 </Button>
                 <Button 
-                  variant="primary" 
+                  variant="secondary" 
                   className="flex-1" 
                   onClick={handleVerify2FA} 
                   loading={saving}
@@ -1122,7 +2894,7 @@ const AdminSettings = () => {
               </div>
 
               <Button 
-                variant="primary" 
+                variant="secondary" 
                 className="w-full" 
                 onClick={() => {
                   setShow2FAModal(false);

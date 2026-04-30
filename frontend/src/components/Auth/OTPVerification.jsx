@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mail, Phone, Smartphone, ArrowRight, RefreshCw, Shield } from 'lucide-react';
+import { Mail, Phone, Smartphone, ArrowLeft, ArrowRight, RefreshCw, Shield } from 'lucide-react';
+import { motion } from 'framer-motion';
+import WireframeSphere from '../WireframeSphere';
 
 const OTPVerification = ({ 
   type = 'email',
@@ -7,7 +9,10 @@ const OTPVerification = ({
   onVerify, 
   onResend,
   onBack,
-  loading = false 
+  loading = false,
+  showNextButton = false,
+  nextButtonText = 'Verify',
+  onNextStep = null
 }) => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(60);
@@ -61,7 +66,11 @@ const OTPVerification = ({
     e.preventDefault();
     const otpString = otp.join('');
     if (otpString.length === 6) {
-      onVerify(otpString);
+      if (showNextButton && onNextStep) {
+        onNextStep(otpString);
+      } else {
+        onVerify(otpString);
+      }
     }
   };
 
@@ -84,153 +93,109 @@ const OTPVerification = ({
 
   return (
     <div
-      className="min-h-screen flex"
+      className="min-h-screen flex items-center justify-center relative px-4 sm:px-6"
       style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: '#18181b',
       }}
     >
-      {/* Left decorative panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden">
-        {/* floating blobs */}
-        <div
-          style={{
-            position: 'absolute', width: 340, height: 340, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.08)', top: -80, left: -80,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute', width: 220, height: 220, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)', bottom: 80, right: -40,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute', width: 140, height: 140, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)', top: '45%', left: '60%',
-          }}
-        />
-
-        {/* brand mark */}
-        <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div
-              style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: 'rgba(255,255,255,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              <Shield className="text-white" size={22} />
-            </div>
-            <span style={{ color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px' }}>
-              InfluenceX
-            </span>
-          </div>
-        </div>
-
-        {/* hero copy */}
-        <div className="relative z-10">
-          <h1
+      {/* Wireframe Sphere Background Animation */}
+      <div className="absolute inset-0 overflow-hidden">
+        <WireframeSphere />
+      </div>
+      
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="w-full p-4 sm:p-6 md:p-8 relative z-10" 
+        style={{ 
+          maxWidth: 480, 
+           }}
+      >
+        {/* mobile logo */}
+        <motion.div 
+          className="flex lg:hidden items-center gap-2 mb-8"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          <div
             style={{
-              color: '#fff', fontSize: 42, fontWeight: 800,
-              lineHeight: 1.15, letterSpacing: '-1px', marginBottom: 20,
+              width: 36, height: 36, borderRadius: 10,
+              background: '#18181b',
+              border: '1px solid #27272a',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            Verify your<br />{type === 'email' ? 'email' : 'phone'}.
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 17, lineHeight: 1.7, maxWidth: 360 }}>
-            We've sent a verification code to {type === 'email' ? 'your email address' : 'your phone number'}. Enter the code below to continue.
-          </p>
-
-          {/* stats row */}
-          <div className="flex gap-10 mt-10">
-            {[
-              { n: '12K+', label: 'Creators' },
-              { n: '3K+', label: 'Brands' },
-              { n: '98%', label: 'Satisfaction' },
-            ].map(({ n, label }) => (
-              <div key={label}>
-                <p style={{ color: '#fff', fontSize: 26, fontWeight: 800 }}>{n}</p>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{label}</p>
-              </div>
-            ))}
+            <Shield className="text-white" size={18} />
           </div>
-        </div>
+          <span
+            style={{
+              fontSize: 18, fontWeight: 700,
+              color: '#f4f4f5',
+            }}
+          >
+            InfluenceX
+          </span>
+        </motion.div>
 
-        {/* bottom tag */}
-        <div
-          className="relative z-10 flex items-center gap-2"
-          style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}
+        {/* heading */}
+        <motion.div 
+          className="mb-8"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <Shield size={13} />
-          <span>Your data is always secure and encrypted</span>
-        </div>
-      </div>
-
-      {/* Right form panel */}
-      <div
-        className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-10"
-        style={{
-          background: '#fff',
-          borderRadius: '0',
-        }}
-      >
-        <div className="w-full" style={{ maxWidth: 420 }}>
-          {/* mobile logo */}
-          <div className="flex lg:hidden items-center gap-2 mb-8">
+          <motion.div 
+            className="flex justify-center mb-6"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
             <div
+              className="w-20 h-20 rounded-full flex items-center justify-center"
               style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'linear-gradient(135deg,#667eea,#764ba2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: '#18181b',
+                border: '1px solid #27272a'
               }}
             >
-              <Shield className="text-white" size={18} />
+              {getIcon()}
             </div>
-            <span
-              style={{
-                fontSize: 18, fontWeight: 700,
-                color: '#111827',
-              }}
-            >
-              InfluenceX
-            </span>
-          </div>
-
-          {/* heading */}
-          <div className="mb-8">
-            <div className="flex justify-center mb-6">
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                }}
-              >
-                {getIcon()}
-              </div>
-            </div>
-            
-            <h2
-              style={{
-                fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px',
-                color: '#111827', marginBottom: 6, textAlign: 'center',
-              }}
-            >
-              Verify Your {type === 'email' ? 'Email' : 'Phone'}
-            </h2>
-            <p style={{ color: '#6b7280', fontSize: 15, textAlign: 'center', lineHeight: 1.6 }}>
-              We've sent a verification code to<br />
-              <span style={{ color: '#667eea', fontWeight: 600 }}>{destination}</span>
-            </p>
-          </div>
+          </motion.div>
+          
+          <motion.h2
+            className="font-['Playfair_Display']"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            style={{
+              fontSize: 'clamp(24px, 5vw, 28px)', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 16, textAlign: 'center',
+              color: '#f4f4f5'
+            }}
+          >
+            Verify Your {type === 'email' ? 'Email' : 'Phone'}
+          </motion.h2>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            style={{ fontSize: 'clamp(14px, 3vw, 15px)', textAlign: 'center', lineHeight: 1.6, color: '#a1a1aa' }}
+          >
+            We've sent a verification code to<br />
+            <span style={{ color: '#f4f4f5', fontWeight: 600 }}>{destination}</span>
+          </motion.p>
+        </motion.div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {/* OTP Inputs */}
-            <div className="flex justify-center gap-2">
+            <motion.div 
+              className="flex justify-center gap-2"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.6 }}
+            >
               {otp.map((digit, index) => (
-                <input
+                <motion.input
                   key={index}
                   ref={el => inputRefs.current[index] = el}
                   type="text"
@@ -240,54 +205,64 @@ const OTPVerification = ({
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   onPaste={index === 0 ? handlePaste : undefined}
                   disabled={loading}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2, delay: 0.6 + (index * 0.1) }}
                   style={{
                     width: 48,
                     height: 48,
                     textAlign: 'center',
                     fontSize: 20,
                     fontWeight: 600,
-                    border: '1.5px solid #e5e7eb',
+                    border: '1.5px solid #27272a',
                     borderRadius: 10,
-                    background: '#f9fafb',
-                    color: '#111827',
+                    background: '#0f172a',
+                    color: '#f4f4f5',
                     outline: 'none',
-                    transition: 'all 0.15s',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                     boxSizing: 'border-box',
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = '#667eea';
-                    e.target.style.background = '#fff';
+                    e.target.style.borderColor = '#3f3f46';
+                    e.target.style.background = '#0f172a';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(63, 63, 70, 0.1)';
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = '#e5e7eb';
-                    e.target.style.background = '#f9fafb';
+                    e.target.style.borderColor = '#27272a';
+                    e.target.style.background = '#0f172a';
+                    e.target.style.boxShadow = 'none';
                   }}
                 />
               ))}
-            </div>
+            </motion.div>
 
             {/* Submit */}
-            <button
+            <motion.button
               type="submit"
               disabled={otp.join('').length !== 6 || loading}
+              whileHover={{ scale: (otp.join('').length === 6 && !loading) ? 1.02 : 1 }}
+              whileTap={{ scale: (otp.join('').length === 6 && !loading) ? 0.98 : 1 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.8 }}
               style={{
                 width: '100%',
                 padding: '13px 20px',
                 borderRadius: 10,
-                border: 'none',
-                background: (otp.join('').length !== 6 || loading) ? '#a5b4fc' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: '#fff',
+                border: '1px solid #27272a',
+                background: (otp.join('').length !== 6 || loading) ? '#0f172a' : '#18181b',
+                color: '#f4f4f5',
                 fontSize: 15,
                 fontWeight: 700,
                 cursor: (otp.join('').length !== 6 || loading) ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'opacity 0.2s, transform 0.1s',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                 letterSpacing: '0.01em',
               }}
               onMouseEnter={(e) => { 
-                if (otp.join('').length === 6 && !loading) e.target.style.opacity = '0.92'; 
+                if (otp.join('').length === 6 && !loading) e.target.style.background = '#27272a'; 
               }}
-              onMouseLeave={(e) => { e.target.style.opacity = '1'; }}
+              onMouseLeave={(e) => { e.target.style.background = '#18181b'; }}
             >
               {loading ? (
                 <div
@@ -300,26 +275,33 @@ const OTPVerification = ({
                 />
               ) : (
                 <>
-                  Verify
+                  {nextButtonText}
                   <ArrowRight size={17} />
                 </>
               )}
-            </button>
+            </motion.button>
           </form>
 
           {/* Resend Code */}
-          <div className="mt-6 text-center">
+          <motion.div 
+            className="mt-6 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.9 }}
+          >
             {!canResend ? (
-              <p style={{ color: '#9ca3af', fontSize: 14 }}>
-                Resend code in <span style={{ color: '#667eea', fontWeight: 600 }}>{timer}s</span>
+              <p style={{ fontSize: 14, color: '#71717a' }}>
+                Resend code in <span style={{ color: '#f4f4f5', fontWeight: 600 }}>{timer}s</span>
               </p>
             ) : (
-              <button
+              <motion.button
                 onClick={handleResend}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#667eea',
+                  color: '#f4f4f5',
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -327,22 +309,27 @@ const OTPVerification = ({
                   margin: '0 auto',
                   transition: 'color 0.15s',
                 }}
-                onMouseEnter={(e) => { e.target.style.color = '#5a67d8'; }}
-                onMouseLeave={(e) => { e.target.style.color = '#667eea'; }}
+                onMouseEnter={(e) => { e.target.style.color = '#a1a1aa'; }}
+                onMouseLeave={(e) => { e.target.style.color = '#f4f4f5'; }}
               >
                 <RefreshCw size={14} />
                 Resend Code
-              </button>
+              </motion.button>
             )}
-          </div>
+          </motion.div>
 
           {onBack && (
-            <button
+            <motion.button
               onClick={onBack}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 1.0 }}
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#9ca3af',
+                color: '#71717a',
                 fontSize: 14,
                 cursor: 'pointer',
                 display: 'block',
@@ -351,55 +338,55 @@ const OTPVerification = ({
                 marginTop: 16,
                 transition: 'color 0.15s',
               }}
-              onMouseEnter={(e) => { e.target.style.color = '#6b7280'; }}
-              onMouseLeave={(e) => { e.target.style.color = '#9ca3af'; }}
+              onMouseEnter={(e) => { e.target.style.color = '#f4f4f5'; }}
+              onMouseLeave={(e) => { e.target.style.color = '#71717a'; }}
             >
               <ArrowLeft size={14} className="inline mr-2" />
               Back to Sign Up
-            </button>
+            </motion.button>
           )}
 
           {/* Security Note */}
-          <div
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 1.1 }}
             style={{
               marginTop: 24,
               padding: '14px 16px',
               borderRadius: 10,
-              background: '#f9fafb',
-              border: '1.5px solid #e5e7eb',
+              background: '#0f172a22',
+              border: '1.5px solid #27272a',
             }}
           >
-            <div className="flex items-start gap-3">
-              <Shield size={16} style={{ color: '#667eea', marginTop: 2 }} />
+            <div className="flex items-start gap-3 ">
+              <Shield size={16} style={{ color: '#3b82f6', marginTop: 2 }} />
               <div>
-                <p style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 4 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#f4f4f5', marginBottom: 4 }}>
                   Secure Verification
                 </p>
-                <p style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+                <p style={{ fontSize: 11, color: '#71717a', lineHeight: 1.5 }}>
                   Your code expires in 10 minutes. Never share this code with anyone.
                 </p>
               </div>
             </div>
-          </div>
+          </motion.div>
 
-          <div
+          <motion.div
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               gap: 6, paddingTop: 8,
             }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 1.2 }}
           >
-            <Shield size={11} style={{ color: '#d1d5db' }} />
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>
+            <Shield size={11} style={{ color: '#64748b' }} />
+            <span style={{ fontSize: 11, color: '#64748b' }}>
               Your information is secure and encrypted
             </span>
-          </div>
-        </div>
-      </div>
-
-      {/* spin keyframe injected inline */}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+          </motion.div>
+      </motion.div>
     </div>
   );
 };

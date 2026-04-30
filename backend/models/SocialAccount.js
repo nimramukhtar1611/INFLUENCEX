@@ -16,7 +16,7 @@ const socialAccountSchema = new mongoose.Schema({
   },
   platform: {
     type: String,
-    enum: ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook', 'linkedin'],
+    enum: ['instagram', 'youtube', 'tiktok', 'facebook'],
     required: true
   },
   platform_user_id: {

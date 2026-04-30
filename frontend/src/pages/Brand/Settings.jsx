@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   User, Bell, Shield, Eye, Lock, Globe, Save, Loader, ChevronRight,
-  Mail, Phone, MapPin, Building2, Instagram, Youtube, Twitter, Facebook, Linkedin,
-  AlertCircle, CheckCircle, XCircle, DollarSign, CreditCard, Wallet,
+  Mail, Phone, MapPin, Building2, Instagram, Youtube, Facebook,
+  AlertCircle, CheckCircle, XCircle, DollarSign, CreditCard, Wallet,ShieldCheck,
   Key, Smartphone, Monitor, Moon, Sun, Languages, Clock, RefreshCw,
   Trash2, Edit, Plus, Download, Upload, HelpCircle, FileText, Camera, Settings as SettingsIcon
 } from 'lucide-react';
@@ -30,9 +30,7 @@ const toSocialUrl = (platform, value) => {
   const clean = trimmed.replace(/^@+/, '');
   const map = {
     instagram: `https://instagram.com/${clean}`,
-    twitter: `https://x.com/${clean}`,
     facebook: `https://facebook.com/${clean}`,
-    linkedin: `https://linkedin.com/in/${clean}`,
     youtube: `https://youtube.com/@${clean}`
   };
 
@@ -86,7 +84,7 @@ const ProfilePictureUpload = ({ currentImage, onUpload }) => {
   };
 
   return (
-    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+    <div className="p-4 bg-black/90 rounded-2xl border border-gray-200">
       <div className="flex items-center gap-4">
         <div className="relative">
           <img
@@ -111,14 +109,15 @@ const ProfilePictureUpload = ({ currentImage, onUpload }) => {
           />
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             icon={Camera}
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
+            className="border-gray-600 !bg-black  text-white "
           >
             {uploading ? 'Uploading...' : 'Change Photo'}
           </Button>
-          <p className="text-xs text-gray-500 mt-2">JPG, PNG, WEBP up to 5MB.</p>
+          <p className="text-xs text-white mt-2">JPG, PNG, WEBP up to 5MB.</p>
         </div>
       </div>
     </div>
@@ -127,7 +126,7 @@ const ProfilePictureUpload = ({ currentImage, onUpload }) => {
 
 const ProfileSettings = ({ settings, setSettings, profileImage, onProfileImageUpload }) => (
   <div className="space-y-6">
-    <ProfilePictureUpload currentImage={profileImage} onUpload={onProfileImageUpload} />
+    <ProfilePictureUpload currentImage={profileImage}onUpload={onProfileImageUpload} />
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <Input
@@ -164,7 +163,7 @@ const ProfileSettings = ({ settings, setSettings, profileImage, onProfileImageUp
         <select
           value={settings.industry || 'Other'}
           onChange={(e) => setSettings({ ...settings, industry: e.target.value })}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#667eea]"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400"
         >
           <option value="Fashion">Fashion</option>
           <option value="Beauty">Beauty</option>
@@ -192,7 +191,7 @@ const ProfileSettings = ({ settings, setSettings, profileImage, onProfileImageUp
         <select
           value={settings.employees || '1-10'}
           onChange={(e) => setSettings({ ...settings, employees: e.target.value })}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#667eea]"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400"
         >
           <option value="1-10">1-10</option>
           <option value="11-50">11-50</option>
@@ -211,7 +210,7 @@ const ProfileSettings = ({ settings, setSettings, profileImage, onProfileImageUp
         rows="4"
         value={settings.description || ''}
         onChange={(e) => setSettings({ ...settings, description: e.target.value })}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400"
         placeholder="Tell creators about your brand..."
       />
     </div>
@@ -224,7 +223,7 @@ const CompanySettings = ({ settings, setSettings }) => {
 
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-medium text-gray-900">Address</h3>
+      <h3 className="text-base font-medium text-gray-900">Address</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input
           label="Street"
@@ -253,7 +252,7 @@ const CompanySettings = ({ settings, setSettings }) => {
         />
       </div>
 
-      <h3 className="text-lg font-medium text-gray-900 mt-6">Tax Information</h3>
+      <h3 className="text-base font-medium text-gray-900 mt-6">Tax Information</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input
           label="Tax ID / EIN"
@@ -267,7 +266,7 @@ const CompanySettings = ({ settings, setSettings }) => {
           <select
             value={settings.businessType || 'individual'}
             onChange={(e) => setSettings({ ...settings, businessType: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#667eea]"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400"
           >
             <option value="individual">Individual</option>
             <option value="sole_proprietor">Sole Proprietor</option>
@@ -295,25 +294,11 @@ const SocialSettings = ({ settings, setSettings }) => {
         placeholder="https://instagram.com/yourbrand"
       />
       <Input
-        label="Twitter URL"
-        value={settings.socialMedia?.twitter || ''}
-        onChange={(e) => updateSocial('twitter', e.target.value)}
-        icon={Twitter}
-        placeholder="https://twitter.com/yourbrand"
-      />
-      <Input
         label="Facebook URL"
         value={settings.socialMedia?.facebook || ''}
         onChange={(e) => updateSocial('facebook', e.target.value)}
         icon={Facebook}
         placeholder="https://facebook.com/yourbrand"
-      />
-      <Input
-        label="LinkedIn URL"
-        value={settings.socialMedia?.linkedin || ''}
-        onChange={(e) => updateSocial('linkedin', e.target.value)}
-        icon={Linkedin}
-        placeholder="https://linkedin.com/company/yourbrand"
       />
       <Input
         label="YouTube URL"
@@ -329,8 +314,8 @@ const SocialSettings = ({ settings, setSettings }) => {
 const AISettings = ({ settings, setSettings }) => {
   return (
     <div className="space-y-6">
-      <div className="bg-gray-50 p-6 rounded-lg">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">AI Counter Dealing</h3>
+      <div className="p-6 rounded-lg">
+        <h3 className="text-base font-medium text-gray-900 mb-4">AI Counter Dealing</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
@@ -343,8 +328,8 @@ const AISettings = ({ settings, setSettings }) => {
             <button
               type="button"
               onClick={() => setSettings({ ...settings, aiCounterEnabled: !settings.aiCounterEnabled })}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#667eea] focus:ring-offset-2 ${
-                settings.aiCounterEnabled ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2]' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 ${
+                settings.aiCounterEnabled ? 'bg-gray-600' : 'bg-gray-200'
               }`}
             >
               <span
@@ -356,7 +341,7 @@ const AISettings = ({ settings, setSettings }) => {
           </div>
           
           {settings.aiCounterEnabled && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="mt-4 p-4 bg-gray-50 border border-green-200 rounded-lg">
               <div className="flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
                 <div>
@@ -370,7 +355,7 @@ const AISettings = ({ settings, setSettings }) => {
           )}
 
           {!settings.aiCounterEnabled && (
-            <div className="mt-4 p-4 bg-gray-100 border border-gray-200 rounded-lg">
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-gray-600 mt-0.5" />
                 <div>
@@ -425,9 +410,7 @@ const BrandSettings = () => {
     },
     socialMedia: {
       instagram: '',
-      twitter: '',
       facebook: '',
-      linkedin: '',
       youtube: ''
     },
     aiCounterEnabled: false
@@ -543,9 +526,7 @@ const BrandSettings = () => {
             },
             socialMedia: {
               instagram: toSocialUrl('instagram', brand.socialMedia?.instagram || ''),
-              twitter: toSocialUrl('twitter', brand.socialMedia?.twitter || ''),
               facebook: toSocialUrl('facebook', brand.socialMedia?.facebook || ''),
-              linkedin: toSocialUrl('linkedin', brand.socialMedia?.linkedin || ''),
               youtube: toSocialUrl('youtube', brand.socialMedia?.youtube || '')
             },
             aiCounterEnabled: brand.aiCounterEnabled || false
@@ -690,19 +671,41 @@ const BrandSettings = () => {
       case 'security':
         return (
           <div className="space-y-6">
-            <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+            <div className=" p-4 border border-2 rounded-lg flex justify-between items-center">
               <div>
                 <h4 className="font-medium text-gray-900">Password</h4>
                 <p className="text-sm text-gray-500">Update your account password</p>
               </div>
-              <Button variant="outline" onClick={() => setShowPasswordModal(true)}>
-                Change Password
-              </Button>
+            <Button 
+  variant="secondary" 
+  onClick={() => setShowPasswordModal(true)} 
+  className="
+    /* Base Styles */
+    !bg-black border-zinc-700 text-zinc-400 font-medium tracking-wide
+    
+    /* Animation & Transitions */
+    transition-all duration-300 ease-in-out
+    hover:border-white hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.07)]
+    hover:-translate-y-0.5
+    
+    /* Active State (Click effect) */
+    active:scale-[0.97] active:translate-y-0
+    
+    /* Focus Ring for accessibility */
+    focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 focus:ring-offset-black
+  "
+>
+  <span className="flex items-center gap-2">
+    {/* Adding a subtle lock icon enhances the feel */}
+    <Lock className="w-3.5 h-3.5 transition-transform duration-500 group-hover:scale-110" />
+    Change Password
+  </span>
+</Button>
             </div>
 
             <div className="pt-6 border-t border-gray-200">
-              <h4 className="text-lg font-medium text-gray-900 mb-4">Two-Factor Authentication</h4>
-              <div className="bg-white border rounded-xl p-6">
+              <h4 className="text-base font-medium text-gray-900 mb-4">Two-Factor Authentication</h4>
+              <div className=" border border-2  rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
@@ -722,14 +725,40 @@ const BrandSettings = () => {
                     </div>
                   </div>
                   {twoFactorStatus?.enabled ? (
-                    <Button variant="danger" onClick={handleDisable2FA} loading={disabling2FA}>
-                      Disable 2FA
-                    </Button>
-                  ) : (
-                    <Button variant="primary" onClick={handleStart2FASetup} loading={saving}>
-                      Enable 2FA
-                    </Button>
-                  )}
+  /* DISABLE 2FA - Caution/Danger Theme */
+  <Button 
+    variant="danger" 
+    onClick={handleDisable2FA} 
+    loading={disabling2FA}
+    className="
+      group transition-all duration-300 
+      hover:bg-red-700 hover:shadow-lg hover:shadow-red-500/20
+      active:scale-95 px-6
+    "
+  >
+    <span className="flex items-center gap-2">
+      <ShieldOff className="w-4 h-4 transition-transform group-hover:scale-110 group-hover:rotate-12" />
+      Disable 2FA
+    </span>
+  </Button>
+) : (
+  /* ENABLE 2FA - Trust/Action Theme */
+  <Button 
+    variant="secondary" 
+    onClick={handleStart2FASetup} 
+    loading={saving} 
+    className="
+      !bg-slate-600 text-white transition-all duration-300 ease-out
+      hover:!bg-slate-700 hover:shadow-xl hover:shadow-slate-500/30
+      hover:-translate-y-0.5 active:scale-95 px-6
+    "
+  >
+    <span className="flex items-center gap-2">
+      <ShieldCheck className="w-4 h-4 transition-all group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
+      Enable 2FA
+    </span>
+  </Button>
+)}
                 </div>
 
                 {twoFactorStatus?.enabled && (
@@ -755,56 +784,100 @@ const BrandSettings = () => {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <Loader className="animate-spin text-[#667eea] w-10 h-10" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading settings...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 max-w-6xl mx-auto ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Settings</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Manage your real brand profile and preferences</p>
+          <h1 className="text-2xl font-light tracking-tight font-semibold">Brand <span className="font-bold">Settings</span></h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Manage your account preferences and brand information.</p>
         </div>
-        <Button
-          variant="primary"
-          icon={Save}
-          onClick={handleSaveSettings}
-          loading={saving}
-        >
-          Save Changes
-        </Button>
+        
+        <div className="flex items-center gap-3">
+         <Button
+  onClick={handleSaveSettings}
+  variant="secondary"
+  loading={saving}
+  className={`
+    flex items-center gap-2 px-6 py-2.5 
+    bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full 
+    transition-all duration-300 ease-out shadow-lg
+    
+    /* Hover & Active States */
+    hover:bg-zinc-800 hover:shadow-xl hover:-translate-y-0.5
+    active:scale-95 active:translate-y-0
+    disabled:opacity-70 disabled:cursor-not-allowed
+    
+    /* Shine Effect (Optional) */
+    relative overflow-hidden group
+ ${isDark ? 'bg-zinc-900' : 'bg-zinc-700'} `}
+>
+  {/* Icon Animation */}
+  <Save 
+    className={`w-4 h-4 transition-all duration-500 ${
+      saving ? 'opacity-0 scale-50' : 'opacity-100 scale-100 group-hover:rotate-12'
+    }`} 
+  />
+
+  {/* Text Transition */}
+  <span className="relative">
+    {saving ? (
+      <span className="flex items-center gap-2">
+        <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        Saving...
+      </span>
+    ) : (
+      'Save Changes'
+    )}
+  </span>
+
+  {/* Background Shine (Premium Touch) */}
+  <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] transition-transform" />
+</Button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[600px]">
-        {/* Sidebar */}
-        <div className="md:w-64 border-r border-gray-200 bg-gray-50 p-4 space-y-1">
+
+      {/* Tab Filters - Matching Other Brand Pages Style */}
+      <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 w-full lg:w-auto no-scrollbar">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center justify-between px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 text-[#667eea]'
-                    : 'text-gray-700 hover:bg-gray-100'
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border whitespace-nowrap ${
+                  activeTab === tab.id 
+                    ? (isDark ? 'bg-white border-white text-gray-800' : 'bg-black border-black text-white')
+                    : (isDark ? 'border-zinc-800 text-zinc-400 hover:border-zinc-600' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400')
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <Icon className="w-5 h-5" />
-                  {tab.label}
-                </div>
-                <ChevronRight className="w-4 h-4" />
+                <Icon className="w-4 h-4" />
+                {tab.label}
               </button>
             );
           })}
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="flex-1 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 capitalize">
+      {/* Content Area */}
+      <div className={`rounded-2xl border transition-all ${
+        isDark 
+          ? 'bg-zinc-900/50 border-zinc-800' 
+          : ' border-zinc-100 hover:shadow-xl shadow-zinc-200/50'
+      }`}>
+        <div className="p-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-6 capitalize">
             {tabs.find((t) => t.id === activeTab)?.label}
           </h2>
           {renderTabContent()}
@@ -852,7 +925,7 @@ const BrandSettings = () => {
           <Button variant="secondary" onClick={() => setShowPasswordModal(false)}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleChangePassword}>
+          <Button variant="secondry" className= "border-2 "onClick={handleChangePassword}>
             Update Password
           </Button>
         </div>
@@ -883,17 +956,17 @@ const BrandSettings = () => {
                   <img src={qrCodeData.qrCode} alt="QR Code" className="w-48 h-48" />
                 ) : (
                   <div className="w-48 h-48 bg-gray-100 animate-spin flex items-center justify-center">
-                    <Loader className="w-8 h-8 text-[#667eea]" />
+                    <Loader className="w-8 h-8 text-gray-500" />
                   </div>
                 )}
               </div>
-              <div className="text-left bg-gray-50 p-3 rounded-lg border">
+              <div className="text-left bg-white p-3 rounded-lg border">
                 <p className="text-xs text-gray-500 font-medium uppercase mb-1">Manual Entry Key</p>
-                <code className="text-sm font-mono break-all text-[#667eea] font-bold">
+                <code className="text-sm font-mono break-all text-gray-600 font-bold">
                   {qrCodeData?.secret}
                 </code>
               </div>
-              <Button className="w-full" onClick={() => setTwoFactorStep('verify')}>
+              <Button className="w-full border-2 " variant="secondry" onClick={() => setTwoFactorStep('verify')}>
                 I've scanned it, continue
               </Button>
             </div>
@@ -908,18 +981,18 @@ const BrandSettings = () => {
                 type="text"
                 maxLength={6}
                 autoFocus
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-3xl tracking-widest font-bold focus:outline-none focus:ring-2 focus:ring-[#667eea]"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-3xl tracking-widest font-bold focus:outline-none focus:ring-2 focus:ring-gray-400"
                 placeholder="000000"
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
               />
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setTwoFactorStep('setup')}>
+              <div className="flex  gap-3">
+                <Button variant="secondry" className="flex-1" onClick={() => setTwoFactorStep('setup')}>
                   Back
                 </Button>
                 <Button 
-                  variant="primary" 
-                  className="flex-1" 
+                  variant="secondry" 
+                  className="flex-1 border-2 " 
                   onClick={handleVerify2FA} 
                   loading={saving}
                   disabled={verificationCode.length !== 6}
@@ -959,7 +1032,7 @@ const BrandSettings = () => {
               </div>
 
               <Button 
-                variant="primary" 
+                variant="secondry" 
                 className="w-full" 
                 onClick={() => {
                   setShow2FAModal(false);

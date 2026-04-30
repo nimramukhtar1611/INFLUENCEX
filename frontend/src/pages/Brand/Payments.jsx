@@ -12,13 +12,14 @@ import {
   Loader,
   Search,
   RefreshCw,
+  ChevronRight,
+  FileText
 } from 'lucide-react';
 import paymentService from '../../services/paymentService';
 import { formatNumber, formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
 import { getStatusColor, getStatusIconColor } from '../../utils/colorScheme';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
-import StatsCard from '../../components/Common/StatsCard';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -42,6 +43,16 @@ const Payments = () => {
     transactions: { page: 1, limit: 10, total: 0, pages: 1 },
     invoices: { page: 1, limit: 10, total: 0, pages: 1 },
   });
+
+  // Status Style Config mimicking CreatorDeals
+  const statusConfig = {
+    completed: { bg: isDark ? 'bg-white' : 'bg-black', text: isDark ? 'text-black' : 'text-white' },
+    released: { bg: isDark ? 'bg-white' : 'bg-black', text: isDark ? 'text-black' : 'text-white' },
+    pending: { bg: isDark ? 'bg-zinc-800' : 'bg-gray-100', text: isDark ? 'text-zinc-400' : 'text-gray-600' },
+    'in-escrow': { bg: 'bg-blue-500/10', text: 'text-blue-500' },
+    failed: { bg: 'bg-red-500/10', text: 'text-red-500' },
+    refunded: { bg: 'bg-purple-500/10', text: 'text-purple-500' }
+  };
 
   const fetchPaymentData = async (showToast = false) => {
     try {
@@ -88,18 +99,11 @@ const Payments = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const depositStatus = params.get('deposit');
-
     if (depositStatus === 'success') {
-      toast.success('Stripe payment completed successfully. Refreshing payment data...');
+      toast.success('Stripe payment completed successfully.');
       fetchPaymentData();
       window.history.replaceState({}, '', window.location.pathname);
     }
-
-    if (depositStatus === 'cancel') {
-      toast('Stripe payment canceled.');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-
     fetchPaymentData();
   }, []);
 
@@ -109,16 +113,11 @@ const Payments = () => {
       toast.error('Minimum deposit is $10');
       return;
     }
-
     try {
       setSubmittingDeposit(true);
       const response = await paymentService.createDepositCheckoutSession(amount, 'usd');
-      if (!response.success || !response.url) {
-        toast.error(response.error || 'Failed to start Stripe checkout');
-        return;
-      }
-
-      window.location.assign(response.url);
+      if (response.success && response.url) window.location.assign(response.url);
+      else toast.error(response.error || 'Failed to start Stripe checkout');
     } catch (error) {
       toast.error('Failed to start Stripe checkout');
     } finally {
@@ -126,406 +125,223 @@ const Payments = () => {
     }
   };
 
-  const getStatusColorClass = (status) => {
-    return getStatusColor(status, 'payment', isDark);
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-      case 'released':
-        return CheckCircle;
-      case 'pending':
-        return Clock;
-      case 'in-escrow':
-        return Wallet;
-      case 'failed':
-        return XCircle;
-      case 'refunded':
-        return RefreshCw;
-      default:
-        return AlertCircle;
-    }
-  };
-
-  const filteredTransactions = useMemo(() => {
-    let filtered = [...transactions];
-
-    if (searchQuery) {
-      const term = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        t =>
-          t.description?.toLowerCase().includes(term) ||
-          t.transactionId?.toLowerCase().includes(term)
-      );
-    }
-
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      const filterDate = new Date();
-
-      if (dateFilter === '7d') filterDate.setDate(now.getDate() - 7);
-      if (dateFilter === '30d') filterDate.setDate(now.getDate() - 30);
-      if (dateFilter === '90d') filterDate.setDate(now.getDate() - 90);
-
-      filtered = filtered.filter(t => new Date(t.createdAt) >= filterDate);
-    }
-
-    return filtered;
-  }, [transactions, searchQuery, dateFilter]);
-
   const totals = useMemo(() => {
     const completed = transactions.filter((t) => t.status === 'completed');
     const totalVolume = completed.reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const totalFees = completed.reduce((sum, t) => sum + Number(t.fee || 0), 0);
-
-    const thisMonthVolume = completed
-      .filter((t) => {
-        const date = new Date(t.createdAt);
-        const now = new Date();
-        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-      })
-      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-
-    return { totalVolume, totalFees, thisMonthVolume };
+    return { totalVolume, totalFees };
   }, [transactions]);
 
   if (loading && transactions.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-12 h-12 animate-spin text-[#667eea]" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading finances...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Payments</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Stripe securely handles all payment details and billing checkout.</p>
+          <h1 className="text-3xl font-light tracking-tight font-semibold">Brand <span className="font-bold">Payments</span></h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Manage transactions, deposits, and payment history.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={RefreshCw}
+        
+        <div className="flex items-center gap-3">
+          <button 
             onClick={() => fetchPaymentData(true)}
-            loading={refreshing}
+            className={`p-2.5 rounded-full border transition-all ${isDark ? 'border-zinc-800 hover:bg-zinc-800 text-zinc-400' : 'border-zinc-200 hover:bg-zinc-100 text-zinc-500'}`}
           >
-            Refresh
-          </Button>
-          <Button variant="primary" icon={DollarSign} onClick={() => setShowDepositModal(true)}>
-            Add Funds
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-6 rounded-xl shadow-lg text-white">
-          <p className="text-sm opacity-90 mb-2">Available Balance</p>
-          <h2 className="text-3xl font-bold mb-4">{formatCurrency(balance)}</h2>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="bg-white text-[#667eea] hover:bg-gradient-to-r hover:from-[#667eea]/5 hover:to-[#764ba2]/5"
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <button 
             onClick={() => setShowDepositModal(true)}
+            className={`px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${isDark ? 'bg-white text-white' : 'bg-black text-white'} hover:scale-105`}
           >
             Add Funds
-          </Button>
+          </button>
         </div>
-
-        <StatsCard
-          title="Pending"
-          value={formatCurrency(pendingBalance)}
-          change="Awaiting approval"
-          icon={Clock}
-          color="bg-yellow-500"
-        />
-
-        <StatsCard
-          title="Total Volume"
-          value={formatCurrency(totals.totalVolume)}
-          change="Completed transactions"
-          icon={ArrowDownRight}
-          color="bg-green-500"
-        />
-
-        <StatsCard
-          title="Fees"
-          value={formatCurrency(totals.totalFees)}
-          change={`This month: ${formatCurrency(totals.thisMonthVolume)}`}
-          icon={ArrowUpRight}
-          color="bg-blue-500"
-        />
       </div>
 
-      <div className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-        <nav className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'overview'
-                ? 'border-[#667eea] text-[#667eea]'
-                : isDark
-                  ? 'border-transparent text-gray-400 hover:text-gray-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'transactions'
-                ? 'border-[#667eea] text-[#667eea]'
-                : isDark
-                  ? 'border-transparent text-gray-400 hover:text-gray-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Transactions
-          </button>
-          <button
-            onClick={() => setActiveTab('invoices')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'invoices'
-                ? 'border-[#667eea] text-[#667eea]'
-                : isDark
-                  ? 'border-transparent text-gray-400 hover:text-gray-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Invoices
-          </button>
-        </nav>
+      {/* Stats as Status Tabs (CreatorDeal Style) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[160px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Balance</span>
+            <span className="text-xl font-light tracking-tighter mt-1">{formatCurrency(balance)}</span>
+        </div>
+        <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[160px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Pending</span>
+            <span className="text-xl font-light tracking-tighter mt-1">{formatCurrency(pendingBalance)}</span>
+        </div>
+        <div className={`px-5 py-3 rounded-2xl border flex flex-col min-w-[160px] ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Volume</span>
+            <span className="text-xl font-light tracking-tighter mt-1">{formatCurrency(totals.totalVolume)}</span>
+        </div>
       </div>
 
-      {activeTab === 'overview' && (
-        <div className={`rounded-xl shadow-sm overflow-hidden ${
-          isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'
-        }`}>
-          <div className={`px-6 py-4 border-b flex justify-between items-center ${
-            isDark ? 'border-gray-700/50' : 'border-gray-200/50'
-          }`}>
-            <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Recent Transactions</h2>
-            <button
-              onClick={() => setActiveTab('transactions')}
-              className={`text-sm hover:underline ${
-                isDark ? 'text-[#667eea] hover:text-[#5a67d8]' : 'text-[#667eea] hover:text-[#764ba2]'
-              }`}
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-zinc-800/10 dark:border-zinc-200/10">
+        {['overview', 'transactions', 'invoices'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+              activeTab === tab 
+                ? (isDark ? 'border-white text-white' : 'border-black text-black')
+                : 'border-transparent text-zinc-500 hover:text-zinc-400'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Transactions Table Interface */}
+  <div className="space-y-4">
+  {activeTab !== 'invoices' ? (
+    <>
+      {/* Table Header - Audit Trail Style */}
+      <div className={`hidden md:grid grid-cols-12 px-8 py-3 text-[10px] font-black uppercase tracking-[0.25em] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+        <div className="col-span-4">Transaction & Reference</div>
+        <div className="col-span-2">Amount</div>
+        <div className="col-span-3">Clearing Status</div>
+        <div className="col-span-2">Timeline</div>
+        <div className="col-span-1 text-right">Origin</div>
+      </div>
+
+      {/* Transaction Rows */}
+      {transactions.map(t => (
+        <div 
+          key={t._id}
+          className={`
+            group relative grid grid-cols-1 md:grid-cols-12 items-center px-8 py-5 rounded-[2.5rem] border 
+            transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]'}
+          `}
+        >
+          {/* Desc & ID: Technical Log Look */}
+          <div className="col-span-4 flex flex-col min-w-0">
+            <span className={`font-bold text-[15px] tracking-tight leading-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+              {t.description || 'System Settlement'}
+            </span>
+            <span className="font-mono text-[9px] mt-1.5 opacity-40 tracking-tighter uppercase">
+              REF: {t.transactionId}
+            </span>
+          </div>
+
+          {/* Amount: Clean Mono */}
+          <div className="col-span-2 mt-2 md:mt-0">
+            <span className={`text-[17px] font-mono font-bold tracking-tighter ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+              {formatCurrency(t.amount)}
+            </span>
+          </div>
+
+          {/* Status: Breathing Pill */}
+          <div className="col-span-3 mt-2 md:mt-0">
+            <span className={`
+              inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] border
+            `}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse shadow-[0_0_8px_rgba(currentColor,0.5)]" />
+              {t.status}
+            </span>
+          </div>
+
+          {/* Timeline */}
+          <div className={`col-span-2 mt-2 md:mt-0 text-[11px] font-bold tracking-tight ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+            {timeAgo(t.createdAt)}
+          </div>
+
+          {/* Type: Minimalist Tag */}
+          <div className="col-span-1 text-right">
+            <span className="text-[10px] font-black uppercase opacity-20 tracking-widest">{t.type}</span>
+          </div>
+        </div>
+      ))}
+    </>
+  ) : (
+    /* Invoices Section: The "Receipt" Look */
+    <div className="grid gap-3">
+      {invoices.map(invoice => (
+        <div 
+          key={invoice._id} 
+          className={`
+            group flex items-center justify-between px-8 py-6 rounded-[2.5rem] border transition-all duration-500
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900' 
+              : 'bg-white border-zinc-100 hover:border-zinc-200 shadow-sm'}
+          `}
+        >
+          <div className="flex items-center gap-5">
+            <div className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+              <FileText className="w-5 h-5 text-zinc-500 opacity-50" />
+            </div>
+            <div className="flex flex-col">
+              <span className={`font-bold text-[15px] tracking-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                INV-#{invoice.invoiceNumber || (invoice.transactionId ? invoice.transactionId.slice(-6).toUpperCase() : 'UNKNOWN')}
+              </span>
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">
+                Issued: {formatDate(invoice.createdAt)}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-8">
+            <span className={`font-mono text-lg font-bold tracking-tighter ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+              {formatCurrency(invoice.amount)}
+            </span>
+            <button 
+              onClick={() => paymentService.downloadInvoice(invoice._id)} 
+              className={`
+                p-3.5 rounded-xl border transition-all duration-300
+                hover:scale-110 active:scale-95
+                ${isDark 
+                  ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-white hover:text-white hover:border-white' 
+                  : 'bg-zinc-50 border-zinc-100 text-zinc-400 hover:bg-black hover:text-white hover:border-black shadow-sm'}
+              `}
             >
-              View All
+              <Download className="w-4 h-4" strokeWidth={2.5} />
             </button>
           </div>
-          <div className={`divide-y ${isDark ? 'divide-gray-700/30' : 'divide-gray-200/30'}`}>
-            {transactions.slice(0, 6).map(transaction => (
-              <div key={transaction._id} className={`p-4 transition-all duration-200 ${isDark ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className={`font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{transaction.description || 'Transaction'}</p>
-                    <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{timeAgo(transaction.createdAt)} • {transaction.transactionId}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatCurrency(transaction.amount || 0)}</p>
-                    <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColorClass(transaction.status)}`}>
-                      {React.createElement(getStatusIcon(transaction.status), { className: `w-3 h-3 ${getStatusIconColor(transaction.status)}` })}
-                      {transaction.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-      )}
+      ))}
+    </div>
+  )}
+</div>
 
-      {activeTab === 'transactions' && (
-        <div className={`rounded-xl shadow-sm overflow-hidden ${
-          isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'
-        }`}>
-          <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-700/50' : 'border-gray-200/50'}`}>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>All Transactions</h2>
-
-              <div className="flex flex-wrap gap-2">
-                <div className="relative">
-                  <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className={`pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                      isDark 
-                        ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                        : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                    }`}
-                  />
-                </div>
-
-                <select
-                  value={dateFilter}
-                  onChange={e => setDateFilter(e.target.value)}
-                  className={`px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isDark 
-                      ? 'bg-gray-800/50 border-gray-700/50 text-gray-100'
-                      : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  <option value="all">All Time</option>
-                  <option value="7d">Last 7 Days</option>
-                  <option value="30d">Last 30 Days</option>
-                  <option value="90d">Last 90 Days</option>
-                </select>
-              </div>
-            </div>
+      {/* Modern Modal styling stays consistent with the theme */}
+      <Modal isOpen={showDepositModal} onClose={() => setShowDepositModal(false)} title="Add Funds">
+        <div className="space-y-6 pt-4">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-light">$</span>
+            <input
+              type="number"
+              value={depositAmount}
+              onChange={e => setDepositAmount(e.target.value)}
+              placeholder="0.00"
+              className={`w-full pl-8 pr-4 py-4 text-2xl font-light bg-transparent border-b-2 focus:outline-none transition-colors ${isDark ? 'border-zinc-800 focus:border-white' : 'border-zinc-100 focus:border-black'}`}
+            />
           </div>
-
-          <div className="overflow-x-auto">
-            <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-              <thead className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Date</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Description</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Amount</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Status</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Type</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reference</th>
-                </tr>
-              </thead>
-              <tbody className={`${isDark ? 'bg-gray-900' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                {filteredTransactions.length > 0 ? (
-                  filteredTransactions.map(transaction => (
-                    <tr key={transaction._id} className={isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatDate(transaction.createdAt)}</td>
-                      <td className={`px-6 py-4 text-sm ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{transaction.description || 'Payment'}</td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatCurrency(transaction.amount || 0)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColor(transaction.status)}`}>
-                          {getStatusIcon(transaction.status)}
-                          {transaction.status}
-                        </span>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {transaction.type}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-xs font-mono ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{transaction.transactionId}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="6" className={`px-6 py-12 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No transactions found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className={`p-4 rounded-2xl text-xs uppercase tracking-widest font-bold ${isDark ? 'bg-zinc-800/50 text-zinc-400' : 'bg-white text-zinc-500'}`}>
+            Redirecting to secure stripe checkout
           </div>
-        </div>
-      )}
-
-      {activeTab === 'invoices' && (
-        <div className={`rounded-xl shadow-sm overflow-hidden ${
-          isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'
-        }`}>
-          <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-700/50' : 'border-gray-200/50'}`}>
-            <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Invoices</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-              <thead className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Invoice #</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Date</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Amount</th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Status</th>
-                  <th className={`px-6 py-3 text-right text-xs font-medium uppercase ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Actions</th>
-                </tr>
-              </thead>
-              <tbody className={`${isDark ? 'bg-gray-900' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                {invoices.length > 0 ? (
-                  invoices.map(invoice => (
-                    <tr key={invoice._id} className={isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-mono ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                        {invoice.invoiceNumber || invoice.transactionId}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {formatDate(invoice.createdAt)}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                        {formatCurrency(invoice.amount || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColorClass(invoice.status)}`}>
-                          {React.createElement(getStatusIcon(invoice.status), { className: `w-3 h-3 ${getStatusIconColor(invoice.status)}` })}
-                          {invoice.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => paymentService.downloadInvoice(invoice._id)}
-                          className={`hover:${isDark ? 'text-[#667eea]' : 'text-[#764ba2]'}`}
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="5" className={`px-6 py-12 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No invoices found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <Modal isOpen={showDepositModal} onClose={() => setShowDepositModal(false)} title="Add Funds via Stripe">
-        <div className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Amount to Add</label>
-            <div className="relative">
-              <DollarSign className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-              <input
-                type="number"
-                value={depositAmount}
-                onChange={e => setDepositAmount(e.target.value)}
-                placeholder="0.00"
-                min="10"
-                step="1"
-                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDark 
-                    ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                    : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-                }`}
-              />
-            </div>
-            <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Minimum deposit: $10</p>
-          </div>
-
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-blue-900/30 border border-blue-700/30' : 'bg-blue-50'}`}>
-            <p className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-800'}`}>
-              You will be redirected to Stripe Checkout to complete payment securely.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowDepositModal(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
+          <button
             onClick={handleDeposit}
-            loading={submittingDeposit}
-            disabled={!depositAmount || Number(depositAmount) < 10}
+            disabled={!depositAmount || submittingDeposit}
+            className={`w-full py-4 rounded-full text-xs font-bold uppercase tracking-[0.2em] transition-all ${isDark ? 'bg-white text-black hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'} disabled:opacity-50`}
           >
-            Continue to Stripe
-          </Button>
+            {submittingDeposit ? 'Processing...' : 'Complete Payment'}
+          </button>
         </div>
       </Modal>
+
     </div>
   );
 };

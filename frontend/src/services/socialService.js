@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 class SocialService {
   // ==================== INSTAGRAM VERIFICATION ====================
@@ -342,107 +342,6 @@ class SocialService {
     }
   }
 
-  // ==================== TWITTER VERIFICATION ====================
-  async verifyTwitter(handle) {
-    try {
-      console.log(`🔍 Verifying Twitter account: ${handle}`);
-      
-      const username = handle.replace('@', '').trim();
-      
-      // Using Twitter oEmbed
-      try {
-        console.log('Trying Twitter oEmbed...');
-        
-        const response = await axios.get(`https://publish.twitter.com/oembed`, {
-          params: {
-            url: `https://twitter.com/${username}`,
-            omit_script: true
-          },
-          timeout: 5000
-        });
-
-        if (response.data) {
-          console.log('✅ Twitter account exists via oEmbed');
-          
-          return {
-            success: true,
-            data: {
-              handle: username,
-              name: response.data.author_name || username,
-              followers: 0,
-              following: 0,
-              tweets: 0,
-              profilePicture: `https://unavatar.io/twitter/${username}`,
-              description: response.data.author_name || '',
-              isVerified: false,
-              engagement: 0,
-              source: 'oembed'
-            }
-          };
-        }
-      } catch (error) {
-        console.log('Twitter oEmbed failed:', error.message);
-      }
-
-      // Using Unavatar
-      try {
-        await axios.head(`https://unavatar.io/twitter/${username}`, {
-          timeout: 3000
-        });
-        
-        console.log('✅ Twitter avatar found');
-        
-        return {
-          success: true,
-          data: {
-            handle: username,
-            name: username,
-            followers: 0,
-            following: 0,
-            tweets: 0,
-            profilePicture: `https://unavatar.io/twitter/${username}`,
-            description: '',
-            isVerified: false,
-            engagement: 0,
-            source: 'unavatar'
-          }
-        };
-      } catch (error) {
-        console.log('Unavatar failed:', error.message);
-      }
-
-      // FALLBACK
-      return {
-        success: true,
-        data: {
-          handle: username,
-          name: username,
-          followers: 0,
-          following: 0,
-          tweets: 0,
-          profilePicture: `https://ui-avatars.com/api/?name=${username}&background=1DA1F2&color=fff`,
-          description: '',
-          isVerified: false,
-          engagement: 0
-        }
-      };
-
-    } catch (error) {
-      console.error('❌ Twitter verification error:', error);
-      return {
-        success: false,
-        error: error.message,
-        data: {
-          handle: handle.replace('@', ''),
-          followers: 0,
-          following: 0,
-          tweets: 0,
-          engagement: 0
-        }
-      };
-    }
-  }
-
   // ==================== FACEBOOK VERIFICATION ====================
   async verifyFacebook(handle) {
     try {
@@ -474,37 +373,6 @@ class SocialService {
       };
     }
   }
-
-  // ==================== LINKEDIN VERIFICATION ====================
-  async verifyLinkedIn(handle) {
-    try {
-      console.log(`🔍 Verifying LinkedIn profile: ${handle}`);
-      
-      const profileId = handle.replace('@', '').trim();
-      
-      return {
-        success: true,
-        data: {
-          handle: profileId,
-          name: profileId,
-          followers: 0,
-          profilePicture: `https://ui-avatars.com/api/?name=${profileId}&background=0077B5&color=fff`,
-          source: 'fallback'
-        }
-      };
-
-    } catch (error) {
-      console.error('❌ LinkedIn verification error:', error);
-      return {
-        success: false,
-        error: error.message,
-        data: {
-          handle: handle.replace('@', ''),
-          followers: 0
-        }
-      };
-    }
-  }
 }
 
-module.exports = new SocialService();
+export default new SocialService();

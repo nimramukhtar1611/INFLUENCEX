@@ -24,7 +24,8 @@ export const useSocket = () => {
 };
 
 export const SocketProvider = ({ children }) => {
-  const { user, token } = useAuth();
+  const { user, token: authToken } = useAuth();
+  const token = authToken || localStorage.getItem('token');
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState({});
@@ -56,7 +57,8 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     const disableSocket = isCypressRun || (typeof window !== 'undefined' && window.localStorage.getItem('disableSocket') === 'true');
 
-    if (!user || !token || disableSocket) {
+    const resolvedToken = authToken || localStorage.getItem('token');
+    if (!user || !resolvedToken || disableSocket) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -67,9 +69,15 @@ export const SocketProvider = ({ children }) => {
 
     const SOCKET_URL = resolveSocketUrl();
     socketRef.current = io(SOCKET_URL, {
-      auth: { token, userId: user?._id },
+      auth: { token: resolvedToken, userId: user?._id },
       query: { userId: user?._id },
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      timeout: 10000,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      maxHttpBufferSize: 1e8
     });
 
     const socket = socketRef.current;

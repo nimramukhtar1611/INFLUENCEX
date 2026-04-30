@@ -467,7 +467,7 @@ const Disputes = () => {
               </div>
             </div>
 
-            <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="bg-white p-4 rounded-lg">
               <p className="text-sm text-gray-700">{selectedDispute.description}</p>
             </div>
 
@@ -476,7 +476,7 @@ const Disputes = () => {
               <div className="space-y-4 max-h-60 overflow-y-auto">
                 {selectedDispute.messages?.length > 0 ? (
                   selectedDispute.messages.map((msg) => (
-                    <div key={msg._id} className="bg-gray-50 p-4 rounded-lg">
+                    <div key={msg._id} className="bg-white p-4 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium text-gray-900">{msg.senderId?.fullName || 'Admin'}</span>
                         <span className="text-xs text-gray-500">{timeAgo(msg.createdAt)}</span>

@@ -79,8 +79,8 @@ const CreatorGrowthOS = () => {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
         <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Loading Creator Growth OS...</p>
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading Creator Growth OS...</p>
         </div>
       </div>
     );

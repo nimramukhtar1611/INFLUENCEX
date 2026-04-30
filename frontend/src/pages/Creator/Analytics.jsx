@@ -79,7 +79,7 @@ const Analytics = () => {
     color: p.name === 'instagram' ? '#E1306C' :
            p.name === 'youtube'   ? '#FF0000' :
            p.name === 'tiktok'    ? '#000000' :
-           p.name === 'twitter'   ? '#1DA1F2' : '#4F46E5'
+           p.name === 'facebook'  ? '#1877F2' : '#4F46E5'
   }));
 
   const engagementBreakdown = [
@@ -116,8 +116,8 @@ const Analytics = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading analytics...</p>
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading analytics...</p>
         </div>
       </div>
     );
@@ -125,64 +125,14 @@ const Analytics = () => {
 
   return (
     <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      <div className={`flex flex-col gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         <div>
-          <h1 className={`text-xl md:text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Analytics Dashboard</h1>
-          <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Track your performance and growth metrics</p>
+          <h1 className="text-3xl font-light tracking-tight font-semibold">Analytics <span className="font-bold">Overview</span></h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Track your performance metrics, engagement data, and growth trends.</p>
         </div>
+      </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className={`flex items-center rounded-lg border overflow-hidden shadow-sm ${
-                isDark ? 'bg-gray-800/50 border-gray-700/50' : 'bg-white/50 border-gray-300/50'
-              }`}>
-                {[
-                  { type: 'area', icon: LineChartIcon },
-                  { type: 'bar',  icon: BarChart3     },
-                  { type: 'line', icon: LineChartIcon  }
-                ].map(({ type, icon: Icon }, i) => (
-                  <button
-                    key={type}
-                    onClick={() => setChartType(type)}
-                    className={`px-2 py-2 text-xs sm:text-sm sm:px-3 font-medium ${i > 0 ? 'border-l' : ''} ${
-                      chartType === type 
-                        ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white' 
-                        : isDark 
-                          ? 'hover:bg-gray-700/50 text-gray-300' 
-                          : 'hover:bg-gray-50 text-gray-700'
-                    } ${
-                      i > 0 ? (isDark ? 'border-gray-700/50' : 'border-gray-300/50') : ''
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </button>
-                ))}
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                icon={RefreshCw}
-                onClick={() => fetchAnalytics(true)}
-                loading={refreshing}
-              >
-                Refresh
-              </Button>
-
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className={`px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm ${
-                  isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100' : 'bg-white/50 border-gray-300/50 text-gray-900'
-                }`}
-              >
-                <option value="7d">Last 7 Days</option>
-                <option value="30d">Last 30 Days</option>
-                <option value="90d">Last 90 Days</option>
-                <option value="12m">Last 12 Months</option>
-              </select>
-            </div>
-        </div>
-
+      
         {error && (
           <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />

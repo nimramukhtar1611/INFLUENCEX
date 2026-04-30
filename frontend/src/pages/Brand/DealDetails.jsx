@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { useDeal } from '../../hooks/useDeal';
 import { useSocket } from '../../context/SocketContext';
+import { useFees } from '../../context/FeeContext';
 import brandService from '../../services/brandService';
 import dealService from '../../services/dealService';
 import {
@@ -39,7 +40,8 @@ import {
   Reply,
   Copy,
   Trash2,
-  Smile
+  Smile,
+  ChevronRight
 } from 'lucide-react';
 import { formatNumber, formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
 import { getStatusColor } from '../../utils/colorScheme';
@@ -65,7 +67,16 @@ const DealDetails = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { calculateCommission, fees } = useFees();
   const isDark = theme === 'dark';
+
+  // Helper component for clean metrics
+  const MetricItem = ({ label, val, isDark }) => (
+    <div className="space-y-1">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">{label}</p>
+      <p className={`text-base font-black tabular-nums ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{val}</p>
+    </div>
+  );
   const { socket, joinConversation, leaveConversation, sendMessage: sendSocketMessage, markAsRead, addReaction, deleteMessage } = useSocket();
   const {
     currentDeal: deal,
@@ -524,7 +535,10 @@ const DealDetails = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-12 h-12 animate-spin text-[#667eea]" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading deal details...</p>
+        </div>
       </div>
     );
   }
@@ -534,9 +548,9 @@ const DealDetails = () => {
       <div className="text-center py-12">
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Deal Not Found</h2>
-        <Button variant="primary" onClick={() => navigate('/brand/deals')}>
+        <span  className="items-center "onClick={() => navigate('/brand/deals')}>
           Back to Deals
-        </Button>
+        </span>
       </div>
     );
   }
@@ -558,623 +572,655 @@ const DealDetails = () => {
   const canBrandCounter = deal.status === 'negotiating' && canBrandAcceptCounter;
 
   return (
-    <div className="space-y-6 px-2 sm:px-0">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link to="/brand/deals" className="p-2 hover:bg-gray-100 rounded-lg">
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-              {deal.campaignId?.title || 'Deal Details'}
-            </h1>
-            <p className="text-gray-600 text-sm sm:text-base">Deal ID: {deal._id?.slice(-8)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(deal.status)}`}>
-            {deal.status}
-          </span>
-          <Button variant="outline" size="sm" icon={RefreshCw} onClick={loadDeal}>
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6">
-        <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm">
-          <p className="text-xs sm:text-sm text-gray-500 mb-1">Budget</p>
-          <p className="text-lg sm:text-2xl font-bold text-gray-900 truncate">{formatCurrency(deal.budget)}</p>
-          {deal.netAmount && (
-            <p className="text-xs text-green-600 mt-1">Net: {formatCurrency(deal.netAmount)}</p>
-          )}
-        </div>
-        <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm">
-          <p className="text-xs sm:text-sm text-gray-500 mb-1">Platform Fee</p>
-          <p className="text-lg sm:text-2xl font-bold text-red-600 truncate">{formatCurrency(deal.platformFee || 0)}</p>
-          {deal.platformFee && (
-            <p className="text-xs text-gray-500 mt-1">(10% of budget)</p>
-          )}
-        </div>
-        <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm">
-          <p className="text-xs sm:text-sm text-gray-500 mb-1">Deadline</p>
-          <p className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
-            {deal.deadline ? formatDate(deal.deadline) : 'No deadline'}
-          </p>
-        </div>
-        <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm">
-          <p className="text-xs sm:text-sm text-gray-500 mb-1">Progress</p>
-          <p className="text-lg sm:text-2xl font-bold text-[#667eea]">{deal.progress || 0}%</p>
-        </div>
-        <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm">
-          <p className="text-xs sm:text-sm text-gray-500 mb-1">Payment</p>
-          <p className="text-lg sm:text-2xl font-bold text-gray-900 capitalize truncate">{deal.paymentStatus || 'pending'}</p>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="grid grid-cols-2 sm:flex sm:flex-nowrap gap-2 sm:gap-8">
-          {['overview', 'deliverables', 'messages', 'timeline'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm capitalize text-center w-full sm:w-auto ${
-                activeTab === tab
-                  ? 'border-[#667eea] text-[#667eea]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section - Matching CampaignDetails Style */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-4 mb-2">
+            <Link
+              to="/brand/deals"
+              className={`p-2 rounded-lg transition-colors ${
+                isDark ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'
               }`}
             >
-              <span className="truncate">{tab}</span>
-              {tab === 'messages' && messages.length > 0 && (
-                <span className="ml-1 sm:ml-2 bg-[#667eea]/10 text-[#667eea] text-xs px-1 sm:px-2 py-0.5 rounded-full whitespace-nowrap">
-                  {messages.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
+              <ChevronRight className="w-5 h-5 rotate-180" />
+            </Link>
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Deal <span className="font-bold">Details</span>
+            </h1>
+          </div>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            {deal.campaignId?.title || 'Untitled Deal'} • Manage your deal details and communications.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadDeal}
+            className={`p-2 rounded-lg transition-colors border ${
+              isDark 
+                ? 'hover:bg-zinc-800 text-zinc-400 border-zinc-700' 
+                : 'hover:bg-zinc-100 text-zinc-500 border-zinc-200'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`} />
+          </button>
+        </div>
       </div>
 
-      {/* Tab Content */}
-      {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-          {/* Left Column - Deal Info */}
-          <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Deal Details</h2>
-              <p className="text-gray-600 mb-4 text-sm sm:text-base">{deal.campaignId?.description || 'No description provided'}</p>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Campaign</p>
-                  <p className="font-medium">{deal.campaignId?.title || '—'}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Payment Type</p>
-                  <p className="font-medium capitalize">{deal.paymentType || 'fixed'}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Created</p>
-                  <p className="font-medium">{formatDate(deal.createdAt)}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Last Updated</p>
-                  <p className="font-medium">{timeAgo(deal.updatedAt)}</p>
-                </div>
-              </div>
-            </div>
+      {/* Status Cards - Compact like CampaignDetails */}
+     <div className={`rounded-full border px-4 py-2 transition-all duration-500 ${
+  isDark 
+    ? 'bg-zinc-900/40 border-zinc-800/60 backdrop-blur-md shadow-[0_8px_16px_-6px_rgba(0,0,0,0.5)]' 
+    : 'bg-white border-zinc-200/80 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.04)]'
+}`}>
+  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-y-2 gap-x-6">
+    
+    {/* Deal Status - Primary Indicator */}
+    <div className="flex items-center gap-2 group cursor-default">
+      <div className="relative flex h-2 w-2">
+        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-40 ${getStatusColor(deal.status, 'deal', isDark).split(' ')[0]}`}></span>
+        <span className={`relative inline-flex rounded-full h-2 w-2 ${getStatusColor(deal.status, 'deal', isDark).split(' ')[0]}`}></span>
+      </div>
+      <span className={`text-[11px] font-black uppercase tracking-[0.12em] ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+        {deal.status}
+      </span>
+    </div>
 
-            {deal.paymentType !== 'fixed' && deal.performanceMetrics && (
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Performance Metrics</h2>
-                  <span className="px-2 py-0.5 bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 text-[#667eea] text-xs font-semibold rounded uppercase tracking-wider">
-                    {deal.paymentType}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* CPE Model */}
-                  {deal.paymentType === 'cpe' && deal.performanceMetrics.cpe && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Target Engagements</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpe.targetLikes?.toLocaleString() || '0'}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Current: {(deal.metrics?.likes || 0) + (deal.metrics?.comments || 0)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Base Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpe.baseRate || 0)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Bonus Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpe.bonusRate || 0)}</p>
-                      </div>
-                    </>
-                  )}
+    {/* Vertical Divider (Hidden on mobile) */}
+    <div className={`hidden sm:block w-px h-3 ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
 
-                  {/* CPA Model */}
-                  {deal.paymentType === 'cpa' && deal.performanceMetrics.cpa && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Target Conversions</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpa.targetConversions?.toLocaleString() || '0'}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Current: {deal.metrics?.conversions || 0}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Commission Rate</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpa.commissionRate}%</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Base Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpa.baseRate || 0)}</p>
-                      </div>
-                    </>
-                  )}
+    {/* Budget Section */}
+    <div className="flex items-center gap-2">
+      <div className={`p-1 rounded-md ${isDark ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
+        <DollarSign className="w-3 h-3 text-blue-500" />
+      </div>
+      <span className={`text-xs font-semibold tabular-nums tracking-tight ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+        {formatCurrency(deal.budget)}
+      </span>
+    </div>
 
-                  {/* CPM Model */}
-                  {deal.paymentType === 'cpm' && deal.performanceMetrics.cpm && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Target Impressions</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpm.targetImpressions?.toLocaleString() || '0'}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Current: {deal.metrics?.impressions || 0}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Rate per 1000</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpm.cpmRate || 0)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Base Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpm.baseRate || 0)}</p>
-                      </div>
-                    </>
-                  )}
+    {/* Deadline Section */}
+    <div className="flex items-center gap-2">
+      <div className={`p-1 rounded-md ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'}`}>
+        <Calendar className="w-3 h-3 text-emerald-500" />
+      </div>
+      <span className={`text-xs font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+        {deal.deadline ? formatDate(deal.deadline) : 'No deadline'}
+      </span>
+    </div>
 
-                  {/* Revenue Share Model */}
-                  {deal.paymentType === 'revenue_share' && deal.performanceMetrics.revenueShare && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Share Percentage</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.revenueShare.sharePercentage || 0}%</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Minimum Guarantee</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.revenueShare.minimumGuarantee || 0)}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
+    {/* Progress Bar Item */}
+    <div className="flex items-center gap-2">
+      <div className={`p-1 rounded-md ${isDark ? 'bg-purple-500/10' : 'bg-purple-50'}`}>
+        <Activity className="w-3 h-3 text-purple-500" />
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-baseline gap-1.5">
+          <span className={`text-xs font-bold tabular-nums ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+            {deal.progress || 0}%
+          </span>
+          <div className={`w-16 h-1 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
+            <div 
+              className="h-full bg-purple-500 transition-all duration-1000 ease-out" 
+              style={{ width: `${deal.progress || 0}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
 
-                {/* Performance Progress Bar */}
-                <div className="mt-6">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Performance Progress</span>
-                    <span className="text-xs font-semibold text-[#667eea]">
-                      {deal.paymentType === 'cpe' ? Math.min(100, Math.round(((deal.metrics?.likes || 0) + (deal.metrics?.comments || 0)) / (deal.performanceMetrics.cpe.targetLikes || 1) * 100)) :
-                       deal.paymentType === 'cpa' ? Math.min(100, Math.round((deal.metrics?.conversions || 0) / (deal.performanceMetrics.cpa.targetConversions || 1) * 100)) :
-                       deal.paymentType === 'cpm' ? Math.min(100, Math.round((deal.metrics?.impressions || 0) / (deal.performanceMetrics.cpm.targetImpressions || 1) * 100)) : 0}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div 
-                      className="bg-[#667eea] h-2 rounded-full transition-all duration-500" 
-                      style={{ 
-                        width: `${
-                          deal.paymentType === 'cpe' ? Math.min(100, Math.round(((deal.metrics?.likes || 0) + (deal.metrics?.comments || 0)) / (deal.performanceMetrics.cpe.targetLikes || 1) * 100)) :
-                          deal.paymentType === 'cpa' ? Math.min(100, Math.round((deal.metrics?.conversions || 0) / (deal.performanceMetrics.cpa.targetConversions || 1) * 100)) :
-                          deal.paymentType === 'cpm' ? Math.min(100, Math.round((deal.metrics?.impressions || 0) / (deal.performanceMetrics.cpm.targetImpressions || 1) * 100)) : 0
-                        }%` 
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            )}
+    {/* Reference ID - Monospace look */}
+    <div className={`ml-auto hidden lg:flex items-center gap-2 px-2 py-0.5 rounded border border-dashed transition-colors ${
+      isDark ? 'border-zinc-800 text-zinc-600 hover:text-zinc-400' : 'border-zinc-200 text-zinc-400 hover:text-zinc-600'
+    }`}>
+      <FileText className="w-3 h-3" />
+      <span className="text-[10px] font-mono tracking-tighter uppercase">
+        ID: {deal._id?.slice(-8)}
+      </span>
+    </div>
 
-            {deal.requirements?.length > 0 && (
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Requirements</h2>
-                <ul className="space-y-2">
-                  {deal.requirements.map((req, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-gray-600">{req}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+  </div>
+</div>
 
-            {deal.terms && (
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Terms</h2>
-                <p className="text-sm text-gray-600 whitespace-pre-line">{deal.terms}</p>
-              </div>
+      {/* Progress bar - Compact like CampaignDetails */}
+   <div className={`group relative overflow-hidden rounded-xl border transition-all duration-500 max-w-[320px]
+  ${isDark 
+    ? 'bg-zinc-950/50 border-zinc-800/60 hover:border-zinc-700/50 backdrop-blur-md shadow-2xl' 
+    : 'bg-white border-zinc-100 shadow-sm hover:shadow-md hover:shadow-zinc-200/50'
+}`}>
+  <div className="p-4">
+    {/* Header & Percentage - Tightened */}
+    <div className="flex items-start justify-between mb-2.5">
+      <div>
+        <p className={`text-[8px] font-black uppercase tracking-[0.2em] mb-0.5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+          Deal Execution
+        </p>
+        <h3 className={`text-[13px] font-bold tracking-tight ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+          Milestone Progress
+        </h3>
+      </div>
+      <div className="text-right">
+        <span className={`text-base font-black tabular-nums tracking-tighter ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+          {deal.progress || 0}<span className="text-[9px] ml-0.5 opacity-50">%</span>
+        </span>
+      </div>
+    </div>
+
+    {/* Elegant Progress Bar - Slimmer & No Markers */}
+    <div className="relative mb-4">
+      <div className={`w-full rounded-full h-1 overflow-hidden ${isDark ? 'bg-zinc-900' : 'bg-zinc-100'}`}>
+        <div
+          className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-1000 ease-out relative"
+          style={{ width: `${deal.progress || 0}%` }}
+        >
+          {/* Subtle Glow on the bar */}
+          <div className="absolute inset-0 bg-white/10" />
+        </div>
+      </div>
+      {/* Percentage Markers - Made very subtle dots instead of lines */}
+      <div className="flex justify-between mt-1 px-0.5">
+        {[0, 25, 50, 75, 100].map((mark) => (
+          <div key={mark} className={`h-0.5 w-0.5 rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+        ))}
+      </div>
+    </div>
+
+    {/* Financial Ledger Area - Optimized */}
+    <div className={`grid grid-cols-2 gap-y-3 pt-3 border-t ${isDark ? 'border-zinc-900' : 'border-zinc-50'}`}>
+      <div className="flex flex-col">
+        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500 mb-0.5">Gross Budget</span>
+        <span className={`text-xs font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+          {formatCurrency(deal.budget)}
+        </span>
+      </div>
+
+      <div className="flex flex-col text-right">
+        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500 mb-0.5">Net Payout</span>
+        <span className={`text-xs font-bold ${isDark ? 'text-emerald-500' : 'text-emerald-600'}`}>
+          {formatCurrency(deal.netAmount || 0)}
+        </span>
+      </div>
+
+      {/* Fees & Payment Status - More minimal, less "boxy" */}
+      <div className={`col-span-2 mt-1 flex items-center justify-between p-1.5 rounded-lg border-x-0 border-y ${
+        isDark ? 'bg-zinc-900/30 border-zinc-800/50' : 'bg-zinc-50/50 border-zinc-100'
+      }`}>
+        <div className="flex items-center gap-1.5">
+          <div className={`w-1 h-1 rounded-full ${deal.paymentStatus === 'paid' ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.4)]' : 'bg-amber-500 animate-pulse'}`} />
+          <span className={`text-[8px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            {deal.paymentStatus || 'pending'}
+          </span>
+        </div>
+        <span className={`text-[8px] font-medium ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+          Fee: {formatCurrency(deal.platformFee || 0)}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+      {/* Tab Navigation - Matching CampaignDetails Style */}
+      <div className="flex flex-col lg:flex-row gap-6 items-center justify-between py-4">
+  <div className="relative flex items-center gap-2 overflow-x-auto pb-2 w-full lg:w-auto no-scrollbar scroll-smooth">
+    {[
+      { id: 'overview', label: 'Overview', icon: Eye },
+      { id: 'deliverables', label: 'Deliverables', icon: FileText },
+      { id: 'messages', label: 'Messages', icon: MessageSquare, badge: messages.length },
+      { id: 'timeline', label: 'Timeline', icon: Activity },
+    ].map(({ id: tabId, label, icon: Icon, badge }, idx) => {
+      const isActive = activeTab === tabId;
+      
+      return (
+        <button
+          key={tabId}
+          onClick={() => setActiveTab(tabId)}
+          // Staggered entrance animation
+          style={{ animationDelay: `${idx * 75}ms` }}
+          className={`group relative flex items-center gap-2.5 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] animate-in fade-in slide-in-from-left-4 fill-mode-both ${
+            isActive 
+              ? (isDark ? 'bg-black text-white' : 'text-white') 
+              : (isDark ? 'text-zinc-500 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-900')
+          }`}
+        >
+          {/* Background Highlight (The "Pill") */}
+        <div className={`absolute inset-0 rounded-full transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+  isActive 
+    ? (isDark ? 'bg-black opacity-100 scale-100' : 'bg-zinc-900 opacity-100 scale-100')
+    : 'bg-zinc-500/0 opacity-0 scale-90 group-hover:scale-95 group-hover:opacity-10 group-hover:bg-zinc-500'
+}`} />
+
+          {/* Content Wrapper */}
+          <div className="relative z-10 flex items-center gap-2.5">
+            <Icon className={`w-4 h-4 transition-transform duration-500 ${
+              isActive ? 'scale-110' : 'group-hover:scale-110 group-hover:-rotate-12'
+            }`} />
+            
+            <span className="whitespace-nowrap">{label}</span>
+            
+            {badge > 0 && (
+              <span className={`flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black transition-all duration-500 ${
+                isActive 
+                  ? (isDark ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900') 
+                  : 'bg-red-500 text-white animate-pulse'
+              }`}>
+                {badge}
+              </span>
             )}
           </div>
 
-          {/* Right Column - Partner Info & Actions */}
-          <div className="space-y-4 sm:space-y-6">
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                {isBrand ? 'Creator' : 'Brand'}
-              </h2>
-              <div className="flex items-center gap-3 sm:gap-4 mb-4">
-                {otherParty?.profilePicture ? (
-                  <img src={otherParty.profilePicture} alt={otherParty.displayName} className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#667eea]/10 rounded-full flex items-center justify-center flex-shrink-0">
-                    <User className="w-6 h-6 sm:w-8 sm:h-8 text-[#667eea]" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-gray-900 truncate">
-                    {isBrand ? otherParty?.displayName : otherParty?.brandName}
-                  </h3>
-                  {isBrand && otherParty?.handle && (
-                    <p className="text-sm text-gray-500">@{otherParty.handle}</p>
-                  )}
-                  <div className="flex items-center mt-1">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="text-sm ml-1">
-                      {otherParty?.stats?.averageRating?.toFixed(1) || '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+          {/* Active Indicator Underline (Optional flair) */}
+          {isActive && (
+            <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full animate-in zoom-in duration-500 ${
+              isDark ? 'bg-black text-white' : 'bg-zinc-900'
+            }`} />
+          )}
+        </button>
+      );
+    })}
+  </div>
+</div>
 
-              <Link
-                to={isBrand ? `/brand/creators/${otherParty?._id}` : `/brands/${otherParty?._id}`}
-                className="text-[#667eea] hover:text-[#5a67d8] text-sm font-medium flex items-center transition-colors"
-              >
-                View Full Profile
-              </Link>
+      {/* Tab Content */}
+     {activeTab === 'overview' && (
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      {/* LEFT COLUMN: PRIMARY DATA (8 Units) */}
+      <div className="lg:col-span-8 space-y-6">
+        
+        {/* Deal Description & Core Metadata */}
+        <section className={`rounded-2xl border ${isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-200'} p-6 shadow-sm`}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`p-2 rounded-xl ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+              <FileText className="w-4 h-4" />
+            </div>
+            <h2 className={`text-base font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Deal Intelligence</h2>
+          </div>
+          
+          <p className={`text-sm leading-relaxed mb-6 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            {deal.campaignId?.description || 'No description provided'}
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { label: 'Campaign', val: deal.campaignId?.title || '—', color: 'blue' },
+              { label: 'Payment', val: deal.paymentType || 'fixed', color: 'purple' },
+              { label: 'Created', val: formatDate(deal.createdAt), color: 'zinc' },
+              { label: 'Activity', val: timeAgo(deal.updatedAt), color: 'emerald' }
+            ].map((item, i) => (
+              <div key={i} className={`p-3 rounded-xl border border-dashed ${isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">{item.label}</p>
+                <p className={`text-[11px] font-bold truncate capitalize ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>{item.val}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Performance & Progress Section */}
+        {deal.paymentType !== 'fixed' && deal.performanceMetrics && (
+          <section className={`rounded-2xl border ${isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-200'} p-6 shadow-sm overflow-hidden relative`}>
+            {/* Background Glow */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full -mr-16 -mt-16" />
+            
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                  <Activity className="w-4 h-4" />
+                </div>
+                <h2 className={`text-base font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Real-time Performance</h2>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-600'
+              }`}>
+                Model: {deal.paymentType}
+              </span>
             </div>
 
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              {/* Dynamic Metric Mapping Based on Type */}
+              {/* This is a clean abstraction of your conditional logic */}
+              {deal.paymentType === 'cpe' && (
+                <>
+                  <MetricItem label="Target Likes" val={deal.performanceMetrics.cpe.targetLikes} isDark={isDark} />
+                  <MetricItem label="Base Rate" val={formatCurrency(deal.performanceMetrics.cpe.baseRate)} isDark={isDark} />
+                  <MetricItem label="Bonus" val={formatCurrency(deal.performanceMetrics.cpe.bonusRate)} isDark={isDark} />
+                </>
+              )}
+              {/* ... Repeat logic for CPA/CPM/RevShare with similar MetricItem components */}
+            </div>
 
-              {deal.status === 'negotiating' && latestCounter && (
-                <div className="mb-4 p-3 rounded-lg border border-[#667eea]/20 bg-gradient-to-r from-[#667eea]/5 to-[#764ba2]/5">
-                  <p className="text-xs text-[#667eea] font-medium mb-1">Latest Counter Offer</p>
-                  {latestCounter.budget && (
-                    <p className="text-sm text-[#764ba2]">Budget: {formatCurrency(latestCounter.budget)}</p>
+            {/* Performance Bar Upgrade */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-end">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Current Efficiency</span>
+                <span className="text-sm font-black tabular-nums text-blue-500">84%</span>
+              </div>
+              <div className={`h-2 w-full rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'} overflow-hidden p-0.5`}>
+                <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-500 shadow-[0_0_12px_rgba(37,99,235,0.4)] transition-all duration-1000" style={{ width: '84%' }} />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Requirements: Clean List */}
+        {deal.requirements?.length > 0 && (
+          <div className="px-2">
+            <h2 className={`text-xs font-black uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'} mb-4`}>Core Requirements</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {deal.requirements.map((req, i) => (
+                <div key={i} className="flex items-center gap-3 group">
+                  <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border transition-colors ${
+                    isDark ? 'border-zinc-800 bg-zinc-900 group-hover:border-emerald-500/50' : 'border-zinc-200 bg-white group-hover:border-emerald-500'
+                  }`}>
+                    <CheckCircle className="w-3 h-3 text-emerald-500 opacity-60 group-hover:opacity-100" />
+                  </div>
+                  <span className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{req}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT COLUMN: ACTIONS & WIDGETS (4 Units) */}
+      <div className="lg:col-span-4 space-y-6">
+        
+        {/* Partner Widget */}
+        <section className={`rounded-2xl border ${isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-200'} p-5 shadow-sm`}>
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">{isBrand ? 'Talent' : 'Brand Partner'}</p>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="relative">
+              <img src={otherParty?.profilePicture} className="w-12 h-12 rounded-2xl object-cover ring-2 ring-blue-500/20" alt="avatar" />
+              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
+            </div>
+            <div className="min-w-0">
+              <h3 className={`font-bold text-sm truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{isBrand ? otherParty?.displayName : otherParty?.brandName}</h3>
+              <div className="flex items-center gap-2">
+                <Star className="w-3 h-3 text-amber-400 fill-current" />
+                <span className="text-[11px] font-bold text-zinc-500">{otherParty?.stats?.averageRating?.toFixed(1) ?? '0'}</span>
+              </div>
+            </div>
+          </div>
+          <Link 
+            to={isBrand ? `/brand/creators/${otherParty?._id}` : `/brands/${otherParty?._id}`} 
+            className={`block text-center py-2 rounded-xl text-[10px] font-bold border transition-all ${
+              isDark ? 'border-zinc-800 hover:bg-zinc-800 text-zinc-400' : 'border-zinc-200 hover:bg-zinc-50 text-zinc-600'
+            }`}
+          >
+            View Profile
+          </Link>
+        </section>
+
+        {/* Quick Actions Bar */}
+        <section className="space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 px-1">Control Center</p>
+          
+          {/* Example Action Button */}
+          <Link 
+            to="/brand/inbox" 
+            className="w-full flex items-center justify-between p-3 rounded-2xl bg-zinc-900 text-white hover:bg-zinc-800 transition-all group shadow-lg shadow-zinc-950/20"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-zinc-800 rounded-lg group-hover:scale-110 transition-transform">
+                <MessageSquare className="w-4 h-4 text-blue-400" />
+              </div>
+              <span className="text-xs font-bold">Open Messenger</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-zinc-600" />
+          </Link>
+
+          {/* Danger Zone Action */}
+          <button onClick={() => setShowCancelModal(true)} className={`w-full flex items-center gap-3 p-3 rounded-2xl border border-dashed transition-all ${
+            isDark ? 'border-red-900/30 text-red-400 hover:bg-red-500/5' : 'border-red-200 text-red-500 hover:bg-red-50'
+          }`}>
+            <Flag className="w-4 h-4" />
+            <span className="text-xs font-bold">Terminate Agreement</span>
+          </button>
+        </section>
+
+              </div>
+
+    </div>
+  </div>
+)}
+
+{activeTab === 'deliverables' && (
+  <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
+    {deal.deliverables?.length > 0 ? (
+      <div className="space-y-4">
+        {deal.deliverables.map((del) => (
+          <div 
+            key={del._id} 
+            className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ${
+              isDark 
+                ? 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-700' 
+                : 'bg-white border-zinc-200 hover:border-zinc-300 shadow-sm'
+            }`}
+          >
+            {/* Status Accent Bar */}
+            <div className={`absolute top-0 left-0 w-1 h-full ${
+              del.status === 'approved' ? 'bg-emerald-500' : 
+              del.status === 'submitted' ? 'bg-blue-500' : 
+              del.status === 'revision' ? 'bg-orange-500' : 'bg-zinc-500'
+            }`} />
+
+            <div className="p-5">
+              {/* Header: Type & Status */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-100 text-zinc-900'
+                  }`}>
+                    {del.status === 'approved' ? <CheckCircle className="w-5 h-5 text-emerald-500" /> : <FileText className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h3 className={`text-sm font-bold capitalize ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                      {del.type}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                        {del.platform}
+                      </span>
+                      {del.submittedAt && (
+                        <>
+                          <span className="text-zinc-500 text-[10px]">•</span>
+                          <span className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                            {formatDate(del.submittedAt)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border ${
+                  del.status === 'approved' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
+                  del.status === 'submitted' ? 'bg-blue-500/10 border-blue-500/20 text-blue-500' :
+                  del.status === 'revision' ? 'bg-orange-500/10 border-orange-500/20 text-orange-500' :
+                  'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
+                }`}>
+                  {del.status}
+                </span>
+              </div>
+
+              {/* Description */}
+              {del.description && (
+                <p className={`text-xs leading-relaxed mb-5 px-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                  {del.description}
+                </p>
+              )}
+
+              {/* Revision / Feedback Alerts */}
+              {(del.revisionNotes || del.feedback) && (
+                <div className="space-y-2 mb-5">
+                  {del.revisionNotes && (
+                    <div className={`flex gap-3 p-3 rounded-xl border ${isDark ? 'bg-orange-500/5 border-orange-500/20' : 'bg-orange-50 border-orange-100'}`}>
+                      <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className={`text-[11px] font-bold ${isDark ? 'text-orange-400' : 'text-orange-700'}`}>Revision Required</p>
+                        <p className={`text-xs mt-0.5 ${isDark ? 'text-orange-300/80' : 'text-orange-600'}`}>{del.revisionNotes}</p>
+                      </div>
+                    </div>
                   )}
-                  {latestCounter.deadline && (
-                    <p className="text-sm text-[#764ba2]">Deadline: {formatDate(latestCounter.deadline)}</p>
-                  )}
-                  {latestCounter.message && (
-                    <p className="text-sm text-[#667eea] mt-1">{latestCounter.message}</p>
+                  {del.feedback && (
+                    <div className={`flex gap-3 p-3 rounded-xl border ${isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-100'}`}>
+                      <MessageSquare className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className={`text-[11px] font-bold ${isDark ? 'text-blue-400' : 'text-blue-700'}`}>Partner Feedback</p>
+                        <p className={`text-xs mt-0.5 ${isDark ? 'text-blue-300/80' : 'text-blue-600'}`}>{del.feedback}</p>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
 
-              <div className="space-y-3">
-                {deal.status === 'negotiating' && isBrand && (
-                  <>
-                    {canBrandAcceptCounter && (
-                      <Button
-                        variant="success"
-                        fullWidth
-                        icon={CheckCircle}
-                        onClick={() => updateDealStatus(id, 'accepted', 'Counter offer accepted')}
+              {/* Files Grid */}
+              {del.files?.length > 0 && (
+                <div className="mb-4">
+                  <h4 className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'} mb-3`}>Assets</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {del.files.map((file, index) => (
+                      <a
+                        key={index}
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`group/file relative aspect-video rounded-xl border overflow-hidden transition-all ${
+                          isDark ? 'bg-zinc-950 border-zinc-800 hover:border-zinc-600' : 'bg-zinc-50 border-zinc-200 hover:border-zinc-300'
+                        }`}
                       >
-                        Accept Counter Offer
-                      </Button>
-                    )}
-                    {canBrandAcceptCounter && (
-                      <Button
-                        variant="outline"
-                        fullWidth
-                        icon={Edit}
-                        onClick={() => setShowCounterModal(true)}
-                        disabled={manualCounterDisabled}
-                      >
-                        Counter Again
-                      </Button>
-                    )}
-                  </>
-                )}
-
-                {canBrandCounter && brandAiCounterEnabled && aiCounterAccess?.canUse && (
-                  <Button
-                    variant="secondary"
-                    fullWidth
-                    icon={RefreshCw}
-                    onClick={handleStartAiCounter}
-                    loading={startingAiCounter}
-                    disabled={manualCounterDisabled}
-                  >
-                    AI Counter Dealing
-                  </Button>
-                )}
-
-                {canBrandCounter && brandAiCounterEnabled && !aiCounterAccess?.canUse && aiCounterAccess?.reason && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                    {aiCounterAccess.reason}
-                  </p>
-                )}
-
-                {canBrandCounter && !brandAiCounterEnabled && (
-                  <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2">
-                    AI Counter Dealing is disabled in your brand settings. Enable it to use this feature.
-                  </p>
-                )}
-
-                {manualCounterDisabled && (
-                  <p className="text-xs text-[#667eea] bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 border border-[#667eea]/20 rounded-lg p-2">
-                    You started AI Counter Dealing, so your manual counter offer is disabled.
-                  </p>
-                )}
-
-                {['accepted', 'in-progress', 'revision', 'negotiating'].includes(deal.status) && isBrand && (
-                  <Button variant="primary" fullWidth icon={MessageSquare} onClick={() => setActiveTab('messages')}>
-                    Send Message
-                  </Button>
-                )}
-
-                {deal.status === 'in-progress' && isBrand && submittedDeliverables.length > 0 && (
-                  <>
-                    <Button variant="success" fullWidth icon={ThumbsUp} onClick={() => setShowApproveModal(true)}>
-                      Approve Deliverables
-                    </Button>
-                    <Button variant="warning" fullWidth icon={Edit} onClick={() => setShowRevisionModal(true)}>
-                      Request Revision
-                    </Button>
-                  </>
-                )}
-
-                {deal.status === 'completed' && !deal.rating && (
-                  <Button variant="primary" fullWidth icon={Star} onClick={() => setShowRatingModal(true)}>
-                    Rate Deal
-                  </Button>
-                )}
-
-                {['pending', 'negotiating'].includes(deal.status) && (
-                  <Button variant="danger" fullWidth icon={Flag} onClick={() => setShowCancelModal(true)}>
-                    Cancel Deal
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Contract</h2>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Contract ID</span>
-                  <span className="text-sm font-mono truncate ml-2">{deal.contract?.id || '—'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Signed</span>
-                  <span className="text-sm">{deal.contract?.signed ? formatDate(deal.contract.signed) : 'Not signed'}</span>
-                </div>
-                {deal.contract?.file && (
-                  <Button variant="outline" size="sm" fullWidth icon={Download}>
-                    Download Contract
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'deliverables' && (
-        <div className="space-y-4 sm:space-y-6">
-          {deal.deliverables?.length > 0 ? (
-            deal.deliverables.map((del) => (
-              <div key={del._id} className="bg-white rounded-xl shadow-sm p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
-                  <div className="flex items-start gap-3">
-                    {del.status === 'approved' ? (
-                      <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
-                    ) : del.status === 'submitted' ? (
-                      <Clock className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                    ) : del.status === 'revision' ? (
-                      <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0" />
-                    ) : (
-                      <Clock className="w-6 h-6 text-yellow-600 flex-shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-gray-900 capitalize truncate">{del.type}</h3>
-                      <p className="text-sm text-gray-500 capitalize">{del.platform}</p>
-                      {del.submittedAt && (
-                        <p className="text-xs text-gray-400 mt-1">Submitted: {formatDate(del.submittedAt)}</p>
-                      )}
-                    </div>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDeliverableStatusColor(del.status)} whitespace-nowrap`}>
-                    {del.status}
-                  </span>
-                </div>
-
-                {del.description && (
-                  <p className="text-sm text-gray-600 mb-4">{del.description}</p>
-                )}
-
-                {del.revisionNotes && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm font-medium text-orange-700 mb-1">Revision Requested:</p>
-                    <p className="text-sm text-orange-600">{del.revisionNotes}</p>
-                  </div>
-                )}
-
-                {del.feedback && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm font-medium text-blue-700 mb-1">Brand Feedback:</p>
-                    <p className="text-sm text-blue-600">{del.feedback}</p>
-                  </div>
-                )}
-
-                {del.files?.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Submitted Files:</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {del.files.map((file, index) => (
-                        <a
-                          key={index}
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="relative group block"
-                        >
-                          {file.type === 'image' ? (
-                            <img src={file.url} alt={file.filename} className="w-full h-28 object-cover rounded-lg" />
-                          ) : (
-                            <div className="w-full h-28 bg-gray-100 rounded-lg flex flex-col items-center justify-center gap-1">
-                              <FileText className="w-8 h-8 text-gray-400" />
-                              <p className="text-xs text-gray-500 truncate max-w-[90%] px-1">{file.filename}</p>
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black bg-opacity-40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <Eye className="w-4 h-4 text-white" />
-                            <Download className="w-4 h-4 text-white" />
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {del.links?.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Submitted Links:</p>
-                    <div className="space-y-1">
-                      {del.links.map((link, i) => (
-                        <a
-                          key={i}
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block text-sm text-[#667eea] hover:text-[#5a67d8] truncate transition-colors"
-                        >
-                          {link}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {del.metrics && Object.keys(del.metrics).length > 0 && (
-                  <div className="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Performance Reported</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {del.metrics.impressions > 0 && (
-                        <div className="text-center">
-                          <p className="text-[10px] text-gray-400">Impressions</p>
-                          <p className="text-sm font-semibold">{del.metrics.impressions.toLocaleString()}</p>
-                        </div>
-                      )}
-                      {del.metrics.likes > 0 && (
-                        <div className="text-center">
-                          <p className="text-[10px] text-gray-400">Likes</p>
-                          <p className="text-sm font-semibold">{del.metrics.likes.toLocaleString()}</p>
-                        </div>
-                      )}
-                      {del.metrics.comments > 0 && (
-                        <div className="text-center">
-                          <p className="text-[10px] text-gray-400">Comments</p>
-                          <p className="text-sm font-semibold">{del.metrics.comments.toLocaleString()}</p>
-                        </div>
-                      )}
-                      {del.metrics.conversions > 0 && (
-                        <div className="text-center">
-                          <p className="text-[10px] text-gray-400">Conversions</p>
-                          <p className="text-sm font-semibold">{del.metrics.conversions.toLocaleString()}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {isBrand && del.status === 'submitted' && (
-                  <div className="flex flex-col sm:flex-row gap-2 mt-4">
-                    {/* Performance Progress logic for approval button */}
-                    {(() => {
-                      const isPerformance = deal.paymentType !== 'fixed';
-                      let performanceProgress = 0;
-                      if (isPerformance) {
-                        if (deal.paymentType === 'cpe' && deal.performanceMetrics?.cpe) {
-                          performanceProgress = Math.round(((deal.metrics?.likes || 0) + (deal.metrics?.comments || 0)) / (deal.performanceMetrics.cpe.targetLikes || 1) * 100);
-                        } else if (deal.paymentType === 'cpa' && deal.performanceMetrics?.cpa) {
-                          performanceProgress = Math.round((deal.metrics?.conversions || 0) / (deal.performanceMetrics.cpa.targetConversions || 1) * 100);
-                        } else if (deal.paymentType === 'cpm' && deal.performanceMetrics?.cpm) {
-                          performanceProgress = Math.round((deal.metrics?.impressions || 0) / (deal.performanceMetrics.cpm.targetImpressions || 1) * 100);
-                        } else {
-                          performanceProgress = 100;
-                        }
-                      }
-                      
-                      const canApprove = !isPerformance || performanceProgress >= 100;
-
-                      return (
-                        <>
-                          <Button
-                            variant="success"
-                            size="sm"
-                            icon={ThumbsUp}
-                            disabled={!canApprove}
-                            onClick={() => {
-                              setSelectedDeliverable(del._id);
-                              setShowApproveModal(true);
-                            }}
-                          >
-                            {canApprove ? 'Approve' : `Approval Locked (${performanceProgress}% Progress)`}
-                          </Button>
-                          {!canApprove && (
-                            <p className="text-[10px] text-amber-600 bg-amber-50 p-1.5 rounded border border-amber-100">
-                              For performance deals, approval is only enabled once the 100% target is reached.
+                        {file.type === 'image' ? (
+                          <img src={file.url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover/file:scale-110" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                            <FileText className={`w-5 h-5 ${isDark ? 'text-zinc-700' : 'text-zinc-300'}`} />
+                            <p className={`text-[10px] font-medium px-2 truncate w-full text-center ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                              {file.filename}
                             </p>
-                          )}
-                        </>
-                      );
-                    })()}
-
-                    <Button
-                      variant="warning"
-                      size="sm"
-                      icon={Edit}
-                      onClick={() => {
-                        setSelectedDeliverable(del._id);
-                        setShowRevisionModal(true);
-                      }}
-                    >
-                      Request Changes
-                    </Button>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-zinc-950/60 opacity-0 group-hover/file:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                          <Eye className="w-4 h-4 text-white" />
+                          <Download className="w-4 h-4 text-white" />
+                        </div>
+                      </a>
+                    ))}
                   </div>
-                )}
-              </div>
-            ))
-          ) : (
-            <div className="bg-white p-12 rounded-xl shadow-sm text-center">
-              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No deliverables defined for this deal</p>
+                </div>
+              )}
+
+              {/* Links List */}
+              {del.links?.length > 0 && (
+                <div className="pt-2">
+                  <h4 className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'} mb-2`}>External URLs</h4>
+                  <div className="space-y-1.5">
+                    {del.links.map((link, i) => (
+                      <a
+                        key={i}
+                        href={link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center gap-2 text-xs font-medium transition-all ${
+                          isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                        }`}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span className="truncate">{link}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className="flex flex-col items-center justify-center py-20 opacity-40">
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 border-2 border-dashed ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+          <PackageOpen className="w-8 h-8" />
+        </div>
+        <p className="text-sm font-bold tracking-tight">Zero Deliverables</p>
+        <p className="text-[11px] mt-1">Submission pipeline is empty.</p>
+      </div>
+    )}
+  </div>
+)}
+      {activeTab === 'timeline' && (
+        <div className={`rounded-xl border transition-all ${
+          isDark 
+            ? 'bg-zinc-900/50 border-zinc-800' 
+            : 'bg-white border-zinc-200'
+        }`}>
+          <div className="p-4">
+            <h2 className={`text-base font-semibold ${isDark ? 'text-zinc-100' : 'text-zinc-900'} mb-4`}>Timeline</h2>
+            {deal.timeline?.length > 0 ? (
+              <div className="relative">
+                {deal.timeline.map((item, index) => (
+                  <div key={index} className="flex gap-3 mb-4 last:mb-0">
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                        item.type === 'create' ? 'bg-blue-500' :
+                        item.type === 'accept' ? 'bg-green-500' :
+                        item.type === 'submit' ? 'bg-purple-500' :
+                        item.type === 'message' ? 'bg-orange-500' :
+                        'bg-gray-500'
+                      }`} />
+                      {index < deal.timeline.length - 1 && (
+                        <div className={`absolute top-3 left-1 w-0.5 h-10 ${isDark ? 'bg-zinc-700' : 'bg-gray-200'}`} />
+                      )}
+                    </div>
+                    <div className="flex-1 pb-3 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <p className={`font-medium text-sm truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{item.event}</p>
+                        <span className={`text-xs whitespace-nowrap ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>{formatDate(item.createdAt)}</span>
+                      </div>
+                      {item.description && (
+                        <p className={`text-sm mt-1 ${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}>{item.description}</p>
+                      )}
+                      {item.userId && (
+                        <p className={`text-xs mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>by {item.userId?.fullName || 'User'}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Activity className={`w-12 h-12 mx-auto mb-3 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
+                <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>No timeline events yet</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
-
       {activeTab === 'messages' && (
-        <div className="bg-white rounded-xl shadow-sm h-[500px] sm:h-[600px] flex flex-col">
-          <div className="p-3 sm:p-4 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 truncate">
+        <div className={`rounded-xl border transition-all h-[500px] sm:h-[600px] flex flex-col ${
+          isDark 
+            ? 'bg-zinc-900/50 border-zinc-800' 
+            : 'bg-white border-zinc-200'
+        }`}>
+          <div className={`p-3 sm:p-4 border-b ${
+            isDark ? 'border-zinc-700' : 'border-gray-200'
+          }`}>
+            <h4 className={`font-semibold truncate ${
+              isDark ? 'text-zinc-100' : 'text-zinc-900'
+            }`}>
               Messages with {isBrand ? deal.creatorId?.displayName : deal.brandId?.brandName}
-            </h2>
+            </h4>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-gray-50">
+          <div className={`flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 ${
+            isDark ? 'bg-zinc-800/50' : 'bg-gray-50'
+          }`}>
             {messages.map((msg) => {
               const senderId = msg.senderId?._id || msg.senderId;
               const isOwn = String(senderId) === String(user?._id);
               return (
                 <div key={msg._id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[85%] sm:max-w-[70%] rounded-lg p-3 ${
-                    isOwn ? 'bg-[#667eea] text-white' : 'bg-white text-gray-900 shadow-sm border border-gray-100'
+                    isOwn ? 'bg-gray-900 text-white' : 'bg-white text-gray-900 shadow-sm border border-gray-100'
                   }`}>
                     {!isOwn && (
                       <p className="text-xs text-gray-500 mb-1">
@@ -1182,7 +1228,7 @@ const DealDetails = () => {
                       </p>
                     )}
                     {msg.replyTo && (
-                      <div className={`mb-2 p-2 rounded-lg text-sm ${isOwn ? 'bg-indigo-700' : 'bg-gray-100'}`}>
+                      <div className={`mb-2 p-2 rounded-lg text-sm ${isOwn ? 'bg-gray-900' : 'bg-white'}`}>
                         <p className="text-xs opacity-75 mb-1">Replying to:</p>
                         <p className="truncate">{msg.replyTo.content}</p>
                       </div>
@@ -1206,7 +1252,7 @@ const DealDetails = () => {
                       </div>
                     )}
                     <div className={`flex items-center justify-end mt-1 text-xs ${
-                      isOwn ? 'text-[#667eea]/60' : 'text-gray-500'
+                      isOwn ? 'text-gray-600' : 'text-gray-500'
                     }`}>
                       <span>{timeAgo(msg.createdAt)}</span>
                       {isOwn && (

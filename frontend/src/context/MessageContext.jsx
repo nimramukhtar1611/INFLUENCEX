@@ -107,6 +107,10 @@ export const MessageProvider = ({ children }) => {
   const fetchConversations = useCallback(async (options = {}) => {
     const { silent = false } = options;
     if (!isMessagingUser) return;
+    
+    // Additional token check to prevent race condition
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
     setLoading(true);
     setError(null);

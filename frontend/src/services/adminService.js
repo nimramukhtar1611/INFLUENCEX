@@ -404,19 +404,8 @@ class AdminService {
   // Get platform settings
   async getSettings() {
     try {
-      return {
-        success: true,
-        settings: {
-          maintenanceMode: false,
-          maintenanceMessage: '',
-          allowRegistration: true,
-          requireEmailVerification: true,
-          maxCampaignBudget: 100000,
-          minCampaignBudget: 100,
-          maxDealDuration: 90,
-          minDealDuration: 1,
-        }
-      };
+      const response = await api.get('/admin/settings');
+      return response.data;
     } catch (error) {
       console.error('Get settings error:', error);
       throw error.response?.data || error.message;
@@ -437,15 +426,8 @@ class AdminService {
   // Get fee structure
   async getFees() {
     try {
-      return {
-        success: true,
-        fees: {
-          commissionRate: 10,
-          creatorPayoutMin: 50,
-          withdrawalFee: 0,
-          totalFees: 0,
-        }
-      };
+      const response = await api.get('/admin/fees');
+      return response.data;
     } catch (error) {
       console.error('Get fees error:', error);
       throw error.response?.data || error.message;
@@ -596,6 +578,198 @@ class AdminService {
     } catch (error) {
       console.error('Disable 2FA error:', error);
       throw error.response?.data || error.message;
+    }
+  }
+
+  // Rotate logs
+  async rotateLogs() {
+    try {
+      const response = await api.post('/admin/system/rotate-logs');
+      return response.data;
+    } catch (error) {
+      console.error('Rotate logs error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // Create backup
+  async createBackup() {
+    try {
+      const response = await api.post('/admin/system/create-backup');
+      return response.data;
+    } catch (error) {
+      console.error('Create backup error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // Maintenance mode
+  async setMaintenanceMode(enabled) {
+    try {
+      const response = await api.post('/admin/system/maintenance-mode', { enabled });
+      return response.data;
+    } catch (error) {
+      console.error('Maintenance mode error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // Upload profile picture
+  async uploadProfilePicture(formData) {
+    try {
+      const response = await api.post('/upload/profile-picture', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Upload profile picture error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // ==================== ADMIN ACCOUNT MANAGEMENT ====================
+
+  // Update admin email
+  async updateAdminEmail(emailData) {
+    try {
+      const response = await api.put('/admin/account/email', emailData);
+      return response.data;
+    } catch (error) {
+      console.error('Update admin email error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // Update admin password
+  async updateAdminPassword(passwordData) {
+    try {
+      const response = await api.put('/admin/account/password', passwordData);
+      return response.data;
+    } catch (error) {
+      console.error('Update admin password error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // ==================== USAGE LIMITS MANAGEMENT ====================
+
+  // Get usage limits settings
+  async getUsageLimits() {
+    try {
+      const response = await api.get('/admin/usage-limits');
+      return response.data;
+    } catch (error) {
+      console.error('Get usage limits error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // Update usage limits settings
+  async updateUsageLimits(limitsData) {
+    try {
+      const response = await api.put('/admin/usage-limits', limitsData);
+      return response.data;
+    } catch (error) {
+      console.error('Update usage limits error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // ==================== FILE UPLOAD SETTINGS MANAGEMENT ====================
+
+  // Get file upload settings
+  async getFileUploadSettings() {
+    try {
+      const response = await api.get('/admin/file-upload-settings');
+      return response.data;
+    } catch (error) {
+      console.error('Get file upload settings error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // Update file upload settings
+  async updateFileUploadSettings(settingsData) {
+    try {
+      const response = await api.put('/admin/file-upload-settings', settingsData);
+      return response.data;
+    } catch (error) {
+      console.error('Update file upload settings error:', error);
+      throw error.response?.data || error.message;
+    }
+  }
+
+  // Add file type to allowed list
+  async addFileType(fileType) {
+    try {
+      const response = await api.post('/admin/file-types', { fileType });
+      return response.data;
+    } catch (error) {
+      console.error('Add file type error:', error);
+      console.error('Error response:', error.response?.data);
+      
+      // Extract error message properly - handle different error formats
+      let errorMessage = 'Failed to add file type';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Handle validation errors (array format)
+        if (Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+          errorMessage = errorData.errors.map(err => err.msg || err.message).join(', ');
+        }
+        // Handle single error message
+        else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+        // Handle message field
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        // Handle array of messages
+        else if (Array.isArray(errorData) && errorData.length > 0) {
+          errorMessage = errorData.map(err => err.msg || err.message || err).join(', ');
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  // Remove file type from allowed list
+  async removeFileType(fileType) {
+    try {
+      const response = await api.delete(`/admin/file-types/${fileType}`);
+      return response.data;
+    } catch (error) {
+      console.error('Remove file type error:', error);
+      console.error('Error response:', error.response?.data);
+      
+      // Extract error message properly - handle different error formats
+      let errorMessage = 'Failed to remove file type';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Handle validation errors (array format)
+        if (Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+          errorMessage = errorData.errors.map(err => err.msg || err.message).join(', ');
+        }
+        // Handle single error message
+        else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+        // Handle message field
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        // Handle array of messages
+        else if (Array.isArray(errorData) && errorData.length > 0) {
+          errorMessage = errorData.map(err => err.msg || err.message || err).join(', ');
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
   }
 }

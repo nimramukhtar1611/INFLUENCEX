@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useEarnings } from '../../hooks/useEarnings';
 import { useAuth } from '../../hooks/useAuth';
+import { useFees } from '../../context/FeeContext';
 import { formatCurrency, formatDate } from '../../utils/helpers';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
@@ -21,6 +22,7 @@ import toast from 'react-hot-toast';
 
 const Withdrawals = () => {
   const { refreshUser } = useAuth();
+  const { validateMinimumAmount, fees } = useFees();
   const {
     loading,
     balance,
@@ -107,10 +109,14 @@ const Withdrawals = () => {
       toast.error('Please enter an amount');
       return;
     }
-    if (amount < 50) {
-      toast.error('Minimum withdrawal is $50');
+    
+    // Use dynamic minimum payout from fee context
+    const minValidation = validateMinimumAmount(amount, 'payout');
+    if (!minValidation.isValid) {
+      toast.error(`Minimum withdrawal is $${minValidation.minimumAmount}`);
       return;
     }
+    
     if (amount > balance) {
       toast.error('Insufficient balance');
       return;
@@ -132,7 +138,7 @@ const Withdrawals = () => {
       case 'processing': return 'bg-blue-100 text-blue-800';
       case 'pending':   return 'bg-yellow-100 text-yellow-800';
       case 'failed':    return 'bg-red-100 text-red-800';
-      default:          return 'bg-gray-100 text-gray-800';
+      default:          return 'bg-white text-gray-800';
     }
   };
 
@@ -149,7 +155,10 @@ const Withdrawals = () => {
   if (loading && withdrawals.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-10 h-10 animate-spin text-indigo-600" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading withdrawals...</p>
+        </div>
       </div>
     );
   }
@@ -180,7 +189,7 @@ const Withdrawals = () => {
     ? 'bg-green-100 text-green-800'
     : payoutAccount.status === 'pending'
       ? 'bg-yellow-100 text-yellow-800'
-      : 'bg-gray-100 text-gray-700';
+      : 'bg-white text-gray-700';
 
   return (
     <div className="space-y-6">
@@ -189,20 +198,7 @@ const Withdrawals = () => {
           <h1 className="text-2xl font-bold text-gray-900">Withdrawals</h1>
           <p className="text-gray-600">Stripe-only payouts with admin approval</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" icon={RefreshCw} onClick={handleRefresh}>
-            Refresh
-          </Button>
-          <Button
-            variant="primary"
-            icon={Wallet}
-            onClick={() => setShowWithdrawModal(true)}
-            disabled={balance < 50}
-          >
-            Request Withdrawal
-          </Button>
-        </div>
-      </div>
+              </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-6 rounded-xl shadow-lg text-white">
@@ -266,7 +262,7 @@ const Withdrawals = () => {
         {withdrawals.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-white">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
@@ -279,7 +275,7 @@ const Withdrawals = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {withdrawals.map((withdrawal) => (
-                  <tr key={withdrawal._id} className="hover:bg-gray-50">
+                  <tr key={withdrawal._id} className="hover:bg-white">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-600">
                       {withdrawal.transactionId || '-'}
                     </td>

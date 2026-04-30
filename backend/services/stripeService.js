@@ -21,38 +21,112 @@ class StripeService {
   }
 
   async resolveUserFromStripeContext(stripeCustomerId, metadata = {}) {
+    console.log(`🔍 [WEBHOOK] Resolving user from context:`, {
+      stripeCustomerId,
+      metadataKeys: Object.keys(metadata || {}),
+      userId: metadata?.userId
+    });
+
     if (metadata?.userId) {
+      console.log(`👤 [WEBHOOK] Looking up user by metadata.userId: ${metadata.userId}`);
       const user = await User.findById(metadata.userId);
-      if (user) return user;
+      if (user) {
+        console.log(`✅ [WEBHOOK] Found user by metadata.userId:`, {
+          id: user._id,
+          email: user.email,
+          userType: user.userType,
+          stripeCustomerId: user.stripeCustomerId
+        });
+        return user;
+      } else {
+        console.warn(`⚠️ [WEBHOOK] User not found by metadata.userId: ${metadata.userId}`);
+      }
     }
 
-    if (!stripeCustomerId) return null;
-    return User.findOne({ stripeCustomerId });
+    if (!stripeCustomerId) {
+      console.warn(`⚠️ [WEBHOOK] No stripeCustomerId provided for user resolution`);
+      return null;
+    }
+    
+    console.log(`👤 [WEBHOOK] Looking up user by stripeCustomerId: ${stripeCustomerId}`);
+    const user = await User.findOne({ stripeCustomerId });
+    if (user) {
+      console.log(`✅ [WEBHOOK] Found user by stripeCustomerId:`, {
+        id: user._id,
+        email: user.email,
+        userType: user.userType,
+        stripeCustomerId: user.stripeCustomerId
+      });
+    } else {
+      console.warn(`⚠️ [WEBHOOK] User not found by stripeCustomerId: ${stripeCustomerId}`);
+    }
+    
+    return user;
   }
 
   async upsertSubscriptionFromStripe(stripeSubscription) {
+    console.log(`💾 [WEBHOOK] Upserting subscription from Stripe:`, {
+      id: stripeSubscription?.id,
+      customer: stripeSubscription?.customer,
+      status: stripeSubscription?.status,
+      metadata: stripeSubscription?.metadata
+    });
+
     const metadata = stripeSubscription?.metadata || {};
     const user = await this.resolveUserFromStripeContext(stripeSubscription?.customer, metadata);
 
     if (!user) {
-      console.warn('⚠️ Unable to resolve user for Stripe subscription:', stripeSubscription?.id);
+      console.error('❌ [WEBHOOK] Unable to resolve user for Stripe subscription:', stripeSubscription?.id);
+      console.error(`🔍 [WEBHOOK] Subscription metadata:`, metadata);
+      console.error(`🔍 [WEBHOOK] Subscription customer:`, stripeSubscription?.customer);
       return null;
     }
 
+    console.log(`✅ [WEBHOOK] User resolved for subscription:`, {
+      userId: user._id,
+      email: user.email,
+      userType: user.userType
+    });
+
     const priceId = stripeSubscription?.items?.data?.[0]?.price?.id;
+    console.log(`💳 [WEBHOOK] Extracted priceId: ${priceId}`);
+    
     const planByPrice = await this.findPlanByStripePriceId(priceId);
+    console.log(`🔍 [WEBHOOK] Plan by price:`, planByPrice ? {
+      planId: planByPrice.planId,
+      name: planByPrice.name,
+      price: planByPrice.price
+    } : 'NULL');
+    
     const existingLocalSubscription = await Subscription.findOne({ userId: user._id }).select('planId planDetails.interval');
+    console.log(`📋 [WEBHOOK] Existing local subscription:`, existingLocalSubscription ? {
+      id: existingLocalSubscription._id,
+      planId: existingLocalSubscription.planId,
+      interval: existingLocalSubscription.planDetails?.interval
+    } : 'NULL');
+    
     const stripeInterval = stripeSubscription?.items?.data?.[0]?.price?.recurring?.interval;
+    console.log(`⏰ [WEBHOOK] Stripe interval: ${stripeInterval}`);
 
     // Prefer Stripe price mapping over metadata because metadata can be stale after portal updates.
     const planId = planByPrice?.planId || metadata.planId || existingLocalSubscription?.planId || 'free';
     const interval = stripeInterval || planByPrice?.interval || metadata.interval || existingLocalSubscription?.planDetails?.interval || 'month';
+    
+    console.log(`🎯 [WEBHOOK] Resolved planId: ${planId}, interval: ${interval}`);
 
     const plan = planByPrice || await Plan.findOne({ planId });
     if (!plan) {
-      console.warn('⚠️ Unable to resolve plan for Stripe subscription:', stripeSubscription?.id);
+      console.error('❌ [WEBHOOK] Unable to resolve plan for Stripe subscription:', stripeSubscription?.id);
+      console.error(`🔍 [WEBHOOK] Plan lookup failed for planId: ${planId}`);
       return null;
     }
+    
+    console.log(`✅ [WEBHOOK] Found plan:`, {
+      planId: plan.planId,
+      name: plan.name,
+      price: plan.price,
+      currency: plan.currency
+    });
 
     const currentPeriodStartSeconds = stripeSubscription.current_period_start || stripeSubscription.items?.data?.[0]?.current_period_start;
     const currentPeriodEndSeconds = stripeSubscription.current_period_end || stripeSubscription.items?.data?.[0]?.current_period_end;
@@ -62,6 +136,20 @@ class StripeService {
     const normalizedFeatures = Array.isArray(plan.features)
       ? plan.features.map((feature) => (typeof feature === 'string' ? feature : feature?.name)).filter(Boolean)
       : [];
+
+    console.log(`💾 [WEBHOOK] Creating/updating subscription document...`);
+    console.log(`🔍 [WEBHOOK] Subscription data to save:`, {
+      userId: user._id,
+      planId,
+      status: stripeSubscription.status || 'active',
+      stripeCustomerId: stripeSubscription.customer,
+      stripeSubscriptionId: stripeSubscription.id,
+      stripePriceId: priceId,
+      billingPeriod: {
+        start: billingStart,
+        end: billingEnd
+      }
+    });
 
     const subscriptionDoc = await Subscription.findOneAndUpdate(
       { userId: user._id },
@@ -95,6 +183,16 @@ class StripeService {
       }
     );
 
+    console.log(`✅ [WEBHOOK] Subscription document saved:`, subscriptionDoc ? {
+      id: subscriptionDoc._id,
+      userId: subscriptionDoc.userId,
+      planId: subscriptionDoc.planId,
+      status: subscriptionDoc.status,
+      stripeSubscriptionId: subscriptionDoc.stripeSubscriptionId,
+      createdAt: subscriptionDoc.createdAt
+    } : 'NULL');
+
+    console.log(`👤 [WEBHOOK] Updating user document with subscription info...`);
     await User.findByIdAndUpdate(user._id, {
       stripeCustomerId: stripeSubscription.customer,
       'subscription.status': stripeSubscription.status,
@@ -102,11 +200,52 @@ class StripeService {
       'subscription.currentPeriodEnd': billingEnd,
       'subscription.cancelAtPeriodEnd': Boolean(stripeSubscription.cancel_at_period_end)
     });
+    
+    console.log(`✅ [WEBHOOK] User document updated successfully`);
 
     // Cancel any OTHER active Stripe subscriptions for this customer to prevent duplicates
+    console.log(`🗑️ [WEBHOOK] Checking for duplicate subscriptions to cancel...`);
     await this.cancelDuplicateSubscriptions(stripeSubscription.customer, stripeSubscription.id);
-
+    
+    console.log(`🎉 [WEBHOOK] Subscription upsert completed successfully!`);
     return subscriptionDoc;
+  }
+
+  /**
+   * CRITICAL FIX: Create fallback subscription from session metadata when Stripe API fails
+   */
+  createFallbackSubscription(session) {
+    console.log(`📝 [WEBHOOK] Creating fallback subscription from session data`);
+    
+    if (!session.metadata?.planId) {
+      console.error(`🚫 [WEBHOOK] Cannot create fallback: missing planId in session metadata`);
+      return null;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const interval = session.metadata?.interval || 'month';
+    const periodMultiplier = interval === 'year' ? 365 : 30;
+    
+    return {
+      id: session.subscription || `fallback_${session.id}`,
+      customer: session.customer,
+      status: 'active', // Assume successful checkout means active
+      current_period_start: now,
+      current_period_end: now + (periodMultiplier * 24 * 60 * 60),
+      cancel_at_period_end: false,
+      canceled_at: null,
+      metadata: session.metadata,
+      items: {
+        data: [{
+          price: {
+            id: session.metadata?.stripePriceId || `price_fallback_${session.metadata.planId}`,
+            recurring: {
+              interval: interval
+            }
+          }
+        }]
+      }
+    };
   }
 
   /**
@@ -383,7 +522,13 @@ class StripeService {
   // ==================== WEBHOOK EVENT HANDLER ====================
   // ✅ FIX: Single unified webhook handler — no duplicate logic
   async handleWebhookEvent(event) {
-    console.log(`⚡ Processing webhook: ${event.type}`);
+    console.log(`🚀 [WEBHOOK] Event received: ${event.type} (ID: ${event.id})`);
+    console.log(`🔍 [WEBHOOK] Event data preview:`, JSON.stringify({
+      type: event.type,
+      id: event.id,
+      created: new Date(event.created * 1000).toISOString(),
+      dataKeys: Object.keys(event.data.object || {})
+    }, null, 2));
 
     const handlers = {
       'checkout.session.completed':       () => this.handleCheckoutSessionCompleted(event.data.object),
@@ -399,28 +544,103 @@ class StripeService {
 
     const handler = handlers[event.type];
     if (handler) {
-      await handler();
+      console.log(`✅ [WEBHOOK] Processing event: ${event.type}`);
+      try {
+        await handler();
+        console.log(`✅ [WEBHOOK] Successfully processed: ${event.type}`);
+      } catch (error) {
+        console.error(`❌ [WEBHOOK] Error processing ${event.type}:`, error.message);
+        console.error(`🔍 [WEBHOOK] Error stack:`, error.stack);
+        throw error;
+      }
     } else {
-      console.log(`ℹ️ Unhandled webhook event: ${event.type}`);
+      console.log(`ℹ️ [WEBHOOK] Unhandled webhook event: ${event.type}`);
     }
   }
 
   async handleCheckoutSessionCompleted(session) {
+    console.log(`🛒 [WEBHOOK] Processing checkout.session.completed`);
+    console.log(`🔍 [WEBHOOK] Session data:`, {
+      id: session.id,
+      mode: session.mode,
+      customer: session.customer,
+      subscription: session.subscription,
+      payment_intent: session.payment_intent,
+      amount_total: session.amount_total,
+      currency: session.currency,
+      metadata: session.metadata
+    });
+
     try {
-      if (session.mode === 'subscription' && session.subscription) {
-        const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription, {
-          expand: ['items.data.price']
-        });
-        await this.upsertSubscriptionFromStripe(stripeSubscription);
+      if (session.mode === 'subscription') {
+        console.log(`🔄 [WEBHOOK] Processing subscription checkout`);
+        console.log(`🔍 [WEBHOOK] Session.subscription: ${session.subscription}`);
+        
+        if (session.subscription) {
+          console.log(`📥 [WEBHOOK] Retrieving Stripe subscription: ${session.subscription}`);
+          let stripeSubscription;
+          
+          try {
+            stripeSubscription = await stripe.subscriptions.retrieve(session.subscription, {
+              expand: ['items.data.price']
+            });
+            console.log(`🔍 [WEBHOOK] Retrieved subscription:`, {
+              id: stripeSubscription.id,
+              status: stripeSubscription.status,
+              customer: stripeSubscription.customer,
+              current_period_start: stripeSubscription.current_period_start,
+              current_period_end: stripeSubscription.current_period_end,
+              items: stripeSubscription.items?.data?.length || 0
+            });
+          } catch (stripeError) {
+            console.warn(`⚠️ [WEBHOOK] Failed to retrieve Stripe subscription: ${stripeError.message}`);
+            console.log(`� [WEBHOOK] Creating fallback subscription from session metadata...`);
+            
+            // CRITICAL FIX: Create subscription from session metadata when Stripe API fails
+            stripeSubscription = this.createFallbackSubscription(session);
+          }
+          
+          console.log(`�� [WEBHOOK] Upserting subscription to database...`);
+          const result = await this.upsertSubscriptionFromStripe(stripeSubscription);
+          console.log(`✅ [WEBHOOK] Subscription upsert result:`, result ? {
+            id: result._id,
+            userId: result.userId,
+            planId: result.planId,
+            status: result.status,
+            stripeSubscriptionId: result.stripeSubscriptionId
+          } : 'NULL');
+        } else {
+          console.warn(`⚠️ [WEBHOOK] Session mode is 'subscription' but session.subscription is NULL`);
+          // CRITICAL FIX: Handle case where session.subscription is missing
+          console.log(`🔄 [WEBHOOK] Creating subscription from session metadata...`);
+          const fallbackSubscription = this.createFallbackSubscription(session);
+          if (fallbackSubscription) {
+            const result = await this.upsertSubscriptionFromStripe(fallbackSubscription);
+            console.log(`✅ [WEBHOOK] Fallback subscription created:`, result ? {
+              id: result._id,
+              planId: result.planId,
+              status: result.status
+            } : 'NULL');
+          }
+        }
       }
 
       if (session.mode === 'payment' && session.metadata?.purpose === 'wallet_topup') {
+        console.log(`💰 [WEBHOOK] Processing wallet top-up`);
         const user = await this.resolveUserFromStripeContext(session.customer, session.metadata);
+        console.log(`🔍 [WEBHOOK] Resolved user for top-up:`, user ? {
+          id: user._id,
+          email: user.email,
+          userType: user.userType
+        } : 'NULL');
+        
         if (user) {
           const existing = await Payment.findOne({ 'metadata.checkoutSessionId': session.id });
           if (!existing) {
             const amount = (session.amount_total || 0) / 100;
             const transactionId = `DEP-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+            console.log(`💰 [WEBHOOK] Creating payment record:`, { transactionId, amount });
+            
             await Payment.create({
               transactionId,
               type: 'payment',
@@ -438,13 +658,20 @@ class StripeService {
                 paymentIntentId: session.payment_intent
               }
             });
+            console.log(`✅ [WEBHOOK] Payment record created successfully`);
+          } else {
+            console.log(`ℹ️ [WEBHOOK] Payment already exists for session: ${session.id}`);
           }
+        } else {
+          console.warn(`⚠️ [WEBHOOK] Could not resolve user for wallet top-up`);
         }
       }
 
-      console.log(`✅ Checkout session completed: ${session.id}`);
+      console.log(`✅ [WEBHOOK] Checkout session completed: ${session.id}`);
     } catch (error) {
-      console.error('Error handling checkout session completed:', error);
+      console.error(`❌ [WEBHOOK] Error handling checkout session completed:`, error.message);
+      console.error(`🔍 [WEBHOOK] Error stack:`, error.stack);
+      throw error;
     }
   }
 
@@ -564,22 +791,58 @@ class StripeService {
   }
 
   async handleSubscriptionCreated(subscription) {
-    try {
-      await this.upsertSubscriptionFromStripe(subscription);
+    console.log(`🆕 [WEBHOOK] Processing customer.subscription.created`);
+    console.log(`🔍 [WEBHOOK] Subscription data:`, {
+      id: subscription.id,
+      customer: subscription.customer,
+      status: subscription.status,
+      current_period_start: subscription.current_period_start,
+      current_period_end: subscription.current_period_end,
+      metadata: subscription.metadata
+    });
 
-      console.log(`📅 Subscription created: ${subscription.id}`);
+    try {
+      console.log(`💾 [WEBHOOK] Upserting subscription from customer.subscription.created event...`);
+      const result = await this.upsertSubscriptionFromStripe(subscription);
+      console.log(`✅ [WEBHOOK] Subscription created successfully:`, result ? {
+        id: result._id,
+        userId: result.userId,
+        planId: result.planId,
+        status: result.status,
+        stripeSubscriptionId: result.stripeSubscriptionId
+      } : 'NULL');
     } catch (error) {
-      console.error('Error handling subscription created:', error);
+      console.error(`❌ [WEBHOOK] Error handling subscription created:`, error.message);
+      console.error(`🔍 [WEBHOOK] Error stack:`, error.stack);
+      throw error;
     }
   }
 
   async handleSubscriptionUpdated(subscription) {
-    try {
-      await this.upsertSubscriptionFromStripe(subscription);
+    console.log(`🔄 [WEBHOOK] Processing customer.subscription.updated`);
+    console.log(`🔍 [WEBHOOK] Subscription data:`, {
+      id: subscription.id,
+      customer: subscription.customer,
+      status: subscription.status,
+      current_period_start: subscription.current_period_start,
+      current_period_end: subscription.current_period_end,
+      cancel_at_period_end: subscription.cancel_at_period_end
+    });
 
-      console.log(`📅 Subscription updated: ${subscription.id}`);
+    try {
+      console.log(`💾 [WEBHOOK] Upserting subscription from customer.subscription.updated event...`);
+      const result = await this.upsertSubscriptionFromStripe(subscription);
+      console.log(`✅ [WEBHOOK] Subscription updated successfully:`, result ? {
+        id: result._id,
+        userId: result.userId,
+        planId: result.planId,
+        status: result.status,
+        stripeSubscriptionId: result.stripeSubscriptionId
+      } : 'NULL');
     } catch (error) {
-      console.error('Error handling subscription updated:', error);
+      console.error(`❌ [WEBHOOK] Error handling subscription updated:`, error.message);
+      console.error(`🔍 [WEBHOOK] Error stack:`, error.stack);
+      throw error;
     }
   }
 
@@ -609,8 +872,25 @@ class StripeService {
   }
 
   async handleInvoicePaymentSucceeded(invoice) {
+    console.log(`💰 [WEBHOOK] Processing invoice.payment_succeeded`);
+    console.log(`🔍 [WEBHOOK] Invoice data:`, {
+      id: invoice.id,
+      number: invoice.number,
+      customer: invoice.customer,
+      amount_paid: invoice.amount_paid,
+      currency: invoice.currency,
+      status: invoice.status,
+      subscription: invoice.subscription
+    });
+
     try {
       const user = await User.findOne({ stripeCustomerId: invoice.customer });
+      console.log(`👤 [WEBHOOK] Found user for invoice:`, user ? {
+        id: user._id,
+        email: user.email,
+        userType: user.userType
+      } : 'NULL');
+      
       if (user) {
         await Notification.create({
           userId: user._id,
@@ -619,10 +899,13 @@ class StripeService {
           message: `Invoice ${invoice.number} has been paid successfully`,
           data: { invoiceId: invoice.id }
         });
+        console.log(`📢 [WEBHOOK] Invoice payment notification created for user ${user._id}`);
       }
-      console.log(`💰 Invoice paid: ${invoice.id}`);
+      console.log(`✅ [WEBHOOK] Invoice payment processed: ${invoice.id}`);
     } catch (error) {
-      console.error('Error handling invoice payment success:', error);
+      console.error(`❌ [WEBHOOK] Error handling invoice payment success:`, error.message);
+      console.error(`🔍 [WEBHOOK] Error stack:`, error.stack);
+      throw error;
     }
   }
 

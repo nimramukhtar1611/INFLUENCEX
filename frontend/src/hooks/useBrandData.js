@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import brandService from '../services/brandService';
 import campaignService from '../services/campaignService';
 import dealService from '../services/dealService';
@@ -31,6 +31,9 @@ export const useBrandData = () => {
     avgROI: 0
   });
 
+  // Use useRef to prevent infinite loop
+  const fetchAllDataRef = useRef(null);
+  
   const fetchAllData = useCallback(async (showToast = false) => {
     if (!user) return;
 
@@ -131,15 +134,22 @@ export const useBrandData = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, []); // Remove user dependency to prevent infinite loop
+
+  // Store the latest function in ref
+  fetchAllDataRef.current = fetchAllData;
 
   useEffect(() => {
-    if (user) {
-      fetchAllData();
+    if (user && fetchAllDataRef.current) {
+      fetchAllDataRef.current();
     }
-  }, [user, fetchAllData]);
+  }, [user]); // Only depend on user, not fetchAllData
 
-  const refreshData = useCallback(() => fetchAllData(true), [fetchAllData]);
+  const refreshData = useCallback(() => {
+    if (fetchAllDataRef.current) {
+      fetchAllDataRef.current(true);
+    }
+  }, []);
 
   return {
     loading,

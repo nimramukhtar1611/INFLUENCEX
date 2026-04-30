@@ -14,7 +14,6 @@ import {
   Camera,
   Instagram,
   Youtube,
-  Twitter,
   MapPin,
   Link2,
   Phone,
@@ -78,9 +77,7 @@ const Settings = ({ userType = 'user' }) => {
     instagram: '@sarahstyle',
     youtube: '@sarahstyle',
     tiktok: '@sarahstyle',
-    twitter: '@sarahstyle',
     facebook: 'sarah.style',
-    linkedin: 'sarahjohnson',
     
     // Notifications
     emailNotifications: {

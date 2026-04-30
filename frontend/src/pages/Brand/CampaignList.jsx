@@ -1,50 +1,27 @@
-// pages/Brand/CampaignList.jsx
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
-  Plus,
-  Search,
-  Play,
-  Eye,
-  Edit,
-  Copy,
-  Archive,
-  TrendingUp,
-  Users,
-  DollarSign,
-  Calendar,
-  Loader,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  X,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  MoreVertical,
-  RefreshCw,
-  Save, // for Draft button
-  File, // alternative if needed
+  Plus, Search, TrendingUp, Loader, ChevronLeft, ChevronRight,
+  RefreshCw, Archive, CheckCircle, Edit, AlertCircle, ArrowUpRight, Calendar, Activity
 } from 'lucide-react';
 import campaignService from '../../services/campaignService';
 import { formatCurrency, formatDate } from '../../utils/helpers';
 import Button from '../../components/UI/Button';
 import { useCampaign } from '../../hooks/useCampaign';
-import StatsCard from '../../components/Common/StatsCard';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
+import BrandLayout from '../../components/Brand/BrandLayout';
 
 const CampaignList = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
   const [counts, setCounts] = useState({});
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const { publishCampaign } = useCampaign();
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -52,22 +29,16 @@ const CampaignList = () => {
     pages: 1
   });
 
-  // ==================== FETCH CAMPAIGNS ====================
+  const statusConfig = {
+active: { label: 'Active', bg: 'bg-emerald-500/10', text: 'text-emerald-500' },    draft: { label: 'Draft', bg: isDark ? 'bg-zinc-800' : 'bg-zinc-100', text: isDark ? 'text-zinc-400' : 'text-zinc-600' },
+    pending: { label: 'Pending', bg: 'bg-amber-500/10', text: 'text-amber-500' },
+    completed: { label: 'Completed', bg: 'bg-slate-100', text: 'text-slate-600' },
+    paused: { label: 'Paused', bg: 'bg-orange-500/10', text: 'text-orange-500' },
+  };
+
   const fetchCampaigns = async (showToast = false) => {
     try {
-      if (showToast) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const params = {
-        status: filter === 'all' ? '' : filter,
-        page: pagination.page,
-        limit: pagination.limit,
-        search: searchQuery,
-      };
-
+      showToast ? setRefreshing(true) : setLoading(true);
       const response = await campaignService.getBrandCampaigns(
         filter === 'all' ? '' : filter,
         pagination.page,
@@ -77,21 +48,10 @@ const CampaignList = () => {
       if (response?.success) {
         setCampaigns(response.campaigns || []);
         setCounts(response.counts || {});
-        setPagination(response.pagination || {
-          page: 1,
-          limit: 10,
-          total: 0,
-          pages: 1
-        });
-
-        if (showToast) {
-          toast.success('Campaigns refreshed');
-        }
-      } else {
-        toast.error(response?.error || 'Failed to load campaigns');
+        setPagination(response.pagination || { page: 1, limit: 10, total: 0, pages: 1 });
+        if (showToast) toast.success('Campaigns refreshed');
       }
     } catch (error) {
-      console.error('Error fetching campaigns:', error);
       toast.error('Failed to load campaigns');
     } finally {
       setLoading(false);
@@ -99,487 +59,209 @@ const CampaignList = () => {
     }
   };
 
-  // ==================== INITIAL LOAD ====================
   useEffect(() => {
     fetchCampaigns();
-  }, [filter, pagination.page, pagination.limit]);
+  }, [filter, pagination.page]);
 
-  // ==================== HANDLE SEARCH ====================
   const handleSearch = (e) => {
     e.preventDefault();
     setPagination(prev => ({ ...prev, page: 1 }));
     fetchCampaigns();
   };
 
-  // ==================== CLEAR SEARCH ====================
-  const clearSearch = () => {
-    setSearchQuery('');
-    setPagination(prev => ({ ...prev, page: 1 }));
-    setTimeout(() => fetchCampaigns(), 100);
-  };
-
-  // ==================== CHANGE PAGE ====================
-  const goToPage = (page) => {
-    setPagination(prev => ({ ...prev, page }));
-  };
-
-  const nextPage = () => {
-    if (pagination.page < pagination.pages) {
-      setPagination(prev => ({ ...prev, page: prev.page + 1 }));
-    }
-  };
-
-  const prevPage = () => {
-    if (pagination.page > 1) {
-      setPagination(prev => ({ ...prev, page: prev.page - 1 }));
-    }
-  };
-
-  // ==================== DUPLICATE CAMPAIGN ====================
-  const handleDuplicate = async (campaignId) => {
-    try {
-      const response = await campaignService.duplicateCampaign(campaignId);
-      if (response?.success) {
-        toast.success('Campaign duplicated');
-        fetchCampaigns();
-      } else {
-        toast.error(response?.error || 'Failed to duplicate campaign');
-      }
-    } catch (error) {
-      toast.error('Failed to duplicate campaign');
-    }
-  };
-
-  // ==================== ARCHIVE CAMPAIGN ====================
-  const handleArchive = async (campaignId) => {
-    if (!window.confirm('Archive this campaign? It will be hidden from active lists.')) {
-      return;
-    }
-
-    try {
-      const response = await campaignService.archiveCampaign(campaignId);
-      if (response?.success) {
-        toast.success('Campaign archived');
-        fetchCampaigns();
-      } else {
-        toast.error(response?.error || 'Failed to archive campaign');
-      }
-    } catch (error) {
-      toast.error('Failed to archive campaign');
-    }
-  };
-
-  // ==================== PUBLISH ============================
-  const handlePublish = async (campaignId) => {
-    try {
-      const result = await publishCampaign(campaignId);
-      if (result) {
-        toast.success('Campaign published successfully');
-        fetchCampaigns();
-      }
-    } catch (error) {
-      toast.error('Failed to publish campaign');
-    }
-  };
-
-  // ==================== MOVE TO DRAFT =====================
-  const handleDraft = async (campaignId) => {
-    try {
-      // Assuming campaignService has an updateCampaign method
-      const response = await campaignService.updateCampaign(campaignId, { status: 'draft' });
-      if (response?.success) {
-        toast.success('Campaign moved to draft');
-        fetchCampaigns();
-      } else {
-        toast.error(response?.error || 'Failed to update campaign');
-      }
-    } catch (error) {
-      toast.error('Failed to update campaign');
-    }
-  };
-
-  // ==================== STATS ====================
-  const stats = [
-    {
-      label: 'Total Campaigns',
-      value: pagination.total,
-      icon: TrendingUp,
-      color: 'bg-blue-500'
-    },
-    {
-      label: 'Active',
-      value: counts.active || 0,
-      icon: CheckCircle,
-      color: 'bg-green-500'
-    },
-    {
-      label: 'Draft',
-      value: counts.draft || 0,
-      icon: Edit,
-      color: 'bg-gray-500'
-    },
-    {
-      label: 'Completed',
-      value: counts.completed || 0,
-      icon: Archive,
-      color: 'bg-purple-500'
-    },
-  ];
-
-  // ==================== STATUS BADGE ====================
-  const getStatusBadge = (status) => {
-    const badges = {
-      active: 'bg-green-100 text-green-800',
-      draft: 'bg-gray-100 text-gray-800',
-      pending: 'bg-yellow-100 text-yellow-800',
-      paused: 'bg-orange-100 text-orange-800',
-      completed: 'bg-blue-100 text-blue-800',
-      archived: 'bg-gray-100 text-gray-800'
-    };
-    return badges[status] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'active': return <CheckCircle className="w-3 h-3" />;
-      case 'draft': return <Edit className="w-3 h-3" />;
-      case 'pending': return <Clock className="w-3 h-3" />;
-      case 'paused': return <Clock className="w-3 h-3" />;
-      case 'completed': return <CheckCircle className="w-3 h-3" />;
-      default: return <AlertCircle className="w-3 h-3" />;
-    }
-  };
-
-  // ==================== LOADING STATE ====================
   if (loading && campaigns.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-12 h-12 animate-spin text-[#667eea]" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading campaigns...</p>
+        </div>
       </div>
     );
   }
 
+  const filters = ['all', 'active', 'draft', 'pending', 'completed'].map((s) => ({
+    id: s,
+    label: s,
+    count: counts[s] || 0
+  }));
+
+  const actionButton = (
+    <Link to="/brand/campaigns/new">
+     <button className="
+  flex items-center gap-2 px-6 py-2.5 
+  bg-gray-700 text-white text-xs font-bold uppercase tracking-widest rounded-full 
+  shadow-lg shadow-gray-500/20
+  
+  /* Animation Classes */
+  transition-all duration-300 ease-in-out
+  hover:bg-gray-800 hover:shadow-xl hover:-translate-y-0.5
+  active:scale-95 active:translate-y-0
+  focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2
+">
+  <Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90" />
+  New Campaign
+</button>
+    </Link>
+  );
+
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
-        <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Campaigns</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Manage all your influencer campaigns</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => fetchCampaigns(true)}
-            loading={refreshing}
-          >
-            Refresh
-          </Button>
-          <Link to="/brand/campaigns/new">
-            <Button variant="primary" icon={Plus}>
-              New Campaign
-            </Button>
-          </Link>
-        </div>
+    <div >
+      <BrandLayout
+        title="Campaigns"
+        subtitle="Monitor and scale your influencer marketing efforts."
+        actionButton={actionButton}
+        filters={filters}
+        activeFilter={filter}
+        onFilterChange={(filterId) => { setFilter(filterId); setPagination(p => ({ ...p, page: 1 })); }}
+        showSearch={true}
+        searchValue={searchQuery}
+        onSearchChange={(e) => setSearchQuery(e.target.value)}
+        onSearchSubmit={handleSearch}
+        searchPlaceholder="Search campaigns..."
+      > 
+      <div className="">
+     
+        {/* Modern List Interface (Row Style) */}
+    <div className="relative overflow-hidden">
+  {campaigns.length > 0 ? (
+    <div className="space-y-4">
+      {/* Table Header - High Tracking Audit Style */}
+      <div className={`hidden md:grid grid-cols-12 px-8 py-3 text-[10px] font-black uppercase tracking-[0.25em] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+        <div className="col-span-4">Campaign Strategy</div>
+        <div className="col-span-2">Allocation</div>
+        <div className="col-span-3 text-center">Status & Velocity</div>
+        <div className="col-span-2">Timeline</div>
+        <div className="col-span-1 text-right">Review</div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <StatsCard key={index} {...stat} />
-        ))}
-      </div>
-
-      {/* Status Quick Filters */}
-      <div className="flex flex-wrap gap-2">
-        {['all', 'active', 'draft', 'pending', 'paused', 'completed'].map((status) => (
-          <button
-            key={status}
-            onClick={() => {
-              setFilter(status);
-              setPagination(prev => ({ ...prev, page: 1 }));
-            }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${
-              filter === status
-                ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {status}
-            {status !== 'all' && counts[status] > 0 && (
-              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                filter === status
-                  ? 'bg-white text-[#667eea]'
-                  : 'bg-gray-200 text-gray-700'
-              }`}>
-                {counts[status]}
+      {/* Campaign Rows */}
+      {campaigns.map((campaign) => (
+        <div 
+          key={campaign._id} 
+          onClick={() => navigate(`/brand/campaigns/${campaign._id}`)}
+          className={`
+            group relative grid grid-cols-1 md:grid-cols-12 items-center px-8 py-6 rounded-[2.5rem] border 
+            transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] cursor-pointer
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]'}
+          `}
+        >
+          {/* Title & Technical ID */}
+          <div className="col-span-4 flex flex-col min-w-0">
+            <span className={`font-bold text-[15px] tracking-tight truncate leading-tight ${isDark ? 'text-zinc-100 group-hover:text-white' : 'text-zinc-900'}`}>
+              {campaign.title}
+            </span>
+            <div className="flex items-center gap-2 mt-1.5">
+               <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded border tracking-tighter font-bold ${isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-500' : 'bg-zinc-50 border-zinc-200 text-zinc-400'}`}>
+                ID: {campaign._id?.slice(-8).toUpperCase()}
               </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Search Bar (Filters removed) */}
-      <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-            <input
-              type="text"
-              placeholder="Search campaigns by name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-              }`}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+            </div>
           </div>
-        </form>
-      </div>
 
-      {/* Campaigns Display */}
-      <div className={`rounded-xl shadow-sm overflow-hidden border ${
-        isDark ? 'bg-gray-900/90 border-gray-700/50' : 'bg-white border-gray-200/50'
-      }`}>
-        {campaigns.length > 0 ? (
-          <>
-            {/* Desktop Table View (hidden on mobile) */}
-            <div className="hidden lg:block overflow-x-auto">
-              <div className="min-w-full inline-block align-middle">
-                <table className="w-full divide-y divide-gray-200">
-                <thead className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[120px]">Campaign</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[70px]">Status</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[70px]">Budget</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[70px]">Spent</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[60px]">Creators</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[80px]">Progress</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap min-w-[100px]">Dates</th>
-                  </tr>
-                </thead>
-                <tbody className={`${isDark ? 'bg-gray-900' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                  {campaigns.map((campaign) => (
-                    <tr 
-                      key={campaign._id} 
-                      className={`${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'} transition-colors duration-200 cursor-pointer`}
-                      onClick={() => window.location.href = `/brand/campaigns/${campaign._id}`}
-                    >
-                      <td className="px-3 py-3">
-                        <div className="text-sm font-medium text-gray-900 truncate max-w-[110px]">{campaign.title}</div>
-                        <div className="text-xs mt-1 text-gray-500">ID: {campaign._id?.slice(-8)}</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusBadge(campaign.status)}`}>
-                          {getStatusIcon(campaign.status)}
-                          {campaign.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-sm font-medium text-gray-900">
-                        {formatCurrency(campaign.budget || 0)}
-                      </td>
-                      <td className="px-3 py-3 text-sm text-gray-900">
-                        {formatCurrency(campaign.spent || 0)}
-                      </td>
-                      <td className="px-3 py-3 text-sm text-gray-900">
-                        {campaign.selectedCreators?.length || 0}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-12 rounded-full h-1.5 bg-gray-200">
-                            <div
-                              className="bg-gradient-to-r from-[#667eea] to-[#764ba2] h-1.5 rounded-full"
-                              style={{ width: `${campaign.progress || 0}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-600">{campaign.progress || 0}%</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="text-xs text-gray-900">
-                          Start: {campaign.startDate ? formatDate(campaign.startDate) : 'N/A'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          End: {campaign.endDate ? formatDate(campaign.endDate) : 'N/A'}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Budget: Financial Ticker Style */}
+          <div className="col-span-2 mt-4 md:mt-0 flex flex-col">
+            <span className={`text-[14px] font-bold tracking-tighter ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+              {formatCurrency(campaign.budget || 0)}
+            </span>
+            <div className="flex items-center gap-1 mt-0.5">
+               <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 opacity-60">Burn:</span>
+               <span className="text-[10px] font-bold text-emerald-500">{formatCurrency(campaign.spent || 0)}</span>
             </div>
-            </div>
+          </div>
 
-            {/* Mobile Card View (visible only on mobile and tablet) */}
-            <div className="lg:hidden divide-y divide-gray-200">
-              {campaigns.map((campaign) => (
+          {/* Status & Progress Bar */}
+          <div className="col-span-3 mt-4 md:mt-0 flex flex-col items-center gap-3 px-4">
+            <span className={`
+              inline-flex items-center px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border
+              ${statusConfig[campaign.status]?.bg} ${statusConfig[campaign.status]?.text}
+            `}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse" />
+              {campaign.status}
+            </span>
+            
+            <div className="w-full flex items-center gap-3">
+              <div className={`flex-1 h-1.5 rounded-full overflow-hidden relative ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
                 <div 
-                  key={campaign._id} 
-                  className="p-3 space-y-2 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => window.location.href = `/brand/campaigns/${campaign._id}`}
-                >
-                  {/* Header with title and status */}
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 mr-3">
-                      <h3 className="font-medium text-gray-900 truncate text-sm">{campaign.title}</h3>
-                      <p className="text-xs text-gray-500">ID: {campaign._id?.slice(-8)}</p>
-                    </div>
-                    <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 flex-shrink-0 ${getStatusBadge(campaign.status)}`}>
-                      {getStatusIcon(campaign.status)}
-                      {campaign.status}
-                    </span>
-                  </div>
-
-                  {/* Budget & Spent */}
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-500">Budget:</span>{' '}
-                      <span className="font-medium text-gray-900">{formatCurrency(campaign.budget || 0)}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Spent:</span>{' '}
-                      <span className="font-medium text-gray-900">{formatCurrency(campaign.spent || 0)}</span>
-                    </div>
-                  </div>
-
-                  {/* Creators & Progress */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm">
-                      <span className="text-gray-500">Creators:</span>{' '}
-                      <span className="font-medium text-gray-900">{campaign.selectedCreators?.length || 0}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-12 rounded-full h-1.5 bg-gray-200">
-                        <div 
-                          className="bg-gradient-to-r from-[#667eea] to-[#764ba2] h-1.5 rounded-full" 
-                          style={{ width: `${campaign.progress || 0}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-600">{campaign.progress || 0}%</span>
-                    </div>
-                  </div>
-
-                  {/* Dates */}
-                  <div className="text-xs text-gray-600">
-                    <div>Start: {campaign.startDate ? formatDate(campaign.startDate) : 'N/A'}</div>
-                    <div>End: {campaign.endDate ? formatDate(campaign.endDate) : 'N/A'}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Pagination */}
-            {pagination.pages > 1 && (
-              <div className={`px-6 py-4 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                isDark ? 'border-gray-700' : 'border-gray-200'
-              }`}>
-                <div className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                  {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                  {pagination.total} results
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => goToPage(1)}
-                    disabled={pagination.page === 1}
-                    className={`p-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isDark 
-                        ? 'border-gray-600 hover:bg-gray-700/50'
-                        : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                    title="First Page"
-                  >
-                    <ChevronsLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={prevPage}
-                    disabled={pagination.page === 1}
-                    className={`p-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isDark 
-                        ? 'border-gray-600 hover:bg-gray-700/50'
-                        : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                    title="Previous Page"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  <span className={`px-4 py-2 text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Page {pagination.page} of {pagination.pages}
-                  </span>
-
-                  <button
-                    onClick={nextPage}
-                    disabled={pagination.page === pagination.pages}
-                    className={`p-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isDark 
-                        ? 'border-gray-600 hover:bg-gray-700/50'
-                        : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                    title="Next Page"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={() => goToPage(pagination.pages)}
-                    disabled={pagination.page === pagination.pages}
-                    className={`p-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isDark 
-                        ? 'border-gray-600 hover:bg-gray-700/50'
-                        : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                    title="Last Page"
-                  >
-                    <ChevronsRight className="w-4 h-4" />
-                  </button>
-                </div>
+                  className="h-full bg-indigo-500 transition-all duration-1000 ease-out relative shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+                  style={{ width: `${campaign.progress || 0}%` }} 
+                />
               </div>
-            )}
-          </>
-        ) : (
-          <div className="text-center py-12">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
-              <TrendingUp className={`w-8 h-8 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+              <span className="font-mono text-[11px] font-bold tracking-tighter w-8">{campaign.progress || 0}%</span>
             </div>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No campaigns found</p>
-            {/* "Create Your First Campaign" button removed as requested */}
           </div>
-        )}
-      </div>
 
-      {/* Quick Tips */}
-      <div className={`p-4 rounded-lg ${isDark ? 'bg-blue-900/30 border border-blue-700/30' : 'bg-blue-50'}`}>
-        <div className="flex items-start gap-3">
-          <div className={`p-1 rounded-full ${isDark ? 'bg-blue-800/50' : 'bg-blue-100'}`}>
-            <TrendingUp className="w-4 h-4 text-blue-600" />
+          {/* Timeline: Calendar Stack */}
+          <div className={`col-span-2 mt-4 md:mt-0 flex flex-col text-[11px] font-bold tracking-tight ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-3 h-3 opacity-40" />
+              <span>{formatDate(campaign.startDate)}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1 opacity-40">
+              <div className="w-3" /> {/* Spacer to align with icon above */}
+              <span>{formatDate(campaign.endDate)}</span>
+            </div>
           </div>
-          <div>
-            <h3 className={`font-medium mb-1 ${isDark ? 'text-blue-300' : 'text-blue-800'}`}>Campaign Tips</h3>
-            <ul className={`text-sm space-y-1 ${isDark ? 'text-blue-200' : 'text-blue-700'}`}>
-              <li>• Active campaigns are visible to creators</li>
-              <li>• You can pause campaigns anytime</li>
-              <li>• Draft campaigns are only visible to you</li>
-              <li>• Completed campaigns are archived automatically</li>
-            </ul>
+
+          {/* Action: The Circle Button */}
+          <div className="col-span-1 hidden md:flex justify-end">
+            <div className={`
+              w-11 h-11 rounded-full flex items-center justify-center transition-all duration-500 border
+              ${isDark 
+                ? 'bg-zinc-800 border-zinc-700 text-zinc-400 group-hover:bg-white group-hover:text-black group-hover:border-white' 
+                : 'bg-zinc-50 border-zinc-100 text-zinc-400 group-hover:bg-black group-hover:text-white group-hover:border-black shadow-sm'}
+              group-hover:rotate-45
+            `}>
+              <ArrowUpRight className="w-5 h-5 transition-transform" />
+            </div>
           </div>
         </div>
+      ))}
+    </div>
+  ) : (
+    /* High-End Empty State */
+    <div className={`
+      flex flex-col items-center justify-center py-32 rounded-[3.5rem] border-2 border-dashed transition-all
+      ${isDark ? 'border-zinc-800 bg-zinc-900/10' : 'border-zinc-100 bg-zinc-50/50'}
+    `}>
+      <div className={`p-8 rounded-[2.5rem] mb-6 shadow-inner ${isDark ? 'bg-zinc-800/50' : 'bg-white'}`}>
+        <Activity className="w-12 h-12 text-zinc-500 opacity-20 stroke-[1.5px]" />
       </div>
+      <h3 className="text-lg font-bold tracking-tight">No Active Campaigns</h3>
+      <p className="text-[12px] text-zinc-500 mt-2 max-w-[260px] text-center leading-relaxed">
+        Initiate a new marketing strategy to begin tracking audience engagement and budget burn.
+      </p>
+    </div>
+  )}
+</div>
+
+      {/* Modern Pagination */}
+      {pagination.pages > 1 && (
+        <div className="flex items-center justify-between pt-8 border-t border-zinc-800/10 dark:border-zinc-200/10">
+          <p className="text-xs font-bold text-zinc-500 uppercase tracking-[0.2em]">
+            Page {pagination.page} <span className="mx-2 opacity-30">/</span> {pagination.pages}
+          </p>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))} 
+              disabled={pagination.page === 1}
+              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-20 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))} 
+              disabled={pagination.page === pagination.pages}
+              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-20 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  </BrandLayout>
     </div>
   );
 };

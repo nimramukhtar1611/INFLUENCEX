@@ -418,7 +418,19 @@ exports.updateProfile = async (req, res) => {
 exports.getDashboard = catchAsync(async (req, res) => {
   const brandId = getBrandContextId(req);
 
-  const [campaigns, deals, payments, recentActivity] = await Promise.all([
+  // 🚀 PERFORMANCE: Run all queries in parallel to prevent N+1 problem
+  const [
+    campaigns,
+    deals, 
+    payments,
+    recentActivity,
+    totalCampaigns,
+    activeCampaigns,
+    totalDeals,
+    pendingDeals,
+    brandData
+  ] = await Promise.all([
+    // Recent data
     Campaign.find({ brandId }).sort('-createdAt').limit(5).select('title status budget spent progress'),
     Deal.find({ brandId })
       .populate('creatorId', 'displayName profilePicture')
@@ -427,15 +439,31 @@ exports.getDashboard = catchAsync(async (req, res) => {
       .limit(5),
     Payment.find({ 'from.userId': brandId }).sort('-createdAt').limit(5),
     getRecentActivity(brandId),
+    
+    // Stats queries
+    Campaign.countDocuments({ brandId }),
+    Campaign.countDocuments({ brandId, status: 'active' }),
+    Deal.countDocuments({ brandId }),
+    Deal.countDocuments({ brandId, status: 'pending' }),
+    Brand.findById(brandId).select('teamMembers')
   ]);
 
+  const activeTeamMembers = brandData?.teamMembers?.filter(m => m.status === 'active').length || 0;
+
   const stats = {
-    totalCampaigns: await Campaign.countDocuments({ brandId }),
-    activeCampaigns: await Campaign.countDocuments({ brandId, status: 'active' }),
-    totalDeals: await Deal.countDocuments({ brandId }),
-    pendingDeals: await Deal.countDocuments({ brandId, status: 'pending' }),
-    activeTeamMembers: (await Brand.findById(brandId).select('teamMembers'))?.teamMembers?.filter(m => m.status === 'active').length || 0,
+    totalCampaigns,
+    activeCampaigns,
+    totalDeals,
+    pendingDeals,
+    activeTeamMembers,
   };
+
+  console.log('✅ Brand dashboard loaded with parallel queries:', {
+    campaigns: campaigns.length,
+    deals: deals.length,
+    payments: payments.length,
+    stats
+  });
 
   res.json({
     success: true,
@@ -502,29 +530,61 @@ exports.getAnalytics = catchAsync(async (req, res) => {
     default: startDate.setDate(startDate.getDate() - 30);
   }
 
-  const [campaignPerformance, platformDistribution, topCreators, summary] = await Promise.all([
+  // Enhanced analytics with proper data aggregation
+  const [campaignPerformance, platformDistribution, topCreators, engagementMetrics, summary] = await Promise.all([
+    // Campaign performance over time
     Campaign.aggregate([
       { $match: { brandId, createdAt: { $gte: startDate } } },
       {
         $group: {
-          _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' } },
+          _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
           campaigns: { $sum: 1 },
-          spent: { $sum: '$spent' },
+          spent: { $sum: '$budget' },
+          avgBudget: { $avg: '$budget' }
         },
       },
-      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
+      { $sort: { '_id.year': 1, '_id.month': 1 } },
+      {
+        $project: {
+          month: {
+            $let: {
+              vars: {
+                months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+              },
+              in: { $arrayElemAt: ['$$months', { $subtract: ['$_id.month', 1] }] }
+            }
+          },
+          year: '$_id.year',
+          spent: 1,
+          campaigns: 1,
+          avgBudget: 1
+        }
+      }
     ]),
+    
+    // Platform distribution from deals
     Deal.aggregate([
-      { $match: { brandId } },
-      { $unwind: '$deliverables' },
+      { $match: { brandId, status: 'completed' } },
+      { $unwind: { path: '$deliverables', preserveNullAndEmptyArrays: true } },
       {
         $group: {
-          _id: '$deliverables.platform',
+          _id: { $ifNull: ['$deliverables.platform', 'other'] },
           count: { $sum: 1 },
-          spend: { $sum: '$deliverables.budget' },
+          spend: { $sum: '$budget' },
         },
       },
+      { $sort: { spend: -1 } },
+      {
+        $project: {
+          _id: 0,
+          platform: '$_id',
+          count: 1,
+          spend: 1
+        }
+      }
     ]),
+    
+    // Top performing creators
     Deal.aggregate([
       { $match: { brandId, status: 'completed' } },
       {
@@ -532,6 +592,7 @@ exports.getAnalytics = catchAsync(async (req, res) => {
           _id: '$creatorId',
           deals: { $sum: 1 },
           totalSpent: { $sum: '$budget' },
+          avgDealValue: { $avg: '$budget' },
         },
       },
       { $sort: { totalSpent: -1 } },
@@ -545,7 +606,39 @@ exports.getAnalytics = catchAsync(async (req, res) => {
         },
       },
       { $unwind: '$creator' },
+      {
+        $project: {
+          _id: 0,
+          creator: {
+            displayName: '$creator.displayName',
+            profilePicture: '$creator.profilePicture',
+            followers: '$creator.followers',
+            niche: '$creator.niche'
+          },
+          deals: 1,
+          totalSpent: 1,
+          avgDealValue: 1
+        }
+      }
     ]),
+    
+    // Engagement metrics
+    Deal.aggregate([
+      { $match: { brandId, status: 'completed' } },
+      { $unwind: { path: '$deliverables', preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: null,
+          totalImpressions: { $sum: '$deliverables.metrics.impressions' },
+          totalLikes: { $sum: '$deliverables.metrics.likes' },
+          totalComments: { $sum: '$deliverables.metrics.comments' },
+          totalShares: { $sum: '$deliverables.metrics.shares' },
+          totalClicks: { $sum: '$deliverables.metrics.clicks' },
+        },
+      },
+    ]),
+    
+    // Summary statistics
     {
       totalCampaigns: await Campaign.countDocuments({ brandId }),
       activeCampaigns: await Campaign.countDocuments({ brandId, status: 'active' }),
@@ -555,17 +648,60 @@ exports.getAnalytics = catchAsync(async (req, res) => {
         { $match: { brandId, status: 'completed' } },
         { $group: { _id: null, total: { $sum: '$budget' } } },
       ]).then(r => r[0]?.total || 0),
-      avgROI: 0, // placeholder; can be calculated from deals with metrics
+      avgROI: await Deal.aggregate([
+        { $match: { brandId, status: 'completed' } },
+        { $unwind: { path: '$deliverables', preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: '$dealId',
+            investment: { $first: '$budget' },
+            returns: { $sum: { $multiply: ['$deliverables.metrics.clicks', 0.5] } } // Assuming $0.50 per click
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            avgROI: { $avg: { $divide: ['$returns', '$investment'] } }
+          }
+        }
+      ]).then(r => r[0]?.avgROI || 0),
     },
   ]);
+
+  // Process engagement metrics
+  const engagement = engagementMetrics[0] || {
+    totalImpressions: 0,
+    totalLikes: 0,
+    totalComments: 0,
+    totalShares: 0,
+    totalClicks: 0
+  };
 
   res.json({
     success: true,
     analytics: {
-      campaignPerformance,
-      platformDistribution,
-      topCreators,
-      summary,
+      campaignPerformance: campaignPerformance.map(item => ({
+        month: `${item.month} ${item.year}`,
+        spent: item.spent || 0,
+        campaigns: item.campaigns || 0
+      })),
+      platforms: platformDistribution.map(item => ({
+        _id: item.platform,
+        count: item.count || 0,
+        spend: item.spend || 0
+      })),
+      topCreators: topCreators.map(creator => ({
+        ...creator,
+        _id: creator.creator._id
+      })),
+      engagement: {
+        impressions: engagement.totalImpressions || 0,
+        likes: engagement.totalLikes || 0,
+        comments: engagement.totalComments || 0,
+        shares: engagement.totalShares || 0,
+        clicks: engagement.totalClicks || 0
+      },
+      summary
     },
   });
 });

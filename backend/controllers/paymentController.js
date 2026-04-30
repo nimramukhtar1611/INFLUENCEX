@@ -37,35 +37,58 @@ const getStripeConnectStatus = (account) => {
 };
 
 const getBrandFinancials = async (userId) => {
-  const normalizedUserId = userId instanceof mongoose.Types.ObjectId
-    ? userId
-    : (mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : null);
+  console.log(`[BALANCE] Calculating brand financials for user: ${userId}`);
+  const normalizedUserId = new mongoose.Types.ObjectId(userId);
+  const userIdString = userId.toString();
 
-  if (!normalizedUserId) {
-    return {
-      inflows: 0,
-      outflows: 0,
-      reserved: 0,
-      totalCampaignBudgets: 0,
-      remainingCommitment: 0,
-      available: 0
-    };
-  }
-
-  const [completedInflows, completedOutflows, reservedOutflows] = await Promise.all([
+  // For brands: balance = wallet deposits (self-to-self) + refunds - deal payments - withdrawals - reserved
+  const [walletDeposits, refunds, dealPayments, reservedOutflows] = await Promise.all([
+    // Wallet top-ups (brand paying themselves)
     Payment.aggregate([
       {
         $match: {
-          'to.userId': normalizedUserId,
-          status: 'completed'
+          $or: [
+            { 'from.userId': normalizedUserId },
+            { 'from.userId': userIdString }
+          ],
+          $or: [
+            { 'to.userId': normalizedUserId },
+            { 'to.userId': userIdString }
+          ],
+          status: 'completed',
+          type: 'payment',
+          'metadata.kind': 'deposit'
         }
       },
-      { $group: { _id: null, total: { $sum: '$netAmount' } } }
+      { $group: { _id: null, total: { $sum: '$amount' } } }
     ]),
+    // Refunds and other inflows
     Payment.aggregate([
       {
         $match: {
-          'from.userId': normalizedUserId,
+          $or: [
+            { 'to.userId': normalizedUserId },
+            { 'to.userId': userIdString }
+          ],
+          status: 'completed',
+          type: { $in: ['refund', 'payment'] }
+        }
+      },
+      {
+        $match: {
+          $expr: { $ne: ['$from.userId', '$to.userId'] }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]),
+    // Deal payments and other outflows
+    Payment.aggregate([
+      {
+        $match: {
+          $or: [
+            { 'from.userId': normalizedUserId },
+            { 'from.userId': userIdString }
+          ],
           status: 'completed',
           type: { $nin: ['refund'] }
         }
@@ -77,10 +100,14 @@ const getBrandFinancials = async (userId) => {
       },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]),
+    // Reserved funds (escrow, pending withdrawals)
     Payment.aggregate([
       {
         $match: {
-          'from.userId': normalizedUserId,
+          $or: [
+            { 'from.userId': normalizedUserId },
+            { 'from.userId': userIdString }
+          ],
           status: { $in: ['pending', 'processing', 'in-escrow'] },
           type: { $nin: ['refund'] }
         }
@@ -94,26 +121,38 @@ const getBrandFinancials = async (userId) => {
     ])
   ]);
 
-  const inflows = completedInflows[0]?.total || 0;
-  const outflows = completedOutflows[0]?.total || 0;
+  const deposits = walletDeposits[0]?.total || 0;
+  const inflows = refunds[0]?.total || 0;
+  const outflows = dealPayments[0]?.total || 0;
   const reserved = reservedOutflows[0]?.total || 0;
+
+  console.log(`💰 [BALANCE] Financial breakdown:`, {
+    deposits,
+    inflows: refunds,
+    outflows: dealPayments,
+    reserved
+  });
+
   const totalCampaignBudgets = 0;
   const noDealCampaignBudgets = 0;
   const dealCommittedBudgets = 0;
   const remainingCommitment = 0;
 
-  // Available balance now changes only from actual wallet transactions/escrow records.
-  const available = Math.max(inflows - outflows - reserved, 0);
+  // Available balance = deposits + refunds - payments - reserved
+  const available = Math.max(deposits + inflows - outflows - reserved, 0);
+
+  console.log(`💰 [BALANCE] Final available balance: ${available}`);
 
   return {
-    inflows,
+    inflows: deposits + inflows,
     outflows,
     reserved,
     totalCampaignBudgets,
     noDealCampaignBudgets,
     dealCommittedBudgets,
     remainingCommitment,
-    available
+    available,
+    deposits
   };
 };
 exports.getBrandFinancials = getBrandFinancials;
@@ -195,24 +234,46 @@ exports.getCreatorFinancials = getCreatorFinancials;
 
 // ==================== GET BALANCE ====================
 exports.getBalance = catchAsync(async (req, res) => {
+  console.log(`💰 [API] Getting balance for user: ${req.user._id} (${req.user.userType})`);
+  
   let balance = 0;
   let pending = 0;
   let available = 0;
 
   if (req.user.userType === 'brand') {
+    console.log(`💰 [API] Calculating brand balance...`);
     const brandFinancials = await getBrandFinancials(req.user._id);
     balance = brandFinancials.available;
     pending = brandFinancials.reserved;
     available = brandFinancials.available;
+    
+    console.log(`💰 [API] Brand balance result:`, {
+      balance,
+      pending,
+      available,
+      deposits: brandFinancials.deposits,
+      inflows: brandFinancials.inflows,
+      outflows: brandFinancials.outflows
+    });
   } else if (req.user.userType === 'creator') {
+    console.log(`💰 [API] Calculating creator balance...`);
     // For creators: withdrawable = completed earnings - requested/completed withdrawals.
     const creatorFinancials = await getCreatorFinancials(req.user._id);
     balance = creatorFinancials.withdrawable;
     pending = creatorFinancials.pendingTotal;
     available = creatorFinancials.withdrawable;
+    
+    console.log(`💰 [API] Creator balance result:`, {
+      balance,
+      pending,
+      available,
+      withdrawable: creatorFinancials.withdrawable
+    });
   }
 
-  res.json({ success: true, balance, pending, available });
+  const response = { success: true, balance, pending, available };
+  console.log(`💰 [API] Returning balance:`, response);
+  res.json(response);
 });
 
 // ==================== GET TRANSACTIONS ====================
@@ -365,40 +426,67 @@ exports.createEscrow = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Valid dealId is required' });
   }
 
-  const deal = await Deal.findOne({ _id: dealId, brandId: req.user._id });
-  if (!deal) {
-    return res.status(404).json({ success: false, error: 'Deal not found or not owned by you' });
+  // 🔒 TRANSACTION: Start session for atomic operations
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const deal = await Deal.findOne({ _id: dealId, brandId: req.user._id }).session(session);
+    if (!deal) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, error: 'Deal not found or not owned by you' });
+    }
+
+    const existingPayment = await Payment.findOne({ dealId }).session(session);
+    if (existingPayment) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, error: 'Payment already exists for this deal' });
+    }
+
+    const fees = await PaymentCalculator.calculateFees(deal.budget, req.user.userType);
+
+    const payment = new Payment({
+      transactionId: `ESC-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      type: 'escrow',
+      status: 'pending',
+      amount: deal.budget,
+      fee: fees.total,
+      netAmount: deal.budget - fees.total,
+      from: { userId: req.user._id, accountType: 'brand' },
+      to: { userId: deal.creatorId, accountType: 'creator' },
+      dealId: deal._id,
+      campaignId: deal.campaignId,
+      description: `Escrow payment for deal ${deal._id}`,
+      metadata: { fees },
+    });
+
+    await payment.save({ session });
+
+    deal.paymentStatus = 'pending';
+    deal.paymentId = payment._id;
+    await deal.save({ session });
+
+    // Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    console.log('✅ Escrow created successfully with transaction:', {
+      paymentId: payment._id,
+      dealId: deal._id,
+      amount: payment.amount
+    });
+
+    res.json({ success: true, message: 'Escrow created', payment });
+  } catch (error) {
+    // 🔒 TRANSACTION: Rollback on any error
+    await session.abortTransaction();
+    session.endSession();
+    
+    console.error('❌ Escrow creation failed, transaction rolled back:', error);
+    throw error;
   }
-
-  const existingPayment = await Payment.findOne({ dealId });
-  if (existingPayment) {
-    return res.status(400).json({ success: false, error: 'Payment already exists for this deal' });
-  }
-
-  const fees = await PaymentCalculator.calculateFees(deal.budget, req.user.userType);
-
-  const payment = new Payment({
-    transactionId: `ESC-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-    type: 'escrow',
-    status: 'pending',
-    amount: deal.budget,
-    fee: fees.total,
-    netAmount: deal.budget - fees.total,
-    from: { userId: req.user._id, accountType: 'brand' },
-    to: { userId: deal.creatorId, accountType: 'creator' },
-    dealId: deal._id,
-    campaignId: deal.campaignId,
-    description: `Escrow payment for deal ${deal._id}`,
-    metadata: { fees },
-  });
-
-  await payment.save();
-
-  deal.paymentStatus = 'pending';
-  deal.paymentId = payment._id;
-  await deal.save();
-
-  res.json({ success: true, message: 'Escrow created', payment });
 });
 
 // ==================== CREATE ESCROW CHECKOUT INTENT ====================
@@ -419,7 +507,13 @@ exports.createEscrowCheckoutIntent = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'Payment already exists for this deal' });
   }
 
-  const fees = await PaymentCalculator.calculateFees(deal.budget, req.user.userType);
+  const feeService = require('../services/feeService');
+  const feeBreakdown = await feeService.calculateTotalFees(deal.budget, {
+    includeCommission: true,
+    includeEscrow: deal.paymentType === 'escrow',
+    includeTax: false
+  });
+  
   const normalizedCurrency = (currency || deal.currency || 'USD').toUpperCase();
 
   const payment = new Payment({
@@ -428,14 +522,14 @@ exports.createEscrowCheckoutIntent = catchAsync(async (req, res) => {
     status: 'pending',
     amount: deal.budget,
     currency: normalizedCurrency,
-    fee: fees.total,
-    netAmount: deal.budget - fees.total,
+    fee: feeBreakdown.totalFees,
+    netAmount: feeBreakdown.netAmount,
     from: { userId: req.user._id, accountType: 'brand' },
     to: { userId: deal.creatorId, accountType: 'creator' },
     dealId: deal._id,
     campaignId: deal.campaignId,
     description: `Escrow payment for deal ${deal._id}`,
-    metadata: { fees, gateway: 'stripe', checkoutStatus: 'created' }
+    metadata: { fees: feeBreakdown, gateway: 'stripe', checkoutStatus: 'created' }
   });
 
   let checkout = null;
@@ -637,37 +731,82 @@ exports.updatePerformanceMetrics = catchAsync(async (req, res) => {
 exports.releasePayment = catchAsync(async (req, res) => {
   const { dealId } = req.params;
 
-  const payment = await Payment.findOne({ dealId, status: 'in-escrow' });
-  if (!payment) {
-    return res.status(404).json({ success: false, error: 'Payment not found or not in escrow' });
+  // 🔒 TRANSACTION: Start session for atomic operations
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const payment = await Payment.findOne({ dealId, status: 'in-escrow' }).session(session);
+    if (!payment) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, error: 'Payment not found or not in escrow' });
+    }
+
+    // Final calculation for performance payments
+    if (payment.type === 'performance') {
+      const deal = await Deal.findById(dealId).session(session);
+      const performancePayment = await PerformancePayment.findById(payment.performancePaymentId).session(session);
+      const finalCalculation = await PaymentCalculator.calculatePerformancePayment(
+        deal,
+        performancePayment.type,
+        performancePayment.metrics,
+        true
+      );
+
+      payment.amount = finalCalculation.finalAmount;
+      payment.netAmount = finalCalculation.finalAmount - finalCalculation.fees.total;
+    }
+
+    payment.status = 'completed';
+    payment.paidAt = new Date();
+    await payment.save({ session });
+
+    await Deal.findByIdAndUpdate(dealId, { paymentStatus: 'released' }, { session });
+
+    await Creator.findByIdAndUpdate(payment.to.userId, {
+      $inc: { 'stats.totalEarnings': payment.netAmount },
+    }, { session });
+
+    // Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    console.log('✅ Payment released successfully with transaction:', {
+      paymentId: payment._id,
+      dealId: dealId,
+      amount: payment.amount,
+      netAmount: payment.netAmount
+    });
+
+    // Notify admins about payment received (async - doesn't affect transaction)
+    setImmediate(async () => {
+      try {
+        const adminNotificationService = require('../services/adminNotificationService');
+        const fromUser = await User.findById(payment.from.userId).select('fullName userType');
+        const toUser = await User.findById(payment.to.userId).select('fullName userType');
+        
+        await adminNotificationService.notifyPaymentReceived({
+          amount: payment.amount,
+          from: fromUser?.fullName || 'Unknown',
+          to: toUser?.fullName || 'Unknown',
+          transactionId: payment._id.toString(),
+          dealId: dealId
+        });
+      } catch (notificationError) {
+        console.warn('Admin notification failed:', notificationError.message);
+      }
+    });
+
+    res.json({ success: true, message: 'Payment released' });
+  } catch (error) {
+    // 🔒 TRANSACTION: Rollback on any error
+    await session.abortTransaction();
+    session.endSession();
+    
+    console.error('❌ Payment release failed, transaction rolled back:', error);
+    throw error;
   }
-
-  // Final calculation for performance payments
-  if (payment.type === 'performance') {
-    const deal = await Deal.findById(dealId);
-    const performancePayment = await PerformancePayment.findById(payment.performancePaymentId);
-    const finalCalculation = await PaymentCalculator.calculatePerformancePayment(
-      deal,
-      performancePayment.type,
-      performancePayment.metrics,
-      true
-    );
-
-    payment.amount = finalCalculation.finalAmount;
-    payment.netAmount = finalCalculation.finalAmount - finalCalculation.fees.total;
-  }
-
-  payment.status = 'completed';
-  payment.paidAt = new Date();
-  await payment.save();
-
-  await Deal.findByIdAndUpdate(dealId, { paymentStatus: 'released' });
-
-  await Creator.findByIdAndUpdate(payment.to.userId, {
-    $inc: { 'stats.totalEarnings': payment.netAmount },
-  });
-
-  res.json({ success: true, message: 'Payment released' });
 });
 
 // ==================== REQUEST WITHDRAWAL ====================
@@ -809,76 +948,107 @@ exports.requestWithdrawal = catchAsync(async (req, res) => {
     return res.status(403).json({ success: false, error: 'Only creators can request withdrawals' });
   }
 
-  if (!isValidBudget(amount) || amount < 50) {
-    return res.status(400).json({ success: false, error: 'Minimum withdrawal amount is $50' });
-  }
+  // 🔒 TRANSACTION: Start session for atomic operations
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  const creatorFinancials = await getCreatorFinancials(req.user._id);
-  const availableBalance = creatorFinancials.withdrawable;
-  if (amount > availableBalance) {
-    return res.status(400).json({
-      success: false,
-      error: `Insufficient balance. Available: $${availableBalance.toFixed(2)}`,
-    });
-  }
+  try {
+    // Use dynamic minimum payout amount instead of hardcoded $50
+    const feeService = require('../services/feeService');
+    const minPayoutValidation = await feeService.validateMinimumAmount(amount, 'payout');
+    
+    if (!isValidBudget(amount) || !minPayoutValidation.isValid) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ 
+        success: false, 
+        error: `Minimum withdrawal amount is $${minPayoutValidation.minimumAmount}` 
+      });
+    }
 
-  const creatorUser = await User.findById(req.user._id).select('stripeAccountId stripeAccountStatus');
-  const destinationAccount = creatorUser?.stripeAccountId || null;
+    const creatorFinancials = await getCreatorFinancials(req.user._id);
+    const availableBalance = creatorFinancials.withdrawable;
+    if (amount > availableBalance) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance. Available: $${availableBalance.toFixed(2)}`,
+      });
+    }
 
-  const fees = await PaymentCalculator.calculateWithdrawalFees(amount, 'stripe');
+    const creatorUser = await User.findById(req.user._id).select('stripeAccountId stripeAccountStatus').session(session);
+    const destinationAccount = creatorUser?.stripeAccountId || null;
 
-  const withdrawal = new Payment({
-    transactionId: `WTH-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-    type: 'withdrawal',
-    status: 'pending',
-    amount,
-    fee: fees.total,
-    netAmount: amount - fees.total,
-    from: { userId: req.user._id, accountType: req.user.userType },
-    to: { userId: req.user._id, accountType: req.user.userType },
-    paymentMethod: {
-      type: 'stripe',
-      details: {
-        destinationAccount
+    // Use dynamic fee service for withdrawal fees
+    const withdrawalFeeBreakdown = await feeService.calculateWithdrawalFee(amount);
+
+    const withdrawal = new Payment({
+      transactionId: `WTH-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      type: 'withdrawal',
+      status: 'pending',
+      amount,
+      fee: withdrawalFeeBreakdown.withdrawalFeeAmount,
+      netAmount: withdrawalFeeBreakdown.netAmount,
+      from: { userId: req.user._id, accountType: req.user.userType },
+      to: { userId: req.user._id, accountType: req.user.userType },
+      paymentMethod: {
+        type: 'stripe',
+        details: {
+          destinationAccount
+        },
       },
-    },
-    description: 'Stripe withdrawal request (pending admin approval)',
-    metadata: {
-      fees,
-      requestedAt: new Date(),
-      approvalRequired: true,
-      destinationAccount,
-      payoutAccountConnected: Boolean(destinationAccount)
-    },
-  });
+      description: 'Stripe withdrawal request (pending admin approval)',
+      metadata: {
+        fees: withdrawalFeeBreakdown,
+        requestedAt: new Date(),
+        approvalRequired: true,
+        destinationAccount,
+        payoutAccountConnected: Boolean(destinationAccount)
+      },
+    });
 
-  await withdrawal.save();
+    await withdrawal.save({ session });
 
-  res.json({
-    success: true,
-    message: destinationAccount
-      ? 'Withdrawal request submitted for admin approval'
-      : 'Withdrawal request submitted. Connect Stripe payout account before admin approval.',
-    withdrawal
-  });
+    // Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    console.log('✅ Withdrawal request created successfully with transaction:', {
+      withdrawalId: withdrawal._id,
+      amount: withdrawal.amount,
+      netAmount: withdrawal.netAmount
+    });
+
+    res.json({
+      success: true,
+      message: destinationAccount
+        ? 'Withdrawal request submitted for admin approval'
+        : 'Withdrawal request submitted. Connect Stripe payout account before admin approval.',
+      withdrawal
+    });
+  } catch (error) {
+    // 🔒 TRANSACTION: Rollback on any error
+    await session.abortTransaction();
+    session.endSession();
+    
+    console.error('❌ Withdrawal request failed, transaction rolled back:', error);
+    throw error;
+  }
 });
 
 // ==================== GET WITHDRAWALS ====================
-exports.getWithdrawals = async (req, res) => {
-  try {
-    const { page = 1, limit = 10 } = req.query;
-    const query = { 'to.userId': req.user._id, type: 'withdrawal' };
-    const withdrawals = await Payment.find(query)
-      .sort('-createdAt')
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .lean();
-    const total = await Payment.countDocuments(query);
-    res.json({ success: true, withdrawals, pagination: { page, limit, total } });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
+exports.getWithdrawals = catchAsync(async (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+  const query = { 'to.userId': req.user._id, type: 'withdrawal' };
+  const withdrawals = await Payment.find(query)
+    .sort('-createdAt')
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit))
+    .lean();
+  const total = await Payment.countDocuments(query);
+  res.json({ success: true, withdrawals, pagination: { page, limit, total } });
+});
 
 // ==================== GET INVOICES ====================
 exports.getInvoices = catchAsync(async (req, res) => {
@@ -910,6 +1080,75 @@ exports.getInvoices = catchAsync(async (req, res) => {
       pages: Math.ceil(total / limit),
     },
   });
+});
+
+// ==================== DOWNLOAD INVOICE ====================
+exports.downloadInvoice = catchAsync(async (req, res) => {
+  const { invoiceId } = req.params;
+
+  // Find the payment record (since getInvoices returns Payment records)
+  const payment = await Payment.findOne({
+    _id: invoiceId,
+    'from.userId': req.user._id,
+    status: 'completed'
+  }).populate('from.userId', 'fullName email phone');
+
+  if (!payment) {
+    return res.status(404).json({ success: false, error: 'Invoice not found' });
+  }
+
+  // Generate PDF content
+  const PDFDocument = require('pdfkit');
+  const doc = new PDFDocument();
+
+  // Set headers for PDF download
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="invoice-${payment.invoiceNumber || payment.transactionId.slice(-6)}.pdf"`);
+
+  // Pipe PDF to response
+  doc.pipe(res);
+
+  // PDF Content
+  const fontSize = 12;
+  const lineHeight = 20;
+  let yPosition = 50;
+
+  // Header
+  doc.fontSize(24).text('INVOICE', 50, yPosition);
+  yPosition += 40;
+
+  // Invoice details
+  doc.fontSize(fontSize).text(`Invoice Number: ${payment.invoiceNumber || payment.transactionId.slice(-6).toUpperCase()}`, 50, yPosition);
+  yPosition += lineHeight;
+  doc.text(`Date: ${payment.createdAt.toLocaleDateString()}`, 50, yPosition);
+  yPosition += lineHeight;
+  doc.text(`Status: ${payment.status.toUpperCase()}`, 50, yPosition);
+  yPosition += lineHeight * 2;
+
+  // Customer info
+  const customer = payment.from.userId;
+  doc.fontSize(16).text('Bill To:', 50, yPosition);
+  yPosition += lineHeight;
+  doc.fontSize(fontSize).text(customer?.fullName || 'Unknown', 50, yPosition);
+  yPosition += lineHeight;
+  doc.text(customer?.email || 'No email', 50, yPosition);
+  yPosition += lineHeight * 2;
+
+  // Transaction details
+  doc.fontSize(16).text('Transaction Details:', 50, yPosition);
+  yPosition += lineHeight;
+  doc.fontSize(fontSize).text(`Description: ${payment.description || 'Payment Transaction'}`, 50, yPosition);
+  yPosition += lineHeight;
+  doc.text(`Amount: $${(payment.amount / 100).toFixed(2)}`, 50, yPosition);
+  yPosition += lineHeight;
+  doc.text(`Transaction ID: ${payment.transactionId}`, 50, yPosition);
+  yPosition += lineHeight * 2;
+
+  // Footer
+  doc.fontSize(10).text('Thank you for your business!', 50, yPosition);
+
+  // Finalize PDF
+  doc.end();
 });
 
 // ==================== CREATE DEPOSIT CHECKOUT SESSION ====================
@@ -1014,30 +1253,129 @@ exports.getPerformanceSummary = catchAsync(async (req, res) => {
   res.json({ success: true, performance });
 });
 
-// ==================== STRIPE WEBHOOK HANDLER ====================
+// ==================== STRIPE WEBHOOK HANDLER (SECURED) ====================
 exports.handleStripeWebhook = async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!webhookSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET not set');
-    return res.status(500).json({ error: 'Webhook secret not configured' });
-  }
-
-  let event;
+  // 🚨 EMERGENCY LOGGING - Detect if webhook reaches server
+  console.log('🚨 [WEBHOOK] Request received at:', new Date().toISOString());
+  console.log('🚨 [WEBHOOK] Headers:', req.headers['stripe-signature'] ? 'HAS STRIPE SIG' : 'NO STRIPE SIG');
+  console.log('🚨 [WEBHOOK] Body type:', Buffer.isBuffer(req.body) ? 'RAW BUFFER' : 'PARSED JSON');
+  console.log('🚨 [WEBHOOK] Body length:', req.body ? req.body.length : 'NULL');
+  
   try {
-    // req.body is already raw buffer from express.raw() middleware
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (err) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    // 🔒 SECURITY: Validate signature header exists
+    const sig = req.headers['stripe-signature'];
+    if (!sig) {
+      console.error('🚨 Webhook Security: Missing stripe-signature header');
+      return res.status(400).json({ 
+        error: 'Invalid webhook request',
+        code: 'MISSING_SIGNATURE'
+      });
+    }
 
-  try {
-    await stripeService.handleWebhookEvent(event);
-    res.json({ received: true });
-  } catch (err) {
-    console.error('Webhook handler error:', err.message);
-    return res.status(500).json({ error: 'Webhook processing failed' });
+    // 🔒 SECURITY: Validate webhook secret is configured
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error('🚨 Webhook Security: STRIPE_WEBHOOK_SECRET not configured');
+      return res.status(500).json({ 
+        error: 'Server configuration error',
+        code: 'MISSING_SECRET'
+      });
+    }
+
+    // 🔒 SECURITY: Validate request body is buffer (from raw middleware)
+    if (!Buffer.isBuffer(req.body)) {
+      console.error('🚨 Webhook Security: Request body is not raw buffer');
+      return res.status(400).json({ 
+        error: 'Invalid request format',
+        code: 'INVALID_BODY_FORMAT'
+      });
+    }
+
+    // 🔒 SECURITY: Validate signature format
+    if (!sig.startsWith('t=') || sig.split(',').length < 2) {
+      console.error('🚨 Webhook Security: Invalid signature format');
+      return res.status(400).json({ 
+        error: 'Invalid signature format',
+        code: 'INVALID_SIGNATURE_FORMAT'
+      });
+    }
+
+    let event;
+    try {
+      // 🔒 SECURITY: Construct event with signature verification
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      console.log(`✅ Webhook Security: Signature verified for event ${event.type}`);
+    } catch (err) {
+      console.error(`🚨 Webhook Security: Signature verification failed: ${err.message}`);
+      // Log attempt for security monitoring
+      console.error(`🔍 Security Log - IP: ${req.ip}, User-Agent: ${req.get('User-Agent')}`);
+      return res.status(400).json({ 
+        error: 'Webhook signature verification failed',
+        code: 'SIGNATURE_VERIFICATION_FAILED'
+      });
+    }
+
+    // 🔒 SECURITY: Validate event structure
+    if (!event || !event.type || !event.id) {
+      console.error('🚨 Webhook Security: Invalid event structure');
+      return res.status(400).json({ 
+        error: 'Invalid event structure',
+        code: 'INVALID_EVENT'
+      });
+    }
+
+    // 🔒 SECURITY: Validate event type is allowed
+    const allowedEventTypes = [
+      'payment_intent.succeeded',
+      'payment_intent.payment_failed',
+      'customer.subscription.created',
+      'customer.subscription.updated',
+      'customer.subscription.deleted',
+      'invoice.payment_succeeded',
+      'invoice.payment_failed',
+      'checkout.session.completed',
+      'charge.refunded'
+    ];
+
+    if (!allowedEventTypes.includes(event.type)) {
+      console.warn(`⚠️ Webhook Security: Unexpected event type: ${event.type}`);
+      // Don't process unknown events but acknowledge receipt
+      return res.json({ received: true, processed: false, reason: 'Unknown event type' });
+    }
+
+    // 🚀 PROCESS: Handle the validated event
+    try {
+      console.log(`📥 Processing webhook event: ${event.type} (ID: ${event.id})`);
+      await stripeService.handleWebhookEvent(event);
+      
+      console.log(`✅ Webhook processed successfully: ${event.type}`);
+      return res.json({ 
+        received: true, 
+        processed: true, 
+        eventId: event.id,
+        eventType: event.type
+      });
+      
+    } catch (processingError) {
+      console.error(`❌ Webhook Processing Error for ${event.type}:`, processingError.message);
+      console.error('🔍 Processing Error Stack:', processingError.stack);
+      
+      // Don't expose internal errors but acknowledge receipt
+      return res.status(500).json({ 
+        error: 'Webhook processing failed',
+        code: 'PROCESSING_ERROR',
+        eventId: event.id
+      });
+    }
+
+  } catch (criticalError) {
+    console.error('🚨 Critical Webhook Error:', criticalError.message);
+    console.error('🔍 Critical Error Stack:', criticalError.stack);
+    
+    // Always respond to prevent webhook retries on critical errors
+    return res.status(500).json({ 
+      error: 'Critical webhook error',
+      code: 'CRITICAL_ERROR'
+    });
   }
 };

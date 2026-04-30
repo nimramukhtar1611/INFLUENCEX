@@ -207,9 +207,7 @@ export const PLATFORMS = {
   INSTAGRAM: 'instagram',
   YOUTUBE: 'youtube',
   TIKTOK: 'tiktok',
-  TWITTER: 'twitter',
   FACEBOOK: 'facebook',
-  LINKEDIN: 'linkedin',
   WEBSITE: 'website',
   OTHER: 'other'
 };
@@ -218,9 +216,7 @@ export const PLATFORM_LABELS = {
   [PLATFORMS.INSTAGRAM]: 'Instagram',
   [PLATFORMS.YOUTUBE]: 'YouTube',
   [PLATFORMS.TIKTOK]: 'TikTok',
-  [PLATFORMS.TWITTER]: 'Twitter',
   [PLATFORMS.FACEBOOK]: 'Facebook',
-  [PLATFORMS.LINKEDIN]: 'LinkedIn',
   [PLATFORMS.WEBSITE]: 'Website',
   [PLATFORMS.OTHER]: 'Other'
 };
@@ -229,9 +225,7 @@ export const PLATFORM_COLORS = {
   [PLATFORMS.INSTAGRAM]: '#E1306C',
   [PLATFORMS.YOUTUBE]: '#FF0000',
   [PLATFORMS.TIKTOK]: '#000000',
-  [PLATFORMS.TWITTER]: '#1DA1F2',
   [PLATFORMS.FACEBOOK]: '#4267B2',
-  [PLATFORMS.LINKEDIN]: '#0077B5',
   [PLATFORMS.WEBSITE]: '#4F46E5',
   [PLATFORMS.OTHER]: '#6B7280'
 };

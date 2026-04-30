@@ -1,105 +1,43 @@
-// pages/Creator/Settings.jsx - COMPLETE FIXED VERSION
+// pages/Creator/Settings.jsx - UPDATED TO MATCH BRAND SETTINGS THEME
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  User, Instagram, Youtube, Twitter, Lock,
-  ChevronRight, Save, Loader, CheckCircle, AlertTriangle,
-  Phone, Mail, Calendar, X, Camera, Upload, Image as ImageIcon,
-  Globe, MapPin, Link2, Smartphone, Eye, EyeOff, Shield
+  User, Bell, Shield, Eye, Lock, Globe, Save, Loader, ChevronRight,
+  Mail, Phone, MapPin, Building2, Instagram, Youtube, Facebook,
+  AlertCircle, CheckCircle, XCircle, DollarSign, CreditCard, Wallet,
+  Key, Smartphone, Monitor, Moon, Sun, Languages, Clock, RefreshCw,
+  Trash2, Edit, Plus, Download, Upload, HelpCircle, FileText, Camera, Settings as SettingsIcon
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../hooks/useTheme';
 import creatorService from '../../services/creatorService';
 import authService from '../../services/authService';
 import api from '../../services/api';
+import Button from '../../components/UI/Button';
+import Input from '../../components/UI/Input';
 import Modal from '../../components/Common/Modal';
 import toast from 'react-hot-toast';
 import { formatNumber, formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
 import { getStatusColor } from '../../utils/colorScheme';
-import { useTheme } from '../../hooks/useTheme';
 
-// ---------- Local UI Components ----------
-const Input = ({ label, type = 'text', value, onChange, placeholder, icon: Icon, disabled }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+// ==================== SUB-COMPONENTS ====================
 
-  return (
-    <div className="mb-4">
-      {label && <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{label}</label>}
-      <div className="relative">
-        {Icon && (
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Icon className={`h-5 w-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-          </div>
-        )}
-        <input
-          type={type}
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={`w-full px-4 py-2 border rounded-lg focus:ring-[#667eea] focus:border-[#667eea] ${
-            Icon ? 'pl-10' : ''
-          } ${disabled
-            ? (isDark ? 'bg-gray-800 text-gray-500 border-gray-700' : 'bg-gray-100 text-gray-500 border-gray-300')
-            : (isDark ? 'bg-gray-900 text-gray-100 border-gray-700' : 'bg-white text-gray-900 border-gray-300')
-          }`}
-        />
-      </div>
-    </div>
-  );
-};
-
-const Button = ({ variant = 'primary', size = 'md', children, onClick, disabled, icon: Icon, loading, className = '' }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg focus:outline-none transition-colors';
-  const variants = {
-    primary: 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white hover:from-[#5a67d8] hover:to-[#6b4c9a] disabled:from-[#9ca3af] disabled:to-[#9ca3af]',
-    secondary: isDark
-      ? 'bg-gray-700 text-gray-100 hover:bg-gray-600 disabled:bg-gray-800'
-      : 'bg-gray-200 text-gray-800 hover:bg-gray-300 disabled:bg-gray-100',
-    outline: isDark
-      ? 'border border-gray-700 text-gray-200 hover:bg-gray-800 disabled:bg-gray-800'
-      : 'border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:bg-gray-100',
-    danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300'
-  };
-  const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base'
-  };
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
-    >
-      {loading && <Loader className="w-4 h-4 mr-2 animate-spin" />}
-      {Icon && !loading && <Icon className="w-4 h-4 mr-2" />}
-      {children}
-    </button>
-  );
-};
-
-// ---------- Profile Picture Upload Component ----------
 const ProfilePictureUpload = ({ currentImage, onUpload }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState(currentImage);
+  const [preview, setPreview] = useState(currentImage || '');
   const fileInputRef = useRef(null);
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
+  useEffect(() => {
+    setPreview(currentImage || '');
+  }, [currentImage]);
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
-    // Preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    const previewReader = new FileReader();
+    previewReader.onloadend = () => setPreview(previewReader.result);
+    previewReader.readAsDataURL(file);
 
-    // Upload
     setUploading(true);
     try {
       const formData = new FormData();
@@ -109,148 +47,139 @@ const ProfilePictureUpload = ({ currentImage, onUpload }) => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (response.data?.success) {
-        toast.success('Profile picture updated');
-        onUpload(response.data.profilePicture); // URL returned from server
-      } else {
+      if (!response.data?.success) {
         throw new Error(response.data?.error || 'Upload failed');
       }
+
+      const uploadedUrl = response.data.profilePicture || response.data.file?.url;
+      if (!uploadedUrl) {
+        throw new Error('Upload succeeded but no image URL was returned');
+      }
+
+      onUpload(uploadedUrl);
+      toast.success('Profile picture updated');
     } catch (error) {
-      console.error('Upload error:', error);
-      toast.error(error.message || 'Failed to upload image');
-      // revert preview
-      setPreview(currentImage);
+      setPreview(currentImage || '');
+      toast.error(error.response?.data?.error || error.message || 'Failed to upload profile picture');
     } finally {
       setUploading(false);
+      event.target.value = '';
     }
   };
 
   return (
-    <div className="flex items-center gap-6 mb-6">
-      <div className="relative">
-        <img
-          src={preview || 'https://via.placeholder.com/100'}
-          alt="Profile"
-          className={`w-24 h-24 rounded-full object-cover border-4 shadow-lg ${isDark ? 'border-gray-800' : 'border-white'}`}
-        />
-        {uploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full">
-            <Loader className="w-6 h-6 text-white animate-spin" />
-          </div>
-        )}
-      </div>
-      <div>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept="image/*"
-          className="hidden"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          icon={Camera}
-          onClick={() => fileInputRef.current.click()}
-          disabled={uploading}
-        >
-          Change Photo
-        </Button>
-        <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>JPG, PNG, GIF up to 5MB</p>
-      </div>
-    </div>
-  );
-};
+    <div className="p-4 bg-black/90 rounded-2xl border border-gray-200">
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <img
+            src={preview || 'https://via.placeholder.com/96?text=Creator'}
+            alt="Creator profile"
+            className="w-24 h-24 rounded-full object-cover border-2 border-white shadow"
+          />
+          {uploading && (
+            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+              <Loader className="w-5 h-5 text-white animate-spin" />
+            </div>
+          )}
+        </div>
 
-// ---------- Profile Settings ----------
-const ProfileSettings = ({ settings, setSettings, user, refreshUser }) => {
-  const handleImageUpload = (newImageUrl) => {
-    setSettings({ ...settings, profilePicture: newImageUrl });
-    refreshUser(); // Also update user context after save
-  };
-
-  // Ensure birthday is in YYYY-MM-DD format for date input
-  const birthdayValue = settings.birthday && !settings.birthday.match(/^\d{4}-\d{2}-\d{2}$/)
-    ? (() => {
-        const date = new Date(settings.birthday);
-        if (!isNaN(date)) return date.toISOString().split('T')[0];
-        return '';
-      })()
-    : settings.birthday || '';
-
-  return (
-    <div className="space-y-6">
-      <ProfilePictureUpload
-        currentImage={user?.profilePicture}
-        onUpload={handleImageUpload}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Input
-          label="Display Name"
-          value={settings.displayName}
-          onChange={(e) => setSettings({ ...settings, displayName: e.target.value })}
-          placeholder="Your public name"
-        />
-        <Input
-          label="Handle"
-          value={settings.handle}
-          onChange={(e) => setSettings({ ...settings, handle: e.target.value })}
-          placeholder="username"
-        />
-        <Input
-          label="Email"
-          type="email"
-          value={settings.email}
-          onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-          icon={Mail}
-          disabled
-        />
-        <Input
-          label="Phone"
-          value={settings.phone}
-          onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
-          icon={Phone}
-        />
-        <Input
-          label="Birthday"
-          type="date"
-          value={birthdayValue}
-          onChange={(e) => setSettings({ ...settings, birthday: e.target.value })}
-        />
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
-          <select
-            value={settings.gender}
-            onChange={(e) => setSettings({ ...settings, gender: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#667eea] focus:border-[#667eea]"
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <Button
+            type="button"
+            icon={Camera}
+                        variant="secondary"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="border-gray-200 !bg-zinc-900/50 text-white "
           >
-            <option value="">Prefer not to say</option>
-            <option value="female">Female</option>
-            <option value="male">Male</option>
-            <option value="non-binary">Non-binary</option>
-          </select>
+            {uploading ? 'Uploading...' : 'Change Photo'}
+          </Button>
+          <p className="text-xs text-white mt-2">JPG, PNG, WEBP up to 5MB.</p>
         </div>
       </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-        <textarea
-          rows="4"
-          value={settings.bio}
-          onChange={(e) => setSettings({ ...settings, bio: e.target.value })}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#667eea] focus:border-[#667eea]"
-          placeholder="Tell brands about yourself..."
-        />
-      </div>
     </div>
   );
 };
 
-// ---------- Social Links ----------
-const SocialLinksSettings = ({ settings, setSettings, onVerify }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+const ProfileSettings = ({ settings, setSettings, profileImage, onProfileImageUpload }) => (
+  <div className="space-y-6">
+    <ProfilePictureUpload currentImage={profileImage} onUpload={onProfileImageUpload} />
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Input
+        label="Display Name *"
+        value={settings.displayName || ''}
+        onChange={(e) => setSettings({ ...settings, displayName: e.target.value })}
+        placeholder="Your public name"
+      />
+      <Input
+        label="Handle"
+        value={settings.handle || ''}
+        onChange={(e) => setSettings({ ...settings, handle: e.target.value })}
+        placeholder="username"
+      />
+      <Input
+        label="Email"
+        type="email"
+        value={settings.email || ''}
+        disabled
+        icon={Mail}
+      />
+      <Input
+        label="Phone"
+        value={settings.phone || ''}
+        onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
+        icon={Phone}
+      />
+      <Input
+        label="Age"
+        type="number"
+        value={settings.age || ''}
+        onChange={(e) => setSettings({ ...settings, age: e.target.value })}
+        placeholder="Enter your age"
+        min="13"
+        max="100"
+      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Gender
+        </label>
+        <select
+          value={settings.gender || ''}
+          onChange={(e) => setSettings({ ...settings, gender: e.target.value })}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400"
+        >
+          <option value="">Prefer not to say</option>
+          <option value="female">Female</option>
+          <option value="male">Male</option>
+          <option value="non-binary">Non-binary</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Bio
+      </label>
+      <textarea
+        rows="4"
+        value={settings.bio || ''}
+        onChange={(e) => setSettings({ ...settings, bio: e.target.value })}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400"
+        placeholder="Tell brands about yourself..."
+      />
+    </div>
+  </div>
+);
+
+const SocialSettings = ({ settings, setSettings, onVerify }) => {
   const [verifying, setVerifying] = useState({});
   const formatStat = (value) => Number(value || 0).toLocaleString();
 
@@ -342,7 +271,7 @@ const SocialLinksSettings = ({ settings, setSettings, onVerify }) => {
   return (
     <div className="space-y-6">
       {['instagram', 'youtube', 'tiktok'].map((platform) => (
-        <div key={platform} className="bg-gray-50 p-4 rounded-lg">
+        <div key={platform} className=" p-4 rounded-lg">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               {platform === 'instagram' && <Instagram className="w-5 h-5 text-pink-600" />}
@@ -351,7 +280,7 @@ const SocialLinksSettings = ({ settings, setSettings, onVerify }) => {
               <span className="font-medium capitalize">{platform}</span>
             </div>
             {settings.socialMedia?.[platform]?.verified && (
-              <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${getStatusColor('verified', 'status', isDark)}`}>
+              <span className="text-xs px-2 py-1 rounded-full flex items-center gap-1 bg-green-100 text-green-800">
                 <CheckCircle className="w-3 h-3" />
                 Verified
               </span>
@@ -377,149 +306,93 @@ const SocialLinksSettings = ({ settings, setSettings, onVerify }) => {
             <p className="text-xs text-amber-700 mt-2">{settings.socialMedia[platform].note}</p>
           ) : null}
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2"
-            onClick={() => handleVerify(platform)}
-            disabled={verifying[platform]}
-          >
-            {verifying[platform] ? <Loader className="w-4 h-4 animate-spin mr-2" /> : null}
-            {settings.socialMedia?.[platform]?.verified ? 'Re-verify' : 'Verify & Fetch Stats'}
-          </Button>
+        <Button
+  variant="secondary"
+  onClick={() => handleVerify(platform)}
+  disabled={verifying[platform]}
+  className="mt-2 !bg-white !text-black transition-all duration-200 ease-in-out hover:scale-105 active:scale-95 hover:!bg-zinc-100 disabled:opacity-50 disabled:hover:scale-100"
+>
+  {verifying[platform] ? <Loader className="w-4 h-4 animate-spin mr-2" /> : null}
+  {settings.socialMedia?.[platform]?.verified ? 'Re-verify' : 'Verify & Fetch Stats'}
+</Button>
         </div>
       ))}
     </div>
   );
 };
 
-// ---------- Security Settings ----------
-const SecuritySettingsComp = ({
-  showPasswordForm, setShowPasswordForm,
-  showDeleteForm, setShowDeleteForm,
+const SecuritySettings = ({
+  showPasswordModal, setShowPasswordModal,
   passwordData, setPasswordData,
-  deletePassword, setDeletePassword,
-  handleChangePassword, handleDeleteAccount,
+  handleChangePassword,
   twoFactorStatus, handleStart2FASetup, handleDisable2FA, disabling2FA, saving
 }) => {
   return (
     <div className="space-y-6">
-      {/* Password section */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <h4 className="font-medium text-gray-900">Password</h4>
-            <p className="text-sm text-gray-500">Update your account password</p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => setShowPasswordForm(!showPasswordForm)}
-          >
-            {showPasswordForm ? 'Cancel' : 'Change Password'}
-          </Button>
+      <div className=" p-4 rounded-lg flex justify-between items-center">
+        <div>
+          <h4 className="font-medium text-gray-900">Password</h4>
+          <p className="text-sm text-gray-500">Update your account password</p>
         </div>
-
-        {showPasswordForm && (
-          <div className="mt-4 border-t pt-4 space-y-4">
-            <Input
-              type="password"
-              label="Current Password"
-              value={passwordData.current}
-              onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })}
-              placeholder="Enter current password"
-            />
-            <Input
-              type="password"
-              label="New Password"
-              value={passwordData.new}
-              onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
-              placeholder="Enter new password"
-            />
-            <Input
-              type="password"
-              label="Confirm New Password"
-              value={passwordData.confirm}
-              onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
-              placeholder="Confirm new password"
-            />
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={handleChangePassword}>
-                Update Password
-              </Button>
-            </div>
-          </div>
-        )}
+        <Button variant="secondary" onClick={() => setShowPasswordModal(true)} className="border-gray-600 text-gray-600 hover:border-gray-700 hover:text-gray-700">
+          Change Password
+        </Button>
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <h4 className="font-medium text-gray-900">Two-Factor Authentication</h4>
-            <p className="text-sm text-gray-500">
-              {twoFactorStatus?.enabled 
-                ? 'Your account is protected with 2FA.' 
-                : 'Add an extra layer of security using an authenticator app.'}
-            </p>
-          </div>
-          {twoFactorStatus?.enabled ? (
-            <Button variant="danger" size="sm" onClick={handleDisable2FA} loading={disabling2FA}>
-              Disable 2FA
-            </Button>
-          ) : (
-            <Button variant="primary" size="sm" onClick={handleStart2FASetup} loading={saving}>
-              Enable 2FA
-            </Button>
-          )}
-        </div>
-        
-        {twoFactorStatus?.enabled && (
-          <div className="mt-4 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-blue-600" />
-            <span className="text-xs text-blue-700">
-              2FA is active. {twoFactorStatus.backupCodesCount} backup codes remaining.
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Delete Account section */}
-      <div className="bg-red-50 p-4 rounded-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <h4 className="font-medium text-red-900">Delete Account</h4>
-            <p className="text-sm text-red-600">Permanently delete your account and all data</p>
-          </div>
-          <Button
-            variant="danger"
-            onClick={() => setShowDeleteForm(!showDeleteForm)}
-          >
-            {showDeleteForm ? 'Cancel' : 'Delete Account'}
-          </Button>
-        </div>
-
-        {showDeleteForm && (
-          <div className="mt-4 border-t border-red-200 pt-4 space-y-4">
-            <div className={`flex items-start gap-3 ${getStatusColor('failed', 'status', isDark)} p-4 rounded-lg`}>
-              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium">This action is permanent!</p>
-                <p className="text-red-700 mt-1">All your data will be permanently deleted and cannot be recovered.</p>
+      <div className="pt-6 border-t border-gray-200">
+        <h4 className="text-base font-medium text-gray-900 mb-4">Two-Factor Authentication</h4>
+        <div className=" p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                twoFactorStatus?.enabled ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
+              }`}>
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">
+                  Status: {twoFactorStatus?.enabled ? 'Enabled' : 'Disabled'}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {twoFactorStatus?.enabled 
+                    ? 'Your account is protected with an additional layer of security.' 
+                    : 'Add an extra layer of security to your account using an authenticator app.'}
+                </p>
               </div>
             </div>
-            <Input
-              type="password"
-              label="Confirm your password"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              placeholder="Enter your password to confirm"
-            />
-            <div className="flex justify-end">
-              <Button variant="danger" onClick={handleDeleteAccount}>
-                Yes, Delete My Account
-              </Button>
-            </div>
+            {twoFactorStatus?.enabled ? (
+             <Button 
+  variant="danger" 
+  onClick={handleDisable2FA} 
+  loading={disabling2FA}
+  className="transition-all duration-200 ease-in-out hover:bg-red-600 hover:shadow-[0_0_15px_rgba(220,38,38,0.4)] active:scale-95"
+>
+  Disable 2FA
+</Button>
+            ) : (
+            <Button 
+  variant="secondary" 
+  onClick={handleStart2FASetup} 
+  loading={saving}
+  className="transition-all duration-200 ease-in-out hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 shadow-sm hover:shadow-md"
+>
+  Enable 2FA
+</Button>
+            )}
           </div>
-        )}
+
+          {twoFactorStatus?.enabled && (
+            <div className="mt-6 bg-blue-50 p-4 rounded-xl flex items-start gap-3">
+              <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-800">2FA is active</p>
+                <p className="text-xs text-blue-700 mt-1">
+                  You have {twoFactorStatus.backupCodesCount} backup codes remaining. Keep them in a safe place.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -528,36 +401,54 @@ const SecuritySettingsComp = ({
 const getDefaultSocialMedia = () => ({
   instagram: { handle: '', url: '', verified: false, followers: 0, engagement: 0 },
   youtube: { handle: '', url: '', verified: false, subscribers: 0, views: 0, videos: 0 },
-  tiktok: { handle: '', url: '', verified: false, followers: 0, likes: 0, videos: 0 },
-  twitter: { handle: '', url: '', verified: false, followers: 0, following: 0, tweets: 0 }
+  tiktok: { handle: '', url: '', verified: false, followers: 0, likes: 0, videos: 0 }
 });
 
 // ---------- Main Component ----------
 const CreatorSettings = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { user, changePassword, deleteAccount, refreshUser } = useAuth();
+  const { user, updateUser, refreshUser, changePassword } = useAuth();
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [profileImage, setProfileImage] = useState('');
 
+  // Modal states
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordData, setPasswordData] = useState({
-    current: '',
-    new: '',
-    confirm: ''
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
   });
 
-  const [deletePassword, setDeletePassword] = useState('');
+  // Database mapped state
+  const [settings, setSettings] = useState({
+    displayName: '',
+    handle: '',
+    bio: '',
+    email: '',
+    phone: '',
+    age: '',
+    gender: '',
+    profilePicture: '',
+    socialMedia: getDefaultSocialMedia()
+  });
 
   // 2FA State
   const [twoFactorStatus, setTwoFactorStatus] = useState(null);
   const [show2FAModal, setShow2FAModal] = useState(false);
-  const [twoFactorStep, setTwoFactorStep] = useState('initial'); // initial, setup, verify, success
+  const [twoFactorStep, setTwoFactorStep] = useState('initial');
   const [qrCodeData, setQrCodeData] = useState(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [backupCodes, setBackupCodes] = useState([]);
   const [disabling2FA, setDisabling2FA] = useState(false);
+
+  const tabs = [
+    { id: 'profile', label: 'Profile Info', icon: User },
+    { id: 'social', label: 'Social Media', icon: Instagram },
+    { id: 'security', label: 'Security', icon: Lock }
+  ];
 
   useEffect(() => {
     if (activeTab === 'security') {
@@ -627,79 +518,83 @@ const CreatorSettings = () => {
     }
   };
 
-  const [settings, setSettings] = useState({
-    displayName: '',
-    handle: '',
-    bio: '',
-    email: '',
-    phone: '',
-    birthday: '',
-    gender: '',
-    profilePicture: '',
-    socialMedia: getDefaultSocialMedia()
-  });
-
-  const tabs = [
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'social', label: 'Social Links', icon: Instagram },
-    { id: 'security', label: 'Security', icon: Lock },
-  ];
-
-  // Load user data into settings
+  // ==================== FETCH FROM DATABASE ====================
   useEffect(() => {
-    if (user) {
-      // Ensure birthday is in YYYY-MM-DD format (HTML date input format)
-      let formattedBirthday = user.birthday || '';
-      if (formattedBirthday && !formattedBirthday.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        const date = new Date(formattedBirthday);
-        if (!isNaN(date)) {
-          formattedBirthday = date.toISOString().split('T')[0];
+    const fetchProfileData = async () => {
+      try {
+        setLoading(true);
+        const res = await creatorService.getProfile();
+        if (res?.success) {
+          const creator = res.creator || res;
+          setProfileImage(creator.profilePicture || user?.profilePicture || '');
+          
+          // Ensure birthday is in YYYY-MM-DD format
+          let formattedBirthday = creator.birthday || '';
+          if (formattedBirthday && !formattedBirthday.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const date = new Date(formattedBirthday);
+            if (!isNaN(date)) {
+              formattedBirthday = date.toISOString().split('T')[0];
+            }
+          }
+
+          const socialDefaults = getDefaultSocialMedia();
+          const socialFromUser = creator.socialMedia || {};
+          const verificationFromUser = creator.socialVerification || {};
+          const mergedSocialMedia = {
+            instagram: {
+              ...socialDefaults.instagram,
+              ...(socialFromUser.instagram || {}),
+              verified: Boolean(socialFromUser.instagram?.verified || verificationFromUser.instagram)
+            },
+            youtube: {
+              ...socialDefaults.youtube,
+              ...(socialFromUser.youtube || {}),
+              verified: Boolean(socialFromUser.youtube?.verified || verificationFromUser.youtube)
+            },
+            tiktok: {
+              ...socialDefaults.tiktok,
+              ...(socialFromUser.tiktok || {}),
+              verified: Boolean(socialFromUser.tiktok?.verified || verificationFromUser.tiktok)
+            }
+          };
+
+          setSettings({
+            displayName: creator.displayName || user?.displayName || '',
+            handle: creator.handle || user?.handle || '',
+            bio: creator.bio || user?.bio || '',
+            email: creator.email || user?.email || '',
+            phone: creator.phone || user?.phone || '',
+            age: creator.age || user?.age || '',
+            gender: creator.gender || user?.gender || '',
+            profilePicture: creator.profilePicture || user?.profilePicture || '',
+            socialMedia: mergedSocialMedia
+          });
         }
+      } catch (error) {
+        console.error('Fetch Profile Error:', error);
+        toast.error('Failed to load settings');
+      } finally {
+        setLoading(false);
       }
-
-      const socialDefaults = getDefaultSocialMedia();
-      const socialFromUser = user.socialMedia || {};
-      const verificationFromUser = user.socialVerification || {};
-      const mergedSocialMedia = {
-        instagram: {
-          ...socialDefaults.instagram,
-          ...(socialFromUser.instagram || {}),
-          verified: Boolean(socialFromUser.instagram?.verified || verificationFromUser.instagram)
-        },
-        youtube: {
-          ...socialDefaults.youtube,
-          ...(socialFromUser.youtube || {}),
-          verified: Boolean(socialFromUser.youtube?.verified || verificationFromUser.youtube)
-        },
-        tiktok: {
-          ...socialDefaults.tiktok,
-          ...(socialFromUser.tiktok || {}),
-          verified: Boolean(socialFromUser.tiktok?.verified || verificationFromUser.tiktok)
-        },
-        twitter: {
-          ...socialDefaults.twitter,
-          ...(socialFromUser.twitter || {}),
-          verified: Boolean(socialFromUser.twitter?.verified || verificationFromUser.twitter)
-        }
-      };
-
-      setSettings({
-        displayName: user.displayName || '',
-        handle: user.handle || '',
-        bio: user.bio || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        birthday: formattedBirthday,
-        gender: user.gender || '',
-        profilePicture: user.profilePicture || '',
-        socialMedia: mergedSocialMedia
-      });
-    }
+    };
+    fetchProfileData();
   }, [user]);
 
+  const handleProfileImageUpload = (imageUrl) => {
+    setProfileImage(imageUrl);
+    if (updateUser) {
+      updateUser({ profilePicture: imageUrl });
+    }
+    if (refreshUser) {
+      refreshUser();
+    }
+  };
+
+  // ==================== SAVE TO DATABASE ====================
   const handleSaveSettings = async () => {
-    setSaving(true);
     try {
+      setSaving(true);
+
       const sanitizePlatform = (platformData = {}) => ({
         handle: platformData.handle || '',
         url: platformData.url || '',
@@ -720,33 +615,59 @@ const CreatorSettings = () => {
         handle: settings.handle,
         bio: settings.bio,
         phone: settings.phone,
-        birthday: settings.birthday,
+        age: settings.age,
         gender: settings.gender,
         profilePicture: settings.profilePicture,
         socialMedia: {
           instagram: sanitizePlatform(settings.socialMedia?.instagram),
           youtube: sanitizePlatform(settings.socialMedia?.youtube),
-          tiktok: sanitizePlatform(settings.socialMedia?.tiktok),
-          twitter: sanitizePlatform(settings.socialMedia?.twitter)
+          tiktok: sanitizePlatform(settings.socialMedia?.tiktok)
         }
       };
 
-      const profileRes = await creatorService.updateProfile(profileUpdate);
-      if (!profileRes.success) {
-        throw new Error(profileRes.error || 'Failed to update profile');
-      }
+      const res = await creatorService.updateProfile(profileUpdate);
 
-      // Refresh user context to sync changes from backend
-      if (refreshUser) {
-        await refreshUser();
+      if (res?.success) {
+        toast.success('Settings updated successfully!');
+        if (refreshUser) await refreshUser();
+      } else {
+        toast.error(res?.error || 'Failed to update settings');
       }
-
-      toast.success('Settings saved successfully');
     } catch (error) {
-      console.error('Save settings error:', error);
-      toast.error(error.message || 'Failed to save settings');
+      console.error('Backend Response Error:', error.response?.data);
+      let errorMessage = 'Server error while saving settings';
+      if (error.response?.data?.errors && error.response.data.errors.length > 0) {
+        errorMessage = error.response.data.errors[0].message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      toast.error(`Error: ${errorMessage}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ==================== CHANGE PASSWORD ====================
+  const handleChangePassword = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+
+    try {
+      const res = await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      if (res?.success) {
+        setShowPasswordModal(false);
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to change password');
     }
   };
 
@@ -754,53 +675,28 @@ const CreatorSettings = () => {
     return await creatorService.verifySocialMedia(platform, handle);
   };
 
-  const handleChangePassword = async () => {
-    if (passwordData.new !== passwordData.confirm) {
-      toast.error('Passwords do not match');
-      return;
-    }
-    if (passwordData.new.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      return;
-    }
-    const res = await changePassword(passwordData.current, passwordData.new);
-    if (res?.success) {
-      setShowPasswordForm(false);
-      setPasswordData({ current: '', new: '', confirm: '' });
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (!deletePassword) {
-      toast.error('Please enter your password');
-      return;
-    }
-    const res = await deleteAccount(deletePassword);
-    if (res?.success) {
-      setShowDeleteForm(false);
-      setDeletePassword('');
-    }
-  };
-
+  // ==================== RENDER TAB CONTENT ====================
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profile':
-        return <ProfileSettings settings={settings} setSettings={setSettings} user={user} refreshUser={refreshUser} />;
+        return (
+          <ProfileSettings
+            settings={settings}
+            setSettings={setSettings}
+            profileImage={profileImage || user?.profilePicture}
+            onProfileImageUpload={handleProfileImageUpload}
+          />
+        );
       case 'social':
-        return <SocialLinksSettings settings={settings} setSettings={setSettings} onVerify={handleVerifySocial} />;
+        return <SocialSettings settings={settings} setSettings={setSettings} onVerify={handleVerifySocial} />;
       case 'security':
         return (
-          <SecuritySettingsComp
-            showPasswordForm={showPasswordForm}
-            setShowPasswordForm={setShowPasswordForm}
-            showDeleteForm={showDeleteForm}
-            setShowDeleteForm={setShowDeleteForm}
+          <SecuritySettings
+            showPasswordModal={showPasswordModal}
+            setShowPasswordModal={setShowPasswordModal}
             passwordData={passwordData}
             setPasswordData={setPasswordData}
-            deletePassword={deletePassword}
-            setDeletePassword={setDeletePassword}
             handleChangePassword={handleChangePassword}
-            handleDeleteAccount={handleDeleteAccount}
             twoFactorStatus={twoFactorStatus}
             handleStart2FASetup={handleStart2FASetup}
             handleDisable2FA={handleDisable2FA}
@@ -813,59 +709,127 @@ const CreatorSettings = () => {
     }
   };
 
-  return (
-    <div className={`space-y-6 max-w-6xl mx-auto ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
-        <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Settings</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Manage your creator profile and preferences</p>
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading settings...</p>
         </div>
-        <Button variant="primary" icon={Save} onClick={handleSaveSettings} loading={saving}>
-          Save Changes
-        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h1 className="text-2xl font-light tracking-tight font-semibold">Creator <span className="font-bold">Settings</span></h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Manage your account preferences and creator information.</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+         <Button
+  icon={Save}
+  onClick={handleSaveSettings}
+  variant='secondary'
+  loading={saving}
+  className="flex items-center gap-2 px-6 py-2.5 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full 
+    transition-all duration-300 ease-out
+    !bg-zinc-800 hover:shadow-[0_0_20px_rgba(0,0,0,0.3)] 
+    hover:-translate-y-0.5 active:translate-y-0 active:scale-95
+    disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+>
+  {saving ? 'Saving...' : 'Save Changes'}
+</Button>
+        </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className={`rounded-xl shadow-sm overflow-hidden border ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-          <div className="flex flex-col md:flex-row">
-            {/* Sidebar */}
-            <div className={`md:w-72 border-r ${isDark ? 'border-gray-800 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>
-              <nav className="p-4 space-y-1">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center justify-between px-4 py-3 text-sm font-medium rounded-lg ${
-                        activeTab === tab.id
-                          ? (isDark ? 'bg-gradient-to-r from-[#667eea]/20 to-[#764ba2]/20 text-[#667eea]' : 'bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 text-[#667eea]')
-                          : (isDark ? 'text-gray-300 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100')
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icon className="w-5 h-5" />
-                        {tab.label}
-                      </div>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
+      {/* Tab Filters - Matching Brand Settings Style */}
+      <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 w-full lg:w-auto no-scrollbar">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border whitespace-nowrap ${
+                  activeTab === tab.id 
+                    ? (isDark ? 'bg-white border-white text-gray-800' : 'bg-black border-black text-white')
+                    : (isDark ? 'border-zinc-800 text-zinc-400 hover:border-zinc-600' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400')
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-            {/* Content */}
-            <div className="flex-1 p-6">
-              <h2 className={`text-xl font-semibold mb-6 capitalize ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                {tabs.find(t => t.id === activeTab)?.label} Settings
-              </h2>
-              {renderTabContent()}
-            </div>
+      {/* Content Area */}
+      <div className={`rounded-2xl border transition-all ${
+        isDark 
+          ? 'bg-zinc-900/50 border-zinc-800' 
+          : ' border-zinc-100 hover:shadow-xl shadow-zinc-200/50'
+      }`}>
+        <div className="p-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-6 capitalize">
+            {tabs.find((t) => t.id === activeTab)?.label}
+          </h2>
+          {renderTabContent()}
+        </div>
+      </div>
+
+      {/* Change Password Modal */}
+      <Modal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        title="Change Password"
+      >
+        <div className="space-y-4">
+          <Input
+            type="password"
+            label="Current Password"
+            value={passwordData.currentPassword}
+            onChange={(e) =>
+              setPasswordData({ ...passwordData, currentPassword: e.target.value })
+            }
+          />
+          <Input
+            type="password"
+            label="New Password"
+            value={passwordData.newPassword}
+            onChange={(e) =>
+              setPasswordData({ ...passwordData, newPassword: e.target.value })
+            }
+          />
+          <Input
+            type="password"
+            label="Confirm New Password"
+            value={passwordData.confirmPassword}
+            onChange={(e) =>
+              setPasswordData({ ...passwordData, confirmPassword: e.target.value })
+            }
+          />
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <p className="text-sm text-blue-800">
+              Password must be at least 8 characters and include uppercase, lowercase, and numbers.
+            </p>
           </div>
         </div>
-      </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="secondary" onClick={() => setShowPasswordModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="secondry" className="border-2" onClick={handleChangePassword}>
+            Update Password
+          </Button>
+        </div>
+      </Modal>
 
       {/* 2FA Setup Modal */}
       <Modal
@@ -878,111 +842,77 @@ const CreatorSettings = () => {
         title={
           twoFactorStep === 'setup' ? 'Setup Two-Factor Authentication' : 
           twoFactorStep === 'verify' ? 'Verify Code' : 
-          '2FA Enabled Successfully'
+          '2FA Setup Complete'
         }
       >
-        <div className="space-y-6 pt-2">
-          {twoFactorStep === 'setup' && (
-            <div className="text-center space-y-4">
-              <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                Scan this QR code with your authenticator app (e.g., Google Authenticator, Authy).
-              </p>
-              <div className={`flex justify-center p-4 border rounded-lg ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}>
-                {qrCodeData?.qrCode ? (
-                  <img src={qrCodeData.qrCode} alt="QR Code" className="w-48 h-48" />
-                ) : (
-                  <div className={`w-48 h-48 flex items-center justify-center ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
-                    <Loader className="w-8 h-8 text-[#667eea] animate-spin" />
-                  </div>
-                )}
+        {/* Modal content would go here - similar to brand settings */}
+        <div className="space-y-4">
+          {twoFactorStep === 'setup' && qrCodeData && (
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-4">Scan this QR code with your authenticator app:</p>
+              <div className="bg-white p-4 rounded-lg inline-block">
+                <img src={qrCodeData.qrCode} alt="QR Code" className="w-48 h-48" />
               </div>
-              <div className={`text-left p-3 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                <p className={`text-xs font-medium uppercase mb-1 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Manual Entry Key</p>
-                <code className="text-sm font-mono break-all text-[#667eea] font-bold block text-center">
-                  {qrCodeData?.secret}
-                </code>
-              </div>
-              <Button className="w-full" onClick={() => setTwoFactorStep('verify')}>
-                I've scanned it, continue
-              </Button>
+              <p className="text-xs text-gray-500 mt-4">Or enter this code manually: {qrCodeData.secret}</p>
             </div>
           )}
-
+          
           {twoFactorStep === 'verify' && (
-            <div className="space-y-4">
-              <p className={`text-center text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                Enter the 6-digit code from your app to verify the setup.
-              </p>
-              <input
-                type="text"
-                maxLength={6}
-                autoFocus
-                className={`w-full px-4 py-3 border rounded-lg text-center text-3xl tracking-widest font-bold focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                  isDark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white border-gray-300 text-gray-900'
-                }`}
-                placeholder="000000"
+            <div>
+              <Input
+                label="Enter 6-digit code"
                 value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => setVerificationCode(e.target.value)}
+                placeholder="000000"
+                maxLength={6}
               />
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setTwoFactorStep('setup')}>
-                  Back
-                </Button>
-                <Button 
-                  variant="primary" 
-                  className="flex-1" 
-                  onClick={handleVerify2FA} 
-                  loading={saving}
-                  disabled={verificationCode.length !== 6}
-                >
-                  Verify & Enable
-                </Button>
-              </div>
             </div>
           )}
-
+          
           {twoFactorStep === 'success' && (
-            <div className="space-y-4 text-center">
-              <div className="flex justify-center">
-                <div className={`w-16 h-16 ${getStatusColor('completed', 'status', isDark).split(' ')[0]} ${getStatusColor('completed', 'status', isDark).split(' ')[1]} rounded-full flex items-center justify-center`}>
-                  <CheckCircle className="w-10 h-10" />
-                </div>
-              </div>
-              <p className="text-gray-600">
-                Two-factor authentication is now active.
-              </p>
-              
-              <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-100 text-left">
-                <h4 className="text-yellow-800 font-semibold mb-2 flex items-center gap-2 text-sm">
-                  <Smartphone className="w-4 h-4" />
-                  Backup Codes
-                </h4>
-                <p className="text-xs text-yellow-700 mb-3">
-                  Save these codes in a safe place. Each can be used once if you lose your phone.
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {backupCodes.map((code, idx) => (
-                    <code key={idx} className={`px-2 py-1 rounded border text-xs text-center font-mono font-bold ${isDark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white border-gray-200 text-gray-900'}`}>
+            <div className="text-center py-8">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">2FA Enabled Successfully!</h3>
+              <p className="text-sm text-gray-600 mb-4">Save your backup codes in a safe place.</p>
+              <div className="bg-gray-50 p-4 rounded-lg max-w-sm mx-auto">
+                <p className="text-xs font-medium text-gray-700 mb-2">Backup Codes:</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {backupCodes.slice(0, 6).map((code, index) => (
+                    <code key={index} className="bg-white px-2 py-1 rounded border text-gray-800">
                       {code}
                     </code>
                   ))}
                 </div>
               </div>
-
-              <Button 
-                variant="primary" 
-                className="w-full" 
-                onClick={() => {
-                  setShow2FAModal(false);
-                  setTwoFactorStep('initial');
-                  setVerificationCode('');
-                }}
-              >
-                Close & Finish
-              </Button>
             </div>
           )}
         </div>
+        
+        {twoFactorStep !== 'success' && (
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="secondary" onClick={() => setShow2FAModal(false)}>
+              Cancel
+            </Button>
+            {twoFactorStep === 'verify' && (
+              <Button onClick={handleVerify2FA} loading={saving}>
+                Verify & Enable
+              </Button>
+            )}
+            {twoFactorStep === 'setup' && (
+              <Button onClick={() => setTwoFactorStep('verify')}>
+                Next
+              </Button>
+            )}
+          </div>
+        )}
+        
+        {twoFactorStep === 'success' && (
+          <div className="flex justify-end mt-6">
+            <Button onClick={() => setShow2FAModal(false)}>
+              Done
+            </Button>
+          </div>
+        )}
       </Modal>
     </div>
   );

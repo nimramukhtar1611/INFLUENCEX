@@ -1,0 +1,142 @@
+[
+  {
+    "timestamp": "2026-04-24T06:32:37.978Z",
+    "message": "🚀 Starting Verification Flow Scenario Tests",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:37.981Z",
+    "message": "==========================================",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:37.982Z",
+    "message": "\n🧪 Testing Scenario: Email ON, Phone OFF",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:37.982Z",
+    "message": "Settings: Email=true, Phone=false",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:37.983Z",
+    "message": "\n=== Updating Security Settings: Email=true, Phone=false ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:38.130Z",
+    "message": "❌ Settings update error: Request failed with status code 401",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:38.132Z",
+    "message": "❌ Failed to update settings for scenario",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:40.133Z",
+    "message": "\n🧪 Testing Scenario: Email OFF, Phone ON",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:40.138Z",
+    "message": "Settings: Email=false, Phone=true",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:40.139Z",
+    "message": "\n=== Updating Security Settings: Email=false, Phone=true ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:40.161Z",
+    "message": "❌ Settings update error: Request failed with status code 401",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:40.168Z",
+    "message": "❌ Failed to update settings for scenario",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:42.170Z",
+    "message": "\n🧪 Testing Scenario: Both OFF",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:42.173Z",
+    "message": "Settings: Email=false, Phone=false",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:42.174Z",
+    "message": "\n=== Updating Security Settings: Email=false, Phone=false ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:42.204Z",
+    "message": "❌ Settings update error: Request failed with status code 401",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:42.208Z",
+    "message": "❌ Failed to update settings for scenario",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:44.211Z",
+    "message": "\n🧪 Testing Scenario: Both ON",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:44.214Z",
+    "message": "Settings: Email=true, Phone=true",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:44.217Z",
+    "message": "\n=== Updating Security Settings: Email=true, Phone=true ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:44.242Z",
+    "message": "❌ Settings update error: Request failed with status code 401",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:44.247Z",
+    "message": "❌ Failed to update settings for scenario",
+    "type": "error"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:46.250Z",
+    "message": "\n=== Test Summary ===",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:46.252Z",
+    "message": "Total Scenarios: 4",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:46.253Z",
+    "message": "Passed: 0",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:46.254Z",
+    "message": "Failed: 4",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:46.255Z",
+    "message": "Success Rate: 0.0%",
+    "type": "info"
+  },
+  {
+    "timestamp": "2026-04-24T06:32:46.256Z",
+    "message": "⚠️  Some scenarios failed. Please review the logs above.",
+    "type": "error"
+  }
+]

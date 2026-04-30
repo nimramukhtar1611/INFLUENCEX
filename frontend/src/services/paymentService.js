@@ -330,7 +330,25 @@ async getWithdrawals(params = {}) {
   }
 
   // ==================== UTILITY ====================
-  calculateFees(amount) {
+  calculateFees(amount, feeStructure = null) {
+    // If fee structure is provided (from FeeContext), use dynamic values
+    if (feeStructure) {
+      const platformFee = (amount * feeStructure.commissionRate) / 100;
+      const stripeFee = amount * 0.029 + 0.3; // Stripe fees remain constant
+      const totalFees = platformFee + stripeFee;
+      const netAmount = amount - totalFees;
+
+      return {
+        amount,
+        commissionRate: feeStructure.commissionRate,
+        platformFee: parseFloat(platformFee.toFixed(2)),
+        stripeFee: parseFloat(stripeFee.toFixed(2)),
+        totalFees: parseFloat(totalFees.toFixed(2)),
+        netAmount: parseFloat(netAmount.toFixed(2))
+      };
+    }
+
+    // Fallback to hardcoded values (backward compatibility)
     const platformFee = amount * 0.1; // 10%
     const stripeFee = amount * 0.029 + 0.3; // 2.9% + $0.30
     const totalFees = platformFee + stripeFee;
@@ -338,6 +356,7 @@ async getWithdrawals(params = {}) {
 
     return {
       amount,
+      commissionRate: 10,
       platformFee: parseFloat(platformFee.toFixed(2)),
       stripeFee: parseFloat(stripeFee.toFixed(2)),
       totalFees: parseFloat(totalFees.toFixed(2)),

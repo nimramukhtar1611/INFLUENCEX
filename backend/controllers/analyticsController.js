@@ -973,13 +973,25 @@ async function calculateGrowthRate(type) {
 }
 
 async function calculateErrorRate(since) {
-  // This would come from your logging system
-  return 0.5;
+  try {
+    // This would come from your logging system
+    // For now, return a mock value
+    return 0.5;
+  } catch (error) {
+    console.error('Error calculating error rate:', error);
+    return 0;
+  }
 }
 
 async function getAverageResponseTime() {
-  // This would come from your monitoring system
-  return 245;
+  try {
+    // This would come from your monitoring system
+    // For now, return a mock value
+    return 245;
+  } catch (error) {
+    console.error('Error getting average response time:', error);
+    return 0;
+  }
 }
 
 // Scheduled tasks

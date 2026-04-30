@@ -33,6 +33,29 @@ class BrandService {
     }
   }
 
+  /**
+   * Get brand by ID (for public viewing)
+   * @param {string} brandId - Brand ID
+   * @returns {Promise<Object>} { success, brand, stats }
+   */
+  async getBrandById(brandId) {
+    try {
+      // Try public endpoint first
+      const response = await api.get(`/public/brands/${brandId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get brand by ID error:', error);
+      // If public endpoint fails, try the regular endpoint (might work for some users)
+      try {
+        const fallbackResponse = await api.get(`/brands/${brandId}`);
+        return fallbackResponse.data;
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+        return this._handleError(fallbackError, 'Failed to load brand profile');
+      }
+    }
+  }
+
   // ==================== DASHBOARD ====================
 
   /**

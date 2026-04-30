@@ -1,27 +1,64 @@
 // services/smsService.js - SINGLE SOURCE OF TRUTH
 const twilio = require('twilio');
+const config = require('../config/auth');
+const logger = require('../utils/logger');
+const settingsService = require('./settingsService');
+
+// Listen for settings changes to reinitialize SMS service
+settingsService.on('settingsChanged', () => {
+  console.log('🔄 SMS service: Settings changed, forcing reinitialization');
+  smsService.client = null;
+  smsService.lastCredentialsHash = null;
+});
 
 class SMSService {
   constructor() {
     this.client = null;
-    this.initialize();
+    this.lastCredentialsHash = null; // Track credential changes
   }
 
-  initialize() {
-    // Initialize Twilio client if credentials are provided
-    if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-      try {
-        this.client = twilio(
-          process.env.TWILIO_ACCOUNT_SID,
-          process.env.TWILIO_AUTH_TOKEN
-        );
-        console.log('✅ Twilio client initialized');
-      } catch (error) {
-        console.error('❌ Twilio initialization failed:', error);
+  async initialize() {
+    try {
+      console.log('🔍 Getting dynamic Twilio configuration...');
+      const settings = await settingsService.getSettings();
+      const twilioConfig = settings.notifications?.sms?.twilio;
+
+      // Use dynamic credentials from database, fallback to environment variables
+      const accountSid = twilioConfig?.accountSid || process.env.TWILIO_ACCOUNT_SID;
+      const authToken = twilioConfig?.authToken || process.env.TWILIO_AUTH_TOKEN;
+      const phoneNumber = twilioConfig?.phoneNumber || process.env.TWILIO_PHONE_NUMBER;
+      
+      // Create hash of current credentials
+      const currentCredentials = { accountSid, authToken, phoneNumber };
+      const currentHash = require('crypto')
+        .createHash('md5')
+        .update(JSON.stringify(currentCredentials))
+        .digest('hex');
+      
+      // If credentials haven't changed and client is initialized, skip
+      if (this.client && this.lastCredentialsHash === currentHash) {
+        console.log('🔍 SMSService credentials unchanged, skipping reinitialization');
+        return;
+      }
+      
+      // If credentials changed, force reinitialization
+      if (this.client) {
+        console.log('🔄 SMSService credentials changed, reinitializing...');
         this.client = null;
       }
-    } else {
-      console.warn('⚠️ Twilio credentials not found. SMS will be logged only.');
+
+      if (accountSid && authToken) {
+        this.client = twilio(accountSid, authToken);
+        this.lastCredentialsHash = currentHash; // Store hash
+        console.log('✅ Twilio client initialized with dynamic credentials');
+      } else {
+        console.warn('⚠️ Twilio credentials not found. SMS will be logged only.');
+        console.warn('⚠️ Missing:', { accountSid: !!accountSid, authToken: !!authToken });
+        this.client = null;
+      }
+    } catch (error) {
+      console.error('❌ Twilio initialization failed:', error);
+      this.client = null;
     }
   }
 
@@ -29,6 +66,11 @@ class SMSService {
   async sendSMS(options) {
     try {
       const { to, message, from } = options;
+      
+      // Ensure initialization with dynamic credentials
+      if (!this.client) {
+        await this.initialize();
+      }
       
       if (!to) {
         return {
@@ -49,10 +91,17 @@ class SMSService {
 
       // In development, just log the SMS
       if (process.env.NODE_ENV === 'development' || !this.client) {
+        // Get dynamic phone number from admin settings
+        const settings = await settingsService.getSettings();
+        const dynamicFrom = from || settings.notifications?.sms?.twilio?.phoneNumber || settings.notifications?.sms?.fromNumber || process.env.TWILIO_PHONE_NUMBER || '+1234567890';
+        
         console.log('📱 SMS would be sent:', {
           to,
-          from: from || process.env.TWILIO_PHONE_NUMBER || '+1234567890',
-          message
+          from: dynamicFrom,
+          message,
+          reason: !this.client ? 'Twilio client not initialized - check credentials' : 'Development mode',
+          settingsFrom: settings.notifications?.sms?.twilio?.phoneNumber,
+          settingsFromNumber: settings.notifications?.sms?.fromNumber
         });
         
         // Log SMS for testing
@@ -66,14 +115,30 @@ class SMSService {
         return {
           success: true,
           message: 'SMS logged (development mode)',
-          sid: `LOG-${Date.now()}`
+          sid: `LOG-${Date.now()}`,
+          warning: !this.client ? 'Twilio client not initialized - check credentials' : null
         };
       }
 
-      // In production, actually send the SMS
+      // In production, actually send SMS
+      // Get dynamic phone number for from field from admin settings
+      const settings = await settingsService.getSettings();
+      const dynamicFrom = from || settings.notifications?.sms?.twilio?.phoneNumber || settings.notifications?.sms?.fromNumber || process.env.TWILIO_PHONE_NUMBER;
+      
+      // Validate that the from number is a valid Twilio number format
+      if (!dynamicFrom || !dynamicFrom.startsWith('+')) {
+        return {
+          success: false,
+          error: 'Invalid Twilio phone number format. Must be in international format (e.g., +1234567890)'
+        };
+      }
+      
+      console.log('🔍 [DEBUG] Using Twilio from number:', dynamicFrom);
+      console.log('🔍 [DEBUG] Twilio Payload:', { to: this.formatPhoneNumber(to), body: message, from: dynamicFrom });
+      
       const twilioMessage = await this.client.messages.create({
         body: message,
-        from: from || process.env.TWILIO_PHONE_NUMBER,
+        from: dynamicFrom,
         to: this.formatPhoneNumber(to)
       });
 
@@ -97,6 +162,15 @@ class SMSService {
     } catch (error) {
       console.error('❌ SMS sending error:', error);
 
+      // Check for specific Twilio phone number errors
+      if (error.code === 21659) {
+        console.error('❌ Twilio phone number error - The from number is not a valid Twilio number');
+        return {
+          success: false,
+          error: 'The configured Twilio phone number is not valid. Please use a Twilio-provided phone number in your settings.'
+        };
+      }
+
       // Log error
       await this.logSMS({
         to: options.to,
@@ -113,49 +187,110 @@ class SMSService {
     }
   }
 
+  // ==================== GET DYNAMIC SETTINGS ====================
+  async getDynamicSettings() {
+    try {
+      const settings = await settingsService.getSettings();
+      const companyName = settings.platform?.name || 'InfluenceX';
+      const otpExpiryMinutes = settings.security?.otpExpiryMinutes || 10;
+      const messageTemplates = settings.notifications?.email?.messageTemplates || {};
+      
+      return {
+        companyName,
+        otpExpiryMinutes,
+        messageTemplates
+      };
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch dynamic settings for SMS, using defaults:', error.message);
+      return {
+        companyName: 'InfluenceX',
+        otpExpiryMinutes: 10,
+        messageTemplates: {}
+      };
+    }
+  }
+
   // ==================== SEND OTP ====================
   async sendOTP(phone, otp) {
-    const message = `Your InfluenceX verification code is: ${otp}. Valid for 10 minutes.`;
+    console.log('🔍 [DEBUG] sendOTP called with:', { phone, otp });
+    
+    const { companyName, otpExpiryMinutes, messageTemplates } = await this.getDynamicSettings();
+    const template = messageTemplates.otpSms || 'Your {platformName} verification code: {otp}. Valid for {expiryMinutes} minutes. Do not share this code.';
+    const message = template
+      .replace('{platformName}', companyName)
+      .replace('{otp}', otp)
+      .replace('{expiryMinutes}', otpExpiryMinutes.toString());
+    
+    console.log('🔍 [DEBUG] Generated OTP message:', message);
+    console.log('🔍 [DEBUG] Calling sendSMS with:', { to: phone, message: message });
     
     return this.sendSMS({
       to: phone,
-      message
+      message: message
     });
   }
 
   // ==================== SEND NOTIFICATION ====================
-  async sendNotification(phone, type, data) {
+  async sendNotification(phone, type, data = {}) {
+    const { companyName, messageTemplates } = await this.getDynamicSettings();
     let message = '';
-
+    
     switch(type) {
       case 'deal_offer':
-        message = `You have a new deal offer from ${data.brandName} for $${data.budget}. View on InfluenceX: ${process.env.FRONTEND_URL}/deals/${data.dealId}`;
+        const dealTemplate = messageTemplates.dealOfferSms || '{platformName}: New deal offer from {brandName} for ${budget}. View: {dealUrl}';
+        message = dealTemplate
+          .replace('{platformName}', companyName)
+          .replace('{brandName}', data.brandName || 'a brand')
+          .replace('{budget}', data.budget || '0')
+          .replace('{dealUrl}', `${process.env.FRONTEND_URL}/deals/${data.dealId}`);
         break;
       case 'deal_accepted':
-        message = `Your deal has been accepted! Check it out on InfluenceX.`;
+        message = `${companyName}: Your deal has been accepted. View details in your dashboard.`;
         break;
       case 'payment_received':
-        message = `Payment of $${data.amount} received! View details on InfluenceX.`;
+        const paymentTemplate = messageTemplates.paymentReceivedSms || '{platformName}: Payment of ${amount} received. View details in your dashboard.';
+        message = paymentTemplate
+          .replace('{platformName}', companyName)
+          .replace('{amount}', data.amount || '0');
         break;
       case 'deadline_reminder':
-        message = `Reminder: Deal deadline approaching in ${data.days} days. Submit your deliverables on InfluenceX.`;
+        const deadlineTemplate = messageTemplates.deadlineReminderSms || '{platformName}: Deal deadline in {days} days. Submit deliverables in your dashboard.';
+        message = deadlineTemplate
+          .replace('{platformName}', companyName)
+          .replace('{days}', data.days || 'several');
         break;
       case 'verification':
-        message = `Your InfluenceX verification code is: ${data.otp}`;
+        const verificationTemplate = messageTemplates.otpSms || 'Your {platformName} verification code: {otp}. Valid for {expiryMinutes} minutes. Do not share this code.';
+        message = verificationTemplate
+          .replace('{platformName}', companyName)
+          .replace('{otp}', data.otp || '000000')
+          .replace('{expiryMinutes}', '10');
         break;
       case '2fa_code':
-        message = `Your InfluenceX 2FA code is: ${data.code}. Valid for 5 minutes.`;
+        const twoFactorTemplate = messageTemplates.twoFactorSms || '{platformName}: Your 2FA code is {code}. Valid for {expiryMinutes} minutes. Do not share.';
+        message = twoFactorTemplate
+          .replace('{platformName}', companyName)
+          .replace('{code}', data.code || '000000')
+          .replace('{expiryMinutes}', '5');
         break;
       case 'account_locked':
-        message = `Your account has been locked due to multiple failed attempts. Please reset your password.`;
+        const lockedTemplate = messageTemplates.accountLockedSms || '{platformName}: Account locked due to failed attempts. Reset your password to continue.';
+        message = lockedTemplate.replace('{platformName}', companyName);
+        break;
+      case 'password_reset':
+        const resetTemplate = messageTemplates.passwordResetSms || '{platformName}: Use this link to reset your password: {resetLink}. Valid for {expiryHours} hour.';
+        message = resetTemplate
+          .replace('{platformName}', companyName)
+          .replace('{resetLink}', data.resetLink || '#')
+          .replace('{expiryHours}', '1');
         break;
       default:
-        message = `You have a new notification on InfluenceX. Check your dashboard.`;
+        message = `${companyName}: You have a new notification. Check your dashboard.`;
     }
 
     return this.sendSMS({
       to: phone,
-      message
+      message: message
     });
   }
 

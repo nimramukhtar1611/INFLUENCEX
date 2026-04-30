@@ -3,6 +3,8 @@ const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const crypto = require('crypto');
 const User = require('../models/User');
+const logger = require('../utils/logger');
+const settingsService = require('./settingsService');
 const Admin = require('../models/Admin');
 const NotificationService = require('./notificationService');
 
@@ -23,6 +25,29 @@ class TwoFactorService {
   }
 
   /**
+   * Get dynamic settings for 2FA
+   * @returns {Promise<Object>} Dynamic settings
+   */
+  async getDynamicSettings() {
+    try {
+      const settings = await settingsService.getSettings();
+      const companyName = settings.platform?.name || 'InfluenceX';
+      const twoFactorCodeExpiryMinutes = settings.security?.twoFactorCodeExpiryMinutes || 5;
+      
+      return {
+        companyName,
+        twoFactorCodeExpiryMinutes
+      };
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch dynamic settings for 2FA, using defaults:', error.message);
+      return {
+        companyName: 'InfluenceX',
+        twoFactorCodeExpiryMinutes: 5
+      };
+    }
+  }
+
+  /**
    * Generate 2FA secret for user
    * @param {string} userId - User/Admin ID
    * @param {string} email - User/Admin email
@@ -30,11 +55,13 @@ class TwoFactorService {
    */
   async generateSecret(userId, email) {
     try {
+      const { companyName, twoFactorCodeExpiryMinutes } = await this.getDynamicSettings();
+      
       // Generate secret
       const secret = speakeasy.generateSecret({
-        name: `InfluenceX:${email}`,
+        name: `${companyName}:${email}`,
         length: 20,
-        issuer: 'InfluenceX'
+        issuer: companyName
       });
 
       // Generate QR code
@@ -43,7 +70,7 @@ class TwoFactorService {
       // Store temporary secret
       const update = {
         twoFactorTempSecret: secret.base32,
-        twoFactorTempSecretExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+        twoFactorTempSecretExpires: new Date(Date.now() + twoFactorCodeExpiryMinutes * 60 * 1000)
       };
 
       // Try User
@@ -346,4 +373,4 @@ class TwoFactorService {
   }
 }
 
-module.exports = new TwoFactorService();
+module.exports = new TwoFactorService();

@@ -69,12 +69,18 @@ cron.schedule('0 0 * * *', async () => {
         
         // Send emails
         for (const email of report.schedule.recipients) {
+          // Validate email to prevent injection
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            console.error(`❌ Invalid email address: ${email}`);
+            continue;
+          }
+          
           await sendEmail({
             email,
             subject: `Daily Report: ${report.name}`,
             template: 'report',
             data: {
-              name: report.userId.fullName,
+              name: report.userId.fullName || 'User',
               reportName: report.name,
               reportUrl: `${process.env.FRONTEND_URL}/reports/${report._id}`,
               summary: data.summary

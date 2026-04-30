@@ -22,14 +22,30 @@ const Button = ({
   
   // ==================== VARIANTS ====================
   const variants = {
-    primary: 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white hover:from-[#5a67d8] hover:to-[#6b4c9a] focus:ring-[#667eea] active:from-[#4c51bf] active:to-[#5a3d7a] shadow-lg hover:shadow-xl transition-all duration-200',
-    secondary: isDark ? 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600 focus:ring-[#667eea] active:bg-gray-500' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-[#667eea] active:bg-gray-100',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 active:bg-red-800',
-    success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 active:bg-green-800',
-    warning: 'bg-yellow-600 text-white hover:bg-yellow-700 focus:ring-yellow-500 active:bg-yellow-800',
-    outline: 'border-2 border-[#667eea] text-[#667eea] hover:bg-gradient-to-r hover:from-[#667eea]/10 hover:to-[#764ba2]/10 focus:ring-[#667eea] active:from-[#667eea]/20 active:to-[#764ba2]/20',
-    ghost: isDark ? 'text-gray-300 hover:bg-gray-700 focus:ring-gray-500 active:bg-gray-600' : 'text-gray-600 hover:bg-gray-100 focus:ring-gray-500 active:bg-gray-200',
-    link: 'text-[#667eea] hover:text-[#5a67d8] underline-offset-2 hover:underline focus:ring-[#667eea] p-0 transition-colors duration-200'
+    primary: isDark 
+      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 focus:ring-purple-500 active:from-purple-800 active:to-indigo-800 shadow-lg hover:shadow-xl transition-all duration-200'
+      : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 focus:ring-blue-500 active:from-blue-800 active:to-indigo-800 shadow-lg hover:shadow-xl transition-all duration-200',
+    secondary: isDark 
+      ? 'bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 focus:ring-purple-500 active:bg-gray-600' 
+      : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 focus:ring-blue-500 active:bg-gray-100',
+    danger: isDark 
+      ? 'bg-red-700 text-white hover:bg-red-800 focus:ring-red-600 active:bg-red-900' 
+      : 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 active:bg-red-800',
+    success: isDark 
+      ? 'bg-green-700 text-white hover:bg-green-800 focus:ring-green-600 active:bg-green-900' 
+      : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 active:bg-green-800',
+    warning: isDark 
+      ? 'bg-yellow-700 text-white hover:bg-yellow-800 focus:ring-yellow-600 active:bg-yellow-900' 
+      : 'bg-yellow-600 text-white hover:bg-yellow-700 focus:ring-yellow-500 active:bg-yellow-800',
+    outline: isDark 
+      ? 'border-2 border-purple-500 text-purple-400 hover:bg-purple-500/10 focus:ring-purple-500 active:bg-purple-500/20' 
+      : 'border-2 border-blue-500 text-blue-600 hover:bg-blue-500/10 focus:ring-blue-500 active:bg-blue-500/20',
+    ghost: isDark 
+      ? 'text-gray-300 hover:bg-gray-700/50 focus:ring-gray-500 active:bg-gray-700' 
+      : 'text-gray-700 hover:bg-gray-100/50 focus:ring-gray-500 active:bg-gray-200',
+    link: isDark 
+      ? 'text-purple-400 hover:text-purple-300 underline-offset-2 hover:underline focus:ring-purple-500 p-0 transition-colors duration-200' 
+      : 'text-blue-600 hover:text-blue-700 underline-offset-2 hover:underline focus:ring-blue-500 p-0 transition-colors duration-200'
   };
 
   // ==================== SIZES ====================
@@ -143,11 +159,21 @@ export const IconButton = ({
   };
 
   const variants = {
-    primary: 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white hover:from-[#5a67d8] hover:to-[#6b4c9a] focus:ring-[#667eea] shadow-lg hover:shadow-xl transition-all duration-200',
-    secondary: isDark ? 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600 focus:ring-[#667eea]' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-[#667eea]',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-    ghost: isDark ? 'text-gray-300 hover:bg-gray-700 focus:ring-gray-500' : 'text-gray-600 hover:bg-gray-100 focus:ring-gray-500',
-    outline: isDark ? 'border border-gray-600 hover:bg-gray-700 focus:ring-[#667eea]' : 'border border-gray-300 hover:bg-gray-50 focus:ring-[#667eea]'
+    primary: isDark 
+      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 focus:ring-purple-500 shadow-lg hover:shadow-xl transition-all duration-200'
+      : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 focus:ring-blue-500 shadow-lg hover:shadow-xl transition-all duration-200',
+    secondary: isDark 
+      ? 'bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 focus:ring-purple-500' 
+      : 'bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 focus:ring-blue-500',
+    danger: isDark 
+      ? 'bg-red-700 text-white hover:bg-red-800 focus:ring-red-600' 
+      : 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    ghost: isDark 
+      ? 'text-gray-300 hover:bg-gray-700/50 focus:ring-gray-500' 
+      : 'text-gray-700 hover:bg-gray-100/50 focus:ring-gray-500',
+    outline: isDark 
+      ? 'border border-purple-500 hover:bg-purple-500/10 focus:ring-purple-500' 
+      : 'border border-blue-500 hover:bg-blue-500/10 focus:ring-blue-500'
   };
 
   return (

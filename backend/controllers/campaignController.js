@@ -91,19 +91,136 @@ exports.createCampaign = async (req, res) => {
       status: 'draft'
     };
 
-    const campaign = new Campaign(campaignData);
-    await campaign.save();
+    // Validate campaign budget
+    if (!campaignData.budget || campaignData.budget <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Campaign budget must be greater than 0'
+      });
+    }
 
-    // Update brand stats
-    await Brand.findByIdAndUpdate(brandId, {
-      $inc: { 'stats.totalCampaigns': 1 }
-    });
+    // Check brand balance for campaign budget
+    const brand = await Brand.findById(brandId);
+    if (!brand) {
+      return res.status(404).json({
+        success: false,
+        error: 'Brand not found'
+      });
+    }
 
-    res.status(201).json({
-      success: true,
-      message: 'Campaign created successfully',
-      campaign
-    });
+    // Get brand's available balance
+    const brandFinancials = await getBrandFinancials(brandId);
+    const availableBalance = brandFinancials.availableBalance || 0;
+
+    if (availableBalance < campaignData.budget) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance. Available: $${availableBalance.toFixed(2)}, Required: $${campaignData.budget.toFixed(2)}`,
+        code: 'INSUFFICIENT_BALANCE',
+        availableBalance,
+        required: campaignData.budget
+      });
+    }
+
+    // Start transaction for campaign creation and payment processing
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Create campaign
+      const campaign = new Campaign(campaignData);
+      await campaign.save({ session });
+
+      // Calculate platform fees
+      const PaymentCalculator = require('../services/paymentCalculator');
+      const fees = await PaymentCalculator.calculateFees(campaignData.budget, 'campaign');
+      
+      // Create escrow payment for campaign budget
+      const payment = new Payment({
+        transactionId: `CAMPAIGN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        type: 'campaign_budget',
+        status: 'in-escrow',
+        amount: campaignData.budget,
+        fee: fees.platform,
+        netAmount: campaignData.budget - fees.platform,
+        from: { userId: brandId, accountType: 'brand' },
+        to: { userId: 'admin', accountType: 'admin' }, // Platform fee goes to admin
+        campaignId: campaign._id,
+        description: `Campaign budget for ${campaign.title}`,
+        metadata: { 
+          fees, 
+          source: 'campaign_creation',
+          createdBy: req.user._id
+        }
+      });
+      await payment.save({ session });
+
+      // Update campaign with payment reference
+      campaign.paymentId = payment._id;
+      campaign.paymentStatus = 'in-escrow';
+      await campaign.save({ session });
+
+      // Update brand stats
+      await Brand.findByIdAndUpdate(brandId, {
+        $inc: { 
+          'stats.totalCampaigns': 1,
+          'stats.totalSpent': campaignData.budget
+        }
+      }, { session });
+
+      // Commit transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      // Notify admins about new campaign creation (async, don't wait)
+      setImmediate(async () => {
+        try {
+          const adminNotificationService = require('../services/adminNotificationService');
+          const brandData = await Brand.findById(brandId).select('brandName');
+          await adminNotificationService.notifyNewCampaign({
+            title: campaign.title,
+            brandName: brandData?.brandName || 'Unknown Brand',
+            budget: campaign.budget
+          });
+        } catch (notificationError) {
+          console.warn('Admin notification failed:', notificationError.message);
+        }
+      });
+
+      // Send real-time notification to brand
+      const notificationService = require('../services/notificationService');
+      await notificationService.createNotification({
+        userId: brandId,
+        type: 'campaign_created',
+        title: 'Campaign Created Successfully',
+        message: `Your campaign "${campaign.title}" has been created with budget $${campaign.budget.toFixed(2)}`,
+        data: {
+          campaignId: campaign._id,
+          budget: campaign.budget
+        }
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Campaign created successfully and budget allocated',
+        campaign: {
+          ...campaign.toObject(),
+          paymentId: payment._id,
+          paymentStatus: 'in-escrow'
+        },
+        payment: {
+          id: payment._id,
+          amount: payment.amount,
+          fee: payment.fee,
+          netAmount: payment.netAmount,
+          status: payment.status
+        }
+      });
+    } catch (transactionError) {
+      await session.abortTransaction();
+      session.endSession();
+      throw transactionError;
+    }
   } catch (error) {
     console.error('Create campaign error:', error);
     res.status(500).json({ 
@@ -526,8 +643,8 @@ exports.getCampaign = async (req, res) => {
 
     const campaign = await Campaign.findById(id)
       .populate('brandId', 'brandName logo website description')
-      .populate('selectedCreators.creatorId', 'displayName handle profilePicture')
-      .populate('applications.creatorId', 'displayName handle profilePicture');
+      .populate('selectedCreators.creatorId', 'displayName handle profilePicture totalFollowers averageEngagement')
+      .populate('applications.creatorId', 'displayName handle profilePicture totalFollowers averageEngagement');
 
     if (!campaign) {
       return res.status(404).json({ 
@@ -546,9 +663,30 @@ exports.getCampaign = async (req, res) => {
       });
     }
 
+    // Fetch deals for this campaign to get budget information
+    const deals = await Deal.find({ campaignId: campaign._id })
+      .populate('creatorId', 'displayName handle')
+      .select('budget creatorId status deliverables');
+
+    // Map deals to selected creators for easy access
+    const dealsMap = {};
+    deals.forEach(deal => {
+      dealsMap[deal.creatorId._id.toString()] = deal;
+    });
+
+    // Attach deal data to selected creators
+    const campaignWithDeals = {
+      ...campaign.toObject(),
+      selectedCreators: campaign.selectedCreators.map(selectedCreator => ({
+        ...selectedCreator.toObject(),
+        deal: dealsMap[selectedCreator.creatorId._id.toString()] || null
+      }))
+    };
+
     res.json({
       success: true,
-      campaign
+      campaign: campaignWithDeals,
+      deals
     });
   } catch (error) {
     console.error('Get campaign error:', error);

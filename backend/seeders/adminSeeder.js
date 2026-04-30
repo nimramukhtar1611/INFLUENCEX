@@ -17,7 +17,7 @@ const createAdmin = async () => {
       process.exit(0);
     }
     const admin = new Admin({
-      email: 'InfluenceX102@gmail.com',
+      email: 'InfluenceX102@gmail.com ',
       password: 'chsyen382738jsi2',     
       fullName: 'admininfluence',
       role: 'super_admin',

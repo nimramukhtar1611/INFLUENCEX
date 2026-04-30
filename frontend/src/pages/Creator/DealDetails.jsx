@@ -23,17 +23,31 @@ import {
   Loader,
   RefreshCw,
   XCircle,
-  Activity
+  Activity,
+  Image as ImageIcon,
+  Video,
+  Link2,
+  Check,
+  CheckCheck,
+  Reply,
+  Copy,
+  Trash2,
+  Smile,
+  ChevronRight
 } from 'lucide-react';
 import dealService from '../../services/dealService';
 import disputeService from '../../services/disputeService';
 import { formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
+import { getStatusColor } from '../../utils/colorScheme';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../hooks/useTheme';
 import { useSocket } from '../../context/SocketContext';
-
+import EmojiPicker from 'emoji-picker-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ExternalLink } from 'lucide-react';
 const normalizeConversationId = (value) => {
   if (!value) return null;
   if (typeof value === 'string') return value;
@@ -44,11 +58,15 @@ const normalizeConversationId = (value) => {
   return String(value);
 };
 
+const getMessageConversationId = (message) => normalizeConversationId(message?.conversationId);
+
 const DealDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { socket, joinConversation, leaveConversation, sendMessage: sendSocketMessage, markAsRead } = useSocket();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const { socket, joinConversation, leaveConversation, sendMessage: sendSocketMessage, markAsRead, addReaction, deleteMessage } = useSocket();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -57,7 +75,14 @@ const DealDetails = () => {
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [attachments, setAttachments] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [showCounterModal, setShowCounterModal] = useState(false);
   const [counterData, setCounterData] = useState({ budget: '', deadline: '', message: '' });
@@ -73,6 +98,9 @@ const DealDetails = () => {
     title: '',
     description: ''
   });
+  const [acceptingDeal, setAcceptingDeal] = useState(false);
+  const [rejectingDeal, setRejectingDeal] = useState(false);
+  const [cancellingDeal, setCancellingDeal] = useState(false);
 
   useEffect(() => {
     fetchDeal();
@@ -128,6 +156,80 @@ const DealDetails = () => {
     };
   }, [socket, conversationId, user, markAsRead]);
 
+  useEffect(() => {
+    if (!socket || !conversationId) return;
+
+    const handleNewMessage = (message) => {
+      if (getMessageConversationId(message) === conversationId) {
+        setMessages(prev => {
+          if (prev.some((msg) => msg._id === message._id)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
+        scrollToBottom();
+        const senderId = message?.senderId?._id || message?.senderId;
+        if (String(senderId) !== String(user?._id)) {
+          markMessagesAsRead([message._id]);
+        }
+      }
+    };
+
+    const handleMessagesRead = ({ messageIds, userId, conversationId: cid }) => {
+      if (cid === conversationId) {
+        setMessages(prev => prev.map(msg =>
+          messageIds.includes(msg._id)
+            ? { ...msg, readBy: [...(msg.readBy || []), { userId, readAt: new Date() }] }
+            : msg
+        ));
+      }
+    };
+
+    const handleMessageReaction = ({ messageId, userId, reaction, conversationId: cid }) => {
+      if (cid === conversationId) {
+        setMessages(prev => prev.map(msg => {
+          if (msg._id === messageId) {
+            const filtered = (msg.reactions || []).filter(r => r.userId !== userId);
+            return { ...msg, reactions: [...filtered, { userId, reaction, createdAt: new Date() }] };
+          }
+          return msg;
+        }));
+      }
+    };
+
+    const handleMessageEdited = ({ messageId, content, conversationId: cid }) => {
+      if (cid === conversationId) {
+        setMessages(prev => prev.map(msg =>
+          msg._id === messageId ? { ...msg, content, isEdited: true } : msg
+        ));
+      }
+    };
+
+    const handleMessageDeleted = ({ messageId, conversationId: cid }) => {
+      if (cid === conversationId) {
+        setMessages(prev => prev.map(msg =>
+          msg._id === messageId
+            ? { ...msg, isDeleted: true, content: 'This message has been deleted', attachments: [] }
+            : msg
+        ));
+      }
+    };
+
+    socket.on('new_message', handleNewMessage);
+    socket.on('messages_read', handleMessagesRead);
+    socket.on('message_reaction', handleMessageReaction);
+    socket.on('message_edited', handleMessageEdited);
+    socket.on('message_deleted', handleMessageDeleted);
+
+    return () => {
+      socket.off('new_message', handleNewMessage);
+      socket.off('messages_read', handleMessagesRead);
+      socket.off('message_reaction', handleMessageReaction);
+      socket.off('message_edited', handleMessageEdited);
+      socket.off('message_deleted', handleMessageDeleted);
+    };
+  }, [socket, conversationId, user]);
+
   const fetchDeal = async (showToast = false) => {
     try {
       if (showToast) setRefreshing(true);
@@ -172,6 +274,31 @@ const DealDetails = () => {
     }
   };
 
+  const scrollToBottom = () => {
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  };
+
+  const markMessagesAsRead = (messageIds) => {
+    if (conversationId && messageIds.length > 0) {
+      markAsRead(conversationId, messageIds);
+    }
+  };
+
+  const handleTyping = (value) => {
+    setMessageInput(value);
+    if (!isTyping && value && conversationId) {
+      setIsTyping(true);
+      socket?.emit('typing:start', { conversationId });
+    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      if (isTyping && conversationId) {
+        setIsTyping(false);
+        socket?.emit('typing:stop', { conversationId });
+      }
+    }, 1000);
+  };
+
   const fetchMessages = async () => {
     try {
       const response = await dealService.getDealMessages(id);
@@ -184,12 +311,27 @@ const DealDetails = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!messageInput.trim()) return;
+    if ((!messageInput.trim() && attachments.length === 0) || sendingMessage) return;
 
+    setSendingMessage(true);
     try {
-      setSendingMessage(true);
-
       const content = messageInput.trim();
+      let uploadedAttachments = [];
+      if (attachments.length > 0) {
+        setUploading(true);
+        const formData = new FormData();
+        attachments.forEach(f => formData.append('files', f));
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        }).then(res => res.json());
+        if (uploadRes.success) {
+          uploadedAttachments = uploadRes.files;
+        }
+        setUploading(false);
+      }
+
       const socketSent = await new Promise((resolve) => {
         if (!conversationId) {
           resolve(false);
@@ -200,6 +342,8 @@ const DealDetails = () => {
         const emitted = sendSocketMessage({
           conversationId,
           content,
+          attachments: uploadedAttachments,
+          replyTo: replyingTo?._id,
           dealId: id,
           contentType: 'text'
         }, (ack) => {
@@ -214,31 +358,51 @@ const DealDetails = () => {
       });
 
       if (!socketSent) {
-        const response = await dealService.sendMessage(id, content);
-        if (!response?.success) {
-          toast.error('Failed to send message');
-          return;
+        const sentMessage = await dealService.sendMessage(id, content, uploadedAttachments);
+        if (!sentMessage) {
+          throw new Error('Failed to send message');
         }
 
-        if (response.message) {
-          setMessages((prev) => {
-            if (prev.some((msg) => msg._id === response.message._id)) {
-              return prev;
-            }
-            return [...prev, response.message];
-          });
-        }
+        setMessages((prev) => {
+          if (prev.some((msg) => msg._id === sentMessage._id)) {
+            return prev;
+          }
+          return [...prev, sentMessage];
+        });
 
         await fetchDeal();
       }
 
       setMessageInput('');
+      setAttachments([]);
+      setReplyingTo(null);
+      if (isTyping && conversationId) {
+        setIsTyping(false);
+        socket?.emit('typing:stop', { conversationId });
+      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      scrollToBottom();
     } catch (error) {
-      console.error('Send message error:', error);
       toast.error('Failed to send message');
     } finally {
       setSendingMessage(false);
+      setUploading(false);
     }
+  };
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files).filter(f => {
+      if (f.size > 50 * 1024 * 1024) {
+        toast.error(`${f.name} too large`);
+        return false;
+      }
+      return true;
+    });
+    setAttachments(prev => [...prev, ...files]);
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   const isManualCounterDisabledForActor = (dealState, actorRole) => {
@@ -320,30 +484,66 @@ const DealDetails = () => {
 
   const handleAccept = async () => {
     try {
+      setAcceptingDeal(true);
       const response = await dealService.acceptDeal(id);
       if (response?.success) {
-        toast.success('Deal accepted!');
+        toast.success('Deal accepted successfully! You can now start working on deliverables.');
         await fetchDeal();
       } else {
-        toast.error(response?.error || 'Failed to accept deal');
+        const errorMsg = response?.error || 'Failed to accept deal';
+        toast.error(errorMsg);
+        console.error('Deal acceptance error:', errorMsg);
       }
     } catch (error) {
-      toast.error('Failed to accept deal');
+      const errorMsg = error?.response?.data?.error || error?.message || 'Network error while accepting deal';
+      toast.error(`Unable to accept deal: ${errorMsg}`);
+      console.error('Deal acceptance exception:', error);
+    } finally {
+      setAcceptingDeal(false);
     }
   };
 
   const handleCancelDeal = async () => {
-    if (!window.confirm('Are you sure you want to cancel this deal?')) return;
+    if (!window.confirm('Are you sure you want to cancel this deal? This action cannot be undone.')) return;
     try {
+      setCancellingDeal(true);
       const response = await dealService.cancelDeal(id, 'Cancelled by creator');
       if (response?.success) {
-        toast.success('Deal cancelled');
+        toast.success('Deal cancelled successfully');
         await fetchDeal();
       } else {
-        toast.error(response?.error || 'Failed to cancel deal');
+        const errorMsg = response?.error || 'Failed to cancel deal';
+        toast.error(`Unable to cancel deal: ${errorMsg}`);
+        console.error('Deal cancellation error:', errorMsg);
       }
     } catch (error) {
-      toast.error('Failed to cancel deal');
+      const errorMsg = error?.response?.data?.error || error?.message || 'Network error while cancelling deal';
+      toast.error(`Deal cancellation failed: ${errorMsg}`);
+      console.error('Deal cancellation exception:', error);
+    } finally {
+      setCancellingDeal(false);
+    }
+  };
+
+  const handleReject = async (reason = 'Deal rejected by creator') => {
+    if (!window.confirm('Are you sure you want to reject this deal? This action cannot be undone.')) return;
+    try {
+      setRejectingDeal(true);
+      const response = await dealService.updateDealStatus(id, 'rejected', reason);
+      if (response?.success) {
+        toast.success('Deal rejected successfully');
+        await fetchDeal();
+      } else {
+        const errorMsg = response?.error || 'Failed to reject deal';
+        toast.error(`Unable to reject deal: ${errorMsg}`);
+        console.error('Deal rejection error:', errorMsg);
+      }
+    } catch (error) {
+      const errorMsg = error?.response?.data?.error || error?.message || 'Network error while rejecting deal';
+      toast.error(`Deal rejection failed: ${errorMsg}`);
+      console.error('Deal rejection exception:', error);
+    } finally {
+      setRejectingDeal(false);
     }
   };
 
@@ -351,13 +551,17 @@ const DealDetails = () => {
     try {
       const response = await dealService.updateDealStatus(id, 'accepted', 'Counter offer accepted');
       if (response?.success) {
-        toast.success('Counter offer accepted');
+        toast.success('Counter offer accepted successfully');
         await fetchDeal();
       } else {
-        toast.error(response?.error || 'Failed to accept counter offer');
+        const errorMsg = response?.error || 'Failed to accept counter offer';
+        toast.error(`Unable to accept counter offer: ${errorMsg}`);
+        console.error('Counter offer acceptance error:', errorMsg);
       }
     } catch (error) {
-      toast.error('Failed to accept counter offer');
+      const errorMsg = error?.response?.data?.error || error?.message || 'Network error while accepting counter offer';
+      toast.error(`Counter offer acceptance failed: ${errorMsg}`);
+      console.error('Counter offer acceptance exception:', error);
     }
   };
 
@@ -397,24 +601,58 @@ const DealDetails = () => {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed':   return 'bg-green-100 text-green-800';
-      case 'pending':     return 'bg-yellow-100 text-yellow-800';
-      case 'negotiating': return 'bg-indigo-100 text-indigo-800';
-      case 'in-progress': return 'bg-blue-100 text-blue-800';
-      case 'revision':    return 'bg-orange-100 text-orange-800';
-      case 'accepted':    return 'bg-indigo-100 text-indigo-800';
-      case 'cancelled':
-      case 'declined':    return 'bg-red-100 text-red-800';
-      default:            return 'bg-gray-100 text-gray-800';
+  const getStatusColorClass = (status) => {
+    return getStatusColor(status, 'deal', isDark);
+  };
+
+  // Motion variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { type: 'spring', stiffness: 300, damping: 24 }
+    }
+  };
+
+  const timelineVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.15 }
+    }
+  };
+
+  const entryVariants = {
+    hidden: { opacity: 0, x: -10 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeOut" } }
+  };
+  const MotionLink = motion(Link);
+  const getDeliverableStatusColor = (status) => {
+    switch(status) {
+      case 'approved': return 'bg-green-100 text-green-800';
+      case 'submitted': return 'bg-blue-100 text-blue-800';
+      case 'revision': return 'bg-orange-100 text-orange-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-12 h-12 animate-spin text-indigo-600" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading deal details...</p>
+        </div>
       </div>
     );
   }
@@ -424,13 +662,16 @@ const DealDetails = () => {
       <div className="text-center py-12">
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Deal Not Found</h2>
-        <Button variant="primary" onClick={() => navigate('/creator/deals')}>
+        <span className="items-center" onClick={() => navigate('/creator/deals')}>
           Back to Deals
-        </Button>
+        </span>
       </div>
     );
   }
 
+  const isCreator = user?.userType === 'creator';
+  const otherParty = isCreator ? deal.brandId : deal.creatorId;
+  const submittedDeliverables = deal.deliverables?.filter(d => d.status === 'submitted') || [];
   const latestCounter = deal.negotiation?.length
     ? deal.negotiation[deal.negotiation.length - 1]
     : null;
@@ -445,636 +686,922 @@ const DealDetails = () => {
   const canCreatorCounter = (deal.status === 'pending') || (deal.status === 'negotiating' && canCreatorAcceptCounter);
 
   return (
-    <div className="space-y-6 px-2 sm:px-0">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <Link to="/creator/deals" className="p-2 hover:bg-gray-100 rounded-lg">
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-              {deal.campaignId?.title || 'Deal Details'}
-            </h1>
-            <p className="text-gray-600 text-sm sm:text-base">Deal ID: {deal._id?.slice(-8)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(deal.status)}`}>
-            {deal.status}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            icon={RefreshCw}
-            onClick={() => fetchDeal(true)}
-            loading={refreshing}
-          />
-        </div>
-      </div>
-
-      <div className="border-b border-gray-200 overflow-x-auto">
-        <nav className="flex space-x-4 sm:space-x-8 min-w-max px-2 sm:px-0">
-          {['overview', 'deliverables', 'messages', 'timeline'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`py-4 px-1 sm:px-2 border-b-2 font-medium text-sm capitalize whitespace-nowrap ${
-                activeTab === tab
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+    <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header Section - Matching CampaignDetails Style */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-4 mb-2">
+            <Link
+              to="/creator/deals"
+              className={`p-2 rounded-lg transition-colors ${
+                isDark ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-500'
               }`}
             >
-              {tab}
-              {tab === 'messages' && messages.length > 0 && (
-                <span className="ml-2 bg-indigo-100 text-indigo-600 text-xs px-1.5 py-0.5 rounded-full">
-                  {messages.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
+              <ChevronRight className="w-5 h-5 rotate-180" />
+            </Link>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Deal <span className="font-bold">Details</span>
+            </h1>
+          </div>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            {deal.campaignId?.title || 'Untitled Deal'} • Manage your deal details and communications.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchDeal(true)}
+            className={`p-2 rounded-lg transition-colors border ${
+              isDark 
+                ? 'hover:bg-zinc-800 text-zinc-400 border-zinc-700' 
+                : 'hover:bg-zinc-100 text-zinc-500 border-zinc-200'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${isDark ? 'text-zinc-400' : 'text-zinc-600'} ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
-      {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-          <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Deal Details</h2>
-              <p className="text-gray-600 mb-4 text-sm sm:text-base">{deal.campaignId?.description || 'No description provided'}</p>
+      {/* Status Cards - Compact like CampaignDetails */}
+     <div className={`
+  relative overflow-hidden rounded-2xl border px-5 py-3 transition-all duration-500
+  ${isDark 
+    ? 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-700 shadow-inner' 
+    : 'bg-zinc-50 border-zinc-200 shadow-sm'}
+`}>
+  {/* Glassy Background Flare */}
+  <div className={`absolute top-0 left-0 w-full h-[1px] ${isDark ? 'bg-gradient-to-r from-transparent via-zinc-700 to-transparent' : 'bg-gradient-to-r from-transparent via-zinc-300 to-transparent'}`} />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Campaign</p>
-                  <p className="font-medium">{deal.campaignId?.title || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Payment Type</p>
-                  <p className="font-medium capitalize">{deal.paymentType || 'fixed'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Budget</p>
-                  <p className="font-medium text-lg">{formatCurrency(deal.budget || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Platform Fee</p>
-                  <p className="font-medium text-red-600">{formatCurrency(deal.platformFee || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">You Receive</p>
-                  <p className="font-medium text-green-600">{formatCurrency(deal.netAmount || deal.budget || 0)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Deadline</p>
-                  <p className="font-medium">{deal.deadline ? formatDate(deal.deadline) : 'No deadline'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Payment Status</p>
-                  <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                    deal.paymentStatus === 'released'  ? 'bg-green-100 text-green-800' :
-                    deal.paymentStatus === 'in-escrow' ? 'bg-blue-100 text-blue-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {deal.paymentStatus || 'pending'}
-                  </span>
-                </div>
-              </div>
-            </div>
+  <div className="flex flex-wrap items-center gap-y-3 gap-x-6">
+    {/* Status Segment */}
+    <div className="flex items-center gap-2 group/stat">
+      <div className={`w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_8px_currentColor] ${getStatusColor(deal.status, 'deal', isDark).split(' ')[0]}`} />
+      <div className="flex flex-col">
+        <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-40">Status</span>
+        <span className={`text-[11px] font-mono font-bold uppercase tracking-tighter ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+          {deal.status}
+        </span>
+      </div>
+    </div>
 
-            {deal.paymentType !== 'fixed' && deal.performanceMetrics && (
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Performance Metrics</h2>
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded uppercase tracking-wider">
-                    {deal.paymentType}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* CPE Model */}
-                  {deal.paymentType === 'cpe' && deal.performanceMetrics.cpe && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Target Engagements</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpe.targetLikes?.toLocaleString() || '0'}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Current: {(deal.metrics?.likes || 0) + (deal.metrics?.comments || 0)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Base Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpe.baseRate || 0)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Bonus Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpe.bonusRate || 0)}</p>
-                      </div>
-                    </>
-                  )}
+    {/* Vertical Divider */}
+    <div className={`hidden sm:block w-[1px] h-6 ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
 
-                  {/* CPA Model */}
-                  {deal.paymentType === 'cpa' && deal.performanceMetrics.cpa && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Target Conversions</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpa.targetConversions?.toLocaleString() || '0'}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Current: {deal.metrics?.conversions || 0}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Commission Rate</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpa.commissionRate}%</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Base Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpa.baseRate || 0)}</p>
-                      </div>
-                    </>
-                  )}
+    {/* Budget Segment */}
+    <div className="flex flex-col group/stat">
+      <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-40">Allocation</span>
+      <div className="flex items-center gap-1.5">
+        <span className={`text-[11px] font-mono font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+          {formatCurrency(deal.budget)}
+        </span>
+      </div>
+    </div>
 
-                  {/* CPM Model */}
-                  {deal.paymentType === 'cpm' && deal.performanceMetrics.cpm && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Target Impressions</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.cpm.targetImpressions?.toLocaleString() || '0'}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Current: {deal.metrics?.impressions || 0}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Rate per 1000</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpm.cpmRate || 0)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Base Rate</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.cpm.baseRate || 0)}</p>
-                      </div>
-                    </>
-                  )}
+    {/* Deadline Segment */}
+    <div className="flex flex-col group/stat">
+      <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-40">Target Date</span>
+      <span className={`text-[11px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+        {deal.deadline ? formatDate(deal.deadline) : 'NO_LIMIT'}
+      </span>
+    </div>
 
-                  {/* Revenue Share Model */}
-                  {deal.paymentType === 'revenue_share' && deal.performanceMetrics.revenueShare && (
-                    <>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Share Percentage</p>
-                        <p className="font-semibold text-gray-900">{deal.performanceMetrics.revenueShare.sharePercentage || 0}%</p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-xs text-gray-500 mb-1">Minimum Guarantee</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(deal.performanceMetrics.revenueShare.minimumGuarantee || 0)}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
+    {/* Progress Segment */}
+    <div className="flex-1 min-w-[120px] flex flex-col group/stat">
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-40">Sync Progress</span>
+        <span className="text-[10px] font-mono font-bold text-indigo-500">{deal.progress || 0}%</span>
+      </div>
+      <div className={`h-1 w-full rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
+        <div 
+          className="h-full bg-indigo-500 transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+          style={{ width: `${deal.progress || 0}%` }}
+        />
+      </div>
+    </div>
 
-                {/* Performance Progress Bar */}
-                <div className="mt-6">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Performance Progress</span>
-                    <span className="text-xs font-semibold text-indigo-600">
-                      {deal.paymentType === 'cpe' ? Math.min(100, Math.round(((deal.metrics?.likes || 0) + (deal.metrics?.comments || 0)) / (deal.performanceMetrics.cpe.targetLikes || 1) * 100)) :
-                       deal.paymentType === 'cpa' ? Math.min(100, Math.round((deal.metrics?.conversions || 0) / (deal.performanceMetrics.cpa.targetConversions || 1) * 100)) :
-                       deal.paymentType === 'cpm' ? Math.min(100, Math.round((deal.metrics?.impressions || 0) / (deal.performanceMetrics.cpm.targetImpressions || 1) * 100)) : 0}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div 
-                      className="bg-indigo-600 h-2 rounded-full transition-all duration-500" 
-                      style={{ 
-                        width: `${
-                          deal.paymentType === 'cpe' ? Math.min(100, Math.round(((deal.metrics?.likes || 0) + (deal.metrics?.comments || 0)) / (deal.performanceMetrics.cpe.targetLikes || 1) * 100)) :
-                          deal.paymentType === 'cpa' ? Math.min(100, Math.round((deal.metrics?.conversions || 0) / (deal.performanceMetrics.cpa.targetConversions || 1) * 100)) :
-                          deal.paymentType === 'cpm' ? Math.min(100, Math.round((deal.metrics?.impressions || 0) / (deal.performanceMetrics.cpm.targetImpressions || 1) * 100)) : 0
-                        }%` 
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            )}
+    {/* Reference ID Segment */}
+    <div className="flex flex-col items-end group/stat ml-auto">
+      <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-40">Ref_Hash</span>
+      <span className={`text-[10px] font-mono font-medium opacity-60 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+        0x{deal._id?.slice(-8).toUpperCase()}
+      </span>
+    </div>
+  </div>
+</div>
 
-            {deal.requirements && deal.requirements.length > 0 && (
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Requirements</h2>
-                <ul className="space-y-2">
-                  {deal.requirements.map((req, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-gray-600">{req}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+      {/* Progress bar - Compact like CampaignDetails */}
+    <div className={`
+  group relative p-4 rounded-2xl border transition-all duration-500
+  ${isDark 
+    ? 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-700' 
+    : 'bg-white border-zinc-100 hover:shadow-lg hover:shadow-zinc-200/30'}
+`}>
+  {/* Header: More compact spacing */}
+  <div className="flex items-center justify-between mb-2">
+    <div>
+      <h3 className={`text-[9px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+        Execution Index
+      </h3>
+      <div className={`text-xl font-mono font-bold tracking-tighter ${isDark ? 'text-white' : 'text-black'}`}>
+        {deal.progress || 0}<span className="text-[10px] opacity-40 ml-0.5">%</span>
+      </div>
+    </div>
+    
+    <div className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm ${isDark ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+      {deal.progress === 100 ? 'COMPLETE' : 'SYNCING'}
+    </div>
+  </div>
 
-            {deal.terms && (
-              <div className="bg-white p-6 rounded-xl shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Terms</h2>
-                <p className="text-sm text-gray-600 whitespace-pre-line">{deal.terms}</p>
-              </div>
-            )}
-          </div>
+  {/* Progress Track: Slimmer height (h-1.5 instead of h-3) */}
+  <div className={`relative w-full rounded-full h-1.5 overflow-hidden ${isDark ? 'bg-zinc-800/50' : 'bg-zinc-100'}`}>
+    <div
+      className={`
+        h-full rounded-full transition-all duration-1000 ease-out relative
+        ${isDark ? 'bg-white shadow-[0_0_10px_rgba(255,255,255,0.2)]' : 'bg-black'}
+      `}
+      style={{ width: `${deal.progress || 0}%` }}
+    >
+      {/* Moving Shimmer Effect */}
+      <div className="absolute inset-0 w-full h-full transform -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+    </div>
+  </div>
 
-          <div className="space-y-4 sm:space-y-6">
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Brand</h2>
-              <div className="flex items-center gap-3 sm:gap-4 mb-4">
-                <img
-                  src={deal.brandId?.logo || deal.brandId?.profilePicture || 'https://via.placeholder.com/60'}
-                  alt={deal.brandId?.brandName}
-                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover flex-shrink-0"
-                />
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-gray-900 truncate">{deal.brandId?.brandName || 'Brand'}</h3>
-                  <div className="flex items-center mt-1">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="text-sm ml-1">
-                      {deal.brandId?.stats?.averageRating?.toFixed(1) || '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+  {/* Financial Ledger Footer: Reduced top margin and padding */}
+  <div className={`grid grid-cols-4 gap-2 mt-4 pt-4 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-50'}`}>
+    <div className="flex flex-col">
+      <span className="text-[7px] font-black uppercase tracking-tight text-zinc-500 mb-0.5">Gross</span>
+      <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+        {formatCurrency(deal.budget)}
+      </span>
+    </div>
 
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Progress</h2>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-indigo-600 h-2 rounded-full"
-                    style={{ width: `${deal.progress || 0}%` }}
-                  />
-                </div>
-                <span className="text-sm font-medium text-gray-700 whitespace-nowrap">{deal.progress || 0}%</span>
-              </div>
-              <p className="text-xs text-gray-500">
-                {deal.deliverables?.filter(d => d.status === 'approved').length || 0} of{' '}
-                {deal.deliverables?.length || 0} deliverables approved
-              </p>
-            </div>
+    {deal.netAmount && (
+      <div className="flex flex-col">
+        <span className="text-[7px] font-black uppercase tracking-tight text-emerald-500/80 mb-0.5">Net</span>
+        <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+          {formatCurrency(deal.netAmount)}
+        </span>
+      </div>
+    )}
 
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
+    {deal.platformFee && (
+      <div className="flex flex-col">
+        <span className="text-[7px] font-black uppercase tracking-tight text-rose-500/80 mb-0.5">Fee</span>
+        <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+          -{formatCurrency(deal.platformFee)}
+        </span>
+      </div>
+    )}
 
-              {deal.status === 'negotiating' && latestCounter && (
-                <div className="mb-4 p-3 rounded-lg border border-indigo-100 bg-indigo-50">
-                  <p className="text-xs text-indigo-700 font-medium mb-1">Latest Counter Offer</p>
-                  {latestCounter.budget && (
-                    <p className="text-sm text-indigo-800">Budget: {formatCurrency(latestCounter.budget)}</p>
-                  )}
-                  {latestCounter.deadline && (
-                    <p className="text-sm text-indigo-800">Deadline: {formatDate(latestCounter.deadline)}</p>
-                  )}
-                  {latestCounter.message && (
-                    <p className="text-sm text-indigo-900 mt-1">{latestCounter.message}</p>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {deal.status === 'pending' && (
-                  <>
-                    <Button variant="primary" fullWidth icon={ThumbsUp} onClick={handleAccept}>
-                      Accept Deal
-                    </Button>
-                    <Button
-                      variant="outline"
-                      fullWidth
-                      icon={Edit}
-                      onClick={() => setShowCounterModal(true)}
-                      disabled={manualCounterDisabled}
-                    >
-                      Counter Offer
-                    </Button>
-                  </>
-                )}
-
-                {deal.status === 'negotiating' && (
-                  <>
-                    {canCreatorAcceptCounter && (
-                      <Button variant="primary" fullWidth icon={ThumbsUp} onClick={handleAcceptCounterOffer}>
-                        Accept Counter Offer
-                      </Button>
-                    )}
-                    {canCreatorAcceptCounter && (
-                      <Button
-                        variant="outline"
-                        fullWidth
-                        icon={Edit}
-                        onClick={() => setShowCounterModal(true)}
-                        disabled={manualCounterDisabled}
-                      >
-                        Counter Again
-                      </Button>
-                    )}
-                  </>
-                )}
-
-                {canCreatorCounter && aiCounterAccess?.canUse && (
-                  <Button
-                    variant="secondary"
-                    fullWidth
-                    icon={RefreshCw}
-                    onClick={handleStartAiCounter}
-                    loading={startingAiCounter}
-                    disabled={manualCounterDisabled}
-                  >
-                    AI Counter Dealing
-                  </Button>
-                )}
-
-                {canCreatorCounter && !aiCounterAccess?.canUse && aiCounterAccess?.reason && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                    {aiCounterAccess.reason}
-                  </p>
-                )}
-
-                {manualCounterDisabled && (
-                  <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-2">
-                    You started AI Counter Dealing, so your manual counter offer is disabled.
-                  </p>
-                )}
-
-                {['accepted', 'in-progress', 'revision'].includes(deal.status) && (
-                  <Button
-                    variant="primary"
-                    fullWidth
-                    icon={Upload}
-                    onClick={() => navigate(`/creator/deliverables/${deal._id}`)}
-                  >
-                    Submit Deliverables
-                  </Button>
-                )}
-
-                <Button
-                  variant="outline"
-                  fullWidth
-                  icon={MessageSquare}
-                  onClick={() => setActiveTab('messages')}
-                >
-                  Send Message
-                </Button>
-
-                {['pending', 'negotiating'].includes(deal.status) && (
-                  <Button variant="danger" fullWidth icon={XCircle} onClick={handleCancelDeal}>
-                    Cancel Deal
-                  </Button>
-                )}
-
-                <Button variant="outline" fullWidth icon={Flag} onClick={() => setShowDisputeModal(true)}>
-                  Report Issue
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'deliverables' && (
-        <div className="space-y-4 sm:space-y-6">
-          {deal.deliverables && deal.deliverables.length > 0 ? (
-            deal.deliverables.map((del) => (
-              <div key={del._id} className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                  <div className="flex items-center gap-3">
-                    {del.status === 'approved' ? (
-                      <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
-                    ) : del.status === 'submitted' ? (
-                      <Clock className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                    ) : del.status === 'revision' ? (
-                      <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0" />
-                    ) : (
-                      <Clock className="w-6 h-6 text-yellow-600 flex-shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-gray-900 capitalize truncate">{del.type}</h3>
-                      <p className="text-sm text-gray-500 capitalize">{del.platform}</p>
-                      {del.submittedAt && (
-                        <p className="text-xs text-gray-400">Submitted: {formatDate(del.submittedAt)}</p>
-                      )}
-                    </div>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(del.status)} whitespace-nowrap`}>
-                    {del.status}
-                  </span>
-                </div>
-
-                {del.description && (
-                  <p className="text-sm text-gray-600 mb-4">{del.description}</p>
-                )}
-
-                {del.revisionNotes && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm font-medium text-orange-700 mb-1">Revision Requested:</p>
-                    <p className="text-sm text-orange-600">{del.revisionNotes}</p>
-                  </div>
-                )}
-
-                {del.feedback && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm font-medium text-blue-700 mb-1">Brand Feedback:</p>
-                    <p className="text-sm text-blue-600">{del.feedback}</p>
-                  </div>
-                )}
-
-                {del.files && del.files.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Submitted Files:</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {del.files.map((file, index) => (
-                        <a
-                          key={index}
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="relative group block"
-                        >
-                          {file.type === 'image' ? (
-                            <img
-                              src={file.url}
-                              alt={file.filename}
-                              className="w-full h-28 object-cover rounded-lg"
-                            />
-                          ) : (
-                            <div className="w-full h-28 bg-gray-100 rounded-lg flex flex-col items-center justify-center gap-1">
-                              <FileText className="w-8 h-8 text-gray-400" />
-                              <p className="text-xs text-gray-500 truncate max-w-[90%] px-1">{file.filename}</p>
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black bg-opacity-40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <Eye className="w-4 h-4 text-white" />
-                            <Download className="w-4 h-4 text-white" />
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {del.links && del.links.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Submitted Links:</p>
-                    <div className="space-y-1">
-                      {del.links.map((link, i) => (
-                        <a
-                          key={i}
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block text-sm text-indigo-600 hover:text-indigo-700 truncate"
-                        >
-                          {link}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {del.status !== 'approved' && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={Upload}
-                    onClick={() => navigate(`/creator/deliverables/${deal._id}`)}
-                  >
-                    {del.status === 'revision' ? 'Resubmit' : 'Upload Files'}
-                  </Button>
-                )}
-              </div>
-            ))
-          ) : (
-            <div className="bg-white p-12 rounded-xl shadow-sm text-center">
-              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No deliverables defined for this deal</p>
-            </div>
+    <div className="flex flex-col items-end justify-center">
+      <span className={`
+        text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter
+        ${deal.paymentStatus === 'paid' 
+          ? 'bg-emerald-500/10 text-emerald-500' 
+          : 'bg-amber-500/10 text-amber-500'}
+      `}>
+        {deal.paymentStatus || 'pending'}
+      </span>
+    </div>
+  </div>
+</div>
+      {/* Tab Navigation - Matching CampaignDetails Style */}
+ <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+  <div className="flex items-center gap-2 overflow-x-auto pb-2 w-full lg:w-auto no-scrollbar">
+    {[
+      { id: 'overview', label: 'Overview', icon: Eye },
+      { id: 'deliverables', label: 'Deliverables', icon: FileText },
+      { id: 'messages', label: 'Messages', icon: MessageSquare, badge: messages.length },
+      { id: 'timeline', label: 'Timeline', icon: Activity },
+    ].map(({ id: tabId, label, icon: Icon, badge }) => {
+      const isActive = activeTab === tabId;
+      
+      return (
+        <button
+          key={tabId}
+          onClick={() => setActiveTab(tabId)}
+          className={`
+            relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[9px] font-bold uppercase tracking-wider 
+            transition-all duration-300 border whitespace-nowrap outline-none
+            ${isActive 
+              ? (isDark 
+                  ? 'bg-whit e border-white text-white shadow-md z-10' 
+                  : 'bg-black border-black text-white shadow-md z-10')
+              : (isDark 
+                  ? 'border-zinc-800/40 text-zinc-500 hover:text-zinc-300 bg-zinc-900/40' 
+                  : 'border-zinc-100 text-zinc-400 hover:text-zinc-600 bg-zinc-50')
+            }
+          `}
+        >
+          <Icon className={`w-3.5 h-3.5 ${isActive ? 'opacity-100' : 'opacity-40'}`} />
+          
+          <span className="relative z-10">{label}</span>
+          
+          {badge > 0 && (
+            <span className={`
+              ml-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-sm text-[8px] font-mono font-black
+              ${isActive 
+                ? (isDark ? 'bg-black text-white' : 'bg-white text-black') 
+                : 'bg-indigo-500 text-white'}
+            `}>
+              {badge}
+            </span>
           )}
-        </div>
-      )}
+        </button>
+      );
+    })}
+  </div>
+</div>
 
-      {activeTab === 'messages' && (
-        <div className="bg-white rounded-xl shadow-sm h-[500px] sm:h-[600px] flex flex-col">
-          <div className="p-3 sm:p-4 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 truncate">
-              Messages with {deal.brandId?.brandName || 'Brand'}
-            </h2>
-          </div>
+      {/* Tab Content */}
+   {activeTab === 'overview' && (
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      {/* LEFT COLUMN: PRIMARY INTEL (8/12) */}
+      <div className="lg:col-span-8 space-y-6">
+        
+        {/* Deal Abstract Card */}
+        <div className={`p-6 rounded-[2rem] border transition-all ${
+          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+        }`}>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+              <FileText className="w-5 h-5" />
+            </div>
+            <h2 className={`text-lg font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+              Campaign Blueprint
+            </h2>
+          </div>
 
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4">
-            {messages.length > 0 ? (
-              messages.map((msg) => {
-                const senderId = msg.senderId?._id || msg.senderId;
-                const isOwn = String(senderId) === String(user?._id);
-                return (
-                  <div key={msg._id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] sm:max-w-[70%] rounded-lg p-3 ${
-                      isOwn ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'
-                    }`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium">
-                          {isOwn ? 'You' : (msg.senderId?.fullName || msg.senderId?.brandName || 'Brand')}
-                        </span>
-                        <span className={`text-xs ${isOwn ? 'text-indigo-200' : 'text-gray-500'}`}>
-                          {timeAgo(msg.createdAt)}
-                        </span>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      {msg.attachments && msg.attachments.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {msg.attachments.map((file, index) => (
-                            <a
-                              key={index}
-                              href={file.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-xs bg-white bg-opacity-20 px-2 py-1 rounded"
-                            >
-                              <Paperclip className="w-3 h-3" />
-                              {file.filename || 'Attachment'}
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-gray-400">No messages yet. Start the conversation!</p>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+          <p className={`text-sm leading-relaxed mb-8 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            {deal.campaignId?.description || 'No project scope defined.'}
+          </p>
 
-          <div className="p-3 sm:p-4 border-t border-gray-200">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                placeholder="Type your message..."
-                className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!messageInput.trim() || sendingMessage}
-                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0"
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {[
+              { label: 'Campaign ID', value: deal.campaignId?.title || '—', color: 'zinc' },
+              { label: 'Model', value: deal.paymentType || 'Fixed', color: 'zinc', capitalize: true },
+              { label: 'Gross Budget', value: formatCurrency(deal.budget || 0), color: 'emerald' },
+              { label: 'System Fee', value: `-${formatCurrency(deal.platformFee || 0)}`, color: 'rose' },
+              { label: 'Net Payout', value: formatCurrency(deal.netAmount || deal.budget || 0), color: 'indigo' },
+              { label: 'Hard Deadline', value: deal.deadline ? formatDate(deal.deadline) : 'OPEN', color: 'zinc' }
+            ].map((stat, i) => (
+              <div key={i} className={`p-4 rounded-2xl border ${
+                isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-zinc-50/50 border-zinc-100'
+              }`}>
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">{stat.label}</p>
+                <p className={`text-[13px] font-mono font-bold ${
+                  stat.color === 'emerald' ? 'text-emerald-500' : 
+                  stat.color === 'rose' ? 'text-rose-500' : 
+                  stat.color === 'indigo' ? 'text-indigo-500' : 
+                  isDark ? 'text-zinc-100' : 'text-zinc-900'
+                } ${stat.capitalize ? 'capitalize' : ''}`}>
+                  {stat.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Dynamic Performance Engine */}
+        {deal.paymentType !== 'fixed' && deal.performanceMetrics && (
+          <div className={`p-6 rounded-[2rem] border ${
+            isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <h2 className="text-sm font-black uppercase tracking-widest opacity-70">Metric Tracking</h2>
+              </div>
+              <span className="px-3 py-1 bg-indigo-500 text-white text-[10px] font-black rounded-full uppercase">
+                {deal.paymentType} Protocol
+              </span>
+            </div>
+
+            {/* Performance Grid Logic - Modularized for any type */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+               {/* Simplified Example for CPE/CPA/CPM */}
+               <div className={`p-4 rounded-2xl border ${isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-zinc-50/50 border-zinc-100'}`}>
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">Current Velocity</p>
+                <p className="text-lg font-mono font-bold text-indigo-500">
+                  {deal.metrics?.likes || deal.metrics?.conversions || 0}
+                </p>
+              </div>
+              {/* ... other metrics follow same pattern */}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] font-black uppercase tracking-tighter opacity-60">
+                <span>KPI Fulfillment</span>
+                <span>{/* Calculation Logic % */}</span>
+              </div>
+              <div className={`h-2 w-full rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'} overflow-hidden`}>
+                <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(99,102,241,0.4)]" style={{width: '65%'}} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT COLUMN: PARTNER & LOGISTICS (4/12) */}
+      <div className="lg:col-span-4 space-y-6">
+        
+        {/* Identity Card */}
+        <div className={`p-6 rounded-[2rem] border text-center ${
+          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+        }`}>
+          <div className="relative inline-block mb-4">
+            <img 
+              src={otherParty?.profilePicture || otherParty?.logo} 
+              className="w-20 h-20 rounded-[2rem] object-cover ring-4 ring-indigo-500/10 shadow-xl" 
+            />
+            <div className="absolute -bottom-2 -right-2 bg-yellow-400 p-1.5 rounded-xl shadow-lg">
+              <Star className="w-4 h-4 text-black fill-current" />
+            </div>
+          </div>
+          <h3 className="text-lg font-bold tracking-tight mb-1">
+            {isCreator ? otherParty?.brandName : otherParty?.displayName}
+          </h3>
+          <p className="text-xs font-mono opacity-50 mb-4">@{otherParty?.handle || 'unlinked'}</p>
+          
+          <MotionLink
+  to={isCreator ? `/creator/brands/${otherParty?._id}` : `/brand/creators/${otherParty?._id}`}
+  state={{ brandData: otherParty }}
+  // Framer Motion Props
+  initial={{ opacity: 0, y: 10 }}
+  animate={{ opacity: 1, y: 0 }}
+  whileHover={{ 
+    scale: 1.02,
+    backgroundColor: isDark ? "rgba(39, 39, 42, 0.8)" : "rgba(244, 244, 245, 0.9)",
+    borderColor: isDark ? "rgba(82, 82, 91, 1)" : "rgba(228, 228, 231, 1)",
+  }}
+  whileTap={{ scale: 0.98 }}
+  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+  className={`block w-full py-3 text-center rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border shadow-sm ${
+    isDark 
+      ? 'border-zinc-800 text-zinc-300 bg-zinc-900/50' 
+      : 'border-zinc-100 text-zinc-600 bg-white'
+  }`}
+>
+  Access Profile
+</MotionLink>
+          </div>
+
+        {/* Command Actions */}
+        <div className={`p-6 rounded-[2rem] border ${
+          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100'
+        }`}>
+          <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-6">Action Terminal</h2>
+          <div className="space-y-3">
+            {/* Logic for specific buttons based on status */}
+            {deal.status === 'pending' && (
+              <Button 
+                variant="primary" 
+                fullWidth 
+                icon={acceptingDeal ? Loader : ThumbsUp} 
+                onClick={handleAccept} 
+                loading={acceptingDeal}
+                disabled={acceptingDeal || loading}
+                className="rounded-xl h-12 text-[11px] font-black uppercase tracking-widest"
               >
-                {sendingMessage ? (
-                  <Loader className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                {acceptingDeal ? 'Authorizing...' : 'Authorize Deal'}
+              </Button>
+            )}
 
-      {activeTab === 'timeline' && (
-        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
-          {deal.timeline && deal.timeline.length > 0 ? (
-            <div className="relative">
-              {deal.timeline.map((item, index) => (
-                <div key={index} className="flex gap-3 sm:gap-4 mb-4 last:mb-0">
-                  <div className="relative flex-shrink-0">
-                    <div className="w-3 h-3 bg-indigo-600 rounded-full mt-1.5" />
-                    {index < deal.timeline.length - 1 && (
-                      <div className="absolute top-4 left-1.5 w-0.5 h-12 bg-gray-200" />
+            {/* AI Counter Agent - Make this look unique */}
+            {canCreatorCounter && aiCounterAccess?.canUse && (
+              <button 
+                onClick={handleStartAiCounter}
+                className="w-full h-12 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+              >
+                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Deploy AI Negotiator</span>
+              </button>
+            )}
+
+            {['accepted', 'in-progress'].includes(deal.status) && (
+              <Button variant="outline" fullWidth icon={Upload} onClick={() => navigate(`/creator/deliverables/${deal._id}`)} className="rounded-xl h-12">
+                Submit Asset
+              </Button>
+            )}
+            
+           <motion.button
+  whileHover={{ scale: 1.01, opacity: 1 }}
+  whileTap={{ scale: 0.98 }}
+  onClick={() => setActiveTab('messages')}
+  className={`group relative w-full h-12 flex items-center justify-center gap-3 rounded-xl border transition-all duration-300 ${
+    isDark 
+      ? 'bg-zinc-900/20 border-zinc-800/80 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700' 
+      : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:border-zinc-300'
+  }`}
+>
+  {/* Security Pulse Indicator */}
+  <div className="relative flex items-center justify-center">
+    <div className="absolute h-2 w-2 rounded-full bg-emerald-500/40 animate-ping" />
+    <div className="relative h-1.5 w-1.5 rounded-full bg-emerald-500" />
+  </div>
+
+  <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+    Secure Channel
+  </span>
+
+  <MessageSquare className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100 transition-opacity" />
+
+  {/* Subtle Internal Glow on Hover (Dark Mode Only) */}
+  {isDark && (
+    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent" />
+    </div>
+  )}
+</motion.button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+)} 
+
+{activeTab === 'deliverables' && (
+  <motion.div 
+    initial="hidden"
+    animate="visible"
+    variants={containerVariants}
+    className="max-w-4xl mx-auto py-2"
+  >
+    {deal.deliverables?.length > 0 ? (
+      <div className="grid gap-4">
+        {deal.deliverables.map((del) => (
+          <motion.div 
+            key={del._id} 
+            variants={itemVariants}
+            className={`relative overflow-hidden rounded-2xl border transition-all duration-300 ${
+              isDark 
+                ? 'bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50' 
+                : 'bg-white border-zinc-200 shadow-sm hover:shadow-md'
+            }`}
+          >
+            {/* Minimalist Status Indicator (Left Bar) */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+              del.status === 'approved' ? 'bg-emerald-500' :
+              del.status === 'submitted' ? 'bg-blue-500' :
+              del.status === 'revision' ? 'bg-orange-500' : 'bg-zinc-500'
+            }`} />
+
+            <div className="p-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                
+                {/* Left Side: Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[9px] font-black uppercase tracking-[0.15em] text-indigo-500">
+                      {del.platform}
+                    </span>
+                    {del.submittedAt && (
+                      <span className={`text-[9px] font-mono ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                        // {formatDate(del.submittedAt)}
+                      </span>
                     )}
                   </div>
-                  <div className="flex-1 pb-4 min-w-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <p className="font-medium text-gray-900 truncate">{item.event}</p>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">{timeAgo(item.createdAt)}</span>
+                  <h3 className={`text-lg font-serif ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`} style={{ fontFamily: "'Playfair Display', serif" }}>
+                    {del.type}
+                  </h3>
+                  {del.description && (
+                    <p className={`text-xs mt-1 line-clamp-1 opacity-70 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                      {del.description}
+                    </p>
+                  )}
+                </div>
+
+                {/* Right Side: Assets & Status */}
+                <div className="flex items-center gap-4">
+                  {/* Small Asset Thumbnails */}
+                  <div className="flex -space-x-1.5">
+                    {del.files?.slice(0, 3).map((file, i) => (
+                      <div key={i} className={`h-8 w-8 rounded-lg border-2 ${isDark ? 'border-zinc-900 bg-zinc-800' : 'border-white bg-zinc-100'} overflow-hidden`}>
+                        {file.type === 'image' ? (
+                          <img src={file.url} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center"><FileText className="w-3 h-3 text-zinc-500" /></div>
+                        )}
+                      </div>
+                    ))}
+                    {del.files?.length > 3 && (
+                      <div className={`h-8 w-8 rounded-lg border-2 flex items-center justify-center text-[8px] font-bold ${isDark ? 'border-zinc-900 bg-zinc-800 text-zinc-400' : 'border-white bg-zinc-100 text-zinc-600'}`}>
+                        +{del.files.length - 3}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border backdrop-blur-md ${getDeliverableStatusColor(del.status)}`}>
+                    {del.status}
+                  </div>
+                </div>
+              </div>
+
+              {/* Feedback Section (Compact) */}
+              <AnimatePresence>
+                {(del.revisionNotes || del.feedback) && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-4 pt-3 border-t border-zinc-800/10 space-y-2"
+                  >
+                    {del.revisionNotes && (
+                      <div className="flex gap-2 items-start text-orange-500/90">
+                        <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <p className="text-[11px] leading-relaxed italic">{del.revisionNotes}</p>
+                      </div>
+                    )}
+                    {del.feedback && (
+                      <div className="flex gap-2 items-start text-blue-500/90">
+                        <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <p className="text-[11px] leading-relaxed italic">{del.feedback}</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    ) : (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex flex-col items-center justify-center py-24 text-center"
+      >
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-4 rotate-12 ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-100'}`}>
+          <FileText className={`w-6 h-6 ${isDark ? 'text-zinc-700' : 'text-zinc-300'}`} />
+        </div>
+        <h3 className={`text-xl font-serif mb-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`} style={{ fontFamily: "'Playfair Display', serif" }}>
+          Awaiting Submissions
+        </h3>
+        <p className="text-xs text-zinc-500">Assets will appear here for review once uploaded.</p>
+      </motion.div>
+    )}
+  </motion.div>
+)}
+
+    {activeTab === 'messages' && (
+  <div className={`rounded-2xl border transition-all h-[600px] flex flex-col overflow-hidden shadow-2xl ${
+    isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'
+  }`}>
+    {/* Header */}
+    <div className={`p-4 border-b flex items-center gap-3 ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
+        <User className={`w-5 h-5 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`} />
+      </div>
+      <div>
+        <h2 className={`font-semibold text-sm ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+          {isCreator ? deal.brandId?.brandName : deal.creatorId?.displayName}
+        </h2>
+        <p className="text-[10px] uppercase tracking-wider text-green-500 font-bold">Active Discussion</p>
+      </div>
+    </div>
+
+    {/* Message Thread */}
+    <div className={`flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar ${isDark ? 'bg-zinc-950/20' : 'bg-zinc-50/50'}`}>
+      <AnimatePresence initial={false}>
+        {messages.map((msg, index) => {
+          const senderId = msg.senderId?._id || msg.senderId;
+          const isOwn = String(senderId) === String(user?._id);
+          
+          return (
+            <motion.div 
+              key={msg._id}
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+            >
+              <div className={`max-w-[80%] sm:max-w-[65%] group`}>
+                {!isOwn && (
+                  <span className="text-[10px] font-bold text-zinc-500 ml-2 mb-1 uppercase tracking-tight block">
+                    {msg.senderId?.fullName || msg.senderId?.brandName || 'User'}
+                  </span>
+                )}
+
+                <div className={`relative p-3 shadow-sm ${
+                  isOwn 
+                    ? 'bg-[#667eea] text-white rounded-2xl rounded-tr-sm shadow-[#667eea]/10' 
+                    : `rounded-2xl rounded-tl-sm border ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-white border-zinc-200 text-zinc-800'}`
+                }`}>
+                  {/* Reply Context */}
+                  {msg.replyTo && (
+                    <div className={`mb-2 p-2 rounded-lg text-xs border-l-2 ${
+                      isOwn ? 'bg-white/10 border-white/30' : 'bg-zinc-100 border-zinc-300'
+                    }`}>
+                      <p className="truncate opacity-80 italic">"{msg.replyTo.content}"</p>
                     </div>
-                    {item.description && (
-                      <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                  )}
+
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+
+                  {/* Attachments */}
+                  {msg.attachments?.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      {msg.attachments.map((file, i) => (
+                        <a key={i} href={file.url} target="_blank" rel="noopener noreferrer"
+                          className={`flex items-center gap-2 p-2 rounded-lg text-xs transition-colors ${
+                            isOwn ? 'bg-white/10 hover:bg-white/20' : 'bg-zinc-100 hover:bg-zinc-200'
+                          }`}
+                        >
+                          <FileText className="w-3.5 h-3.5 text-black " />
+                          <span className="flex-1 truncate text-black">{file.filename}</span>
+                          <Download className="w-3.5 h-3.5 text-black" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Meta (Time & Status) */}
+                  <div className={`flex items-center justify-end mt-2 gap-1.5 opacity-60 text-[10px] font-medium`}>
+                    <span>{timeAgo(msg.createdAt)}</span>
+                    {isOwn && (
+                      msg.readBy?.length > 1 
+                        ? <CheckCheck className="w-3 h-3 text-blue-200" /> 
+                        : <Check className="w-3 h-3 text-white/70" />
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Activity className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No timeline events yet</p>
-            </div>
-          )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+      <div ref={messagesEndRef} />
+    </div>
+
+    {/* Input Area */}
+    <div className={`p-4 border-t ${isDark ? 'border-zinc-800 bg-zinc-900' : 'border-zinc-100 bg-white'}`}>
+      <div className={`relative rounded-2xl border transition-all p-2 ${
+        isDark ? 'bg-zinc-950 border-zinc-800 focus-within:border-zinc-700' : 'bg-zinc-50 border-zinc-200 focus-within:border-zinc-300'
+      }`}>
+        {/* Active Reply Banner */}
+        {replyingTo && (
+          <div className="mx-2 mb-2 flex items-center justify-between bg-[#667eea]/10 p-2 rounded-xl">
+            <span className="text-xs text-[#667eea] truncate">Replying to: {replyingTo.content}</span>
+            <button onClick={() => setReplyingTo(null)} className="text-[#667eea]"><X className="w-3 h-3" /></button>
+          </div>
+        )}
+
+        <textarea
+          rows="1"
+          value={messageInput}
+          onChange={(e) => handleTyping(e.target.value)}
+          placeholder="Message..."
+          className="w-full bg-transparent px-3 py-2 focus:outline-none text-sm resize-none min-h-[44px]"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
+        />
+
+        <div className="flex items-center justify-between px-2 pt-1 border-t border-zinc-800/50 mt-1">
+          <div className="flex items-center gap-1">
+            <label className="p-2 hover:bg-zinc-800 rounded-lg cursor-pointer transition-colors group">
+              <input type="file" multiple onChange={handleFileUpload} className="hidden" />
+              <Paperclip className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300" />
+            </label>
+            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors group">
+              <Smile className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300" />
+            </button>
+          </div>
+
+          <button
+            onClick={handleSendMessage}
+            disabled={(!messageInput.trim() && attachments.length === 0) || sendingMessage}
+            className="flex items-center gap-2 px-4 py-2 bg-[#667eea] text-white rounded-xl text-xs font-bold hover:bg-[#5a67d8] transition-all disabled:opacity-50 active:scale-95"
+          >
+            {sendingMessage ? <Loader className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+            SEND
+          </button>
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
+
+    {activeTab === 'timeline' && (
+  <motion.div 
+    initial="hidden"
+    animate="visible"
+    variants={timelineVariants}
+    className="max-w-2xl mx-auto py-2" // Reduced width for better focus
+  >
+    {/* Header - Much more compact */}
+    <div className="flex items-center justify-between mb-8 px-2">
+      <div>
+        <h2 className={`text-xl font-serif tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`} style={{ fontFamily: "'Playfair Display', serif" }}>
+          Deal Journey
+        </h2>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-indigo-500 font-bold mt-1">Audit Trail</p>
+      </div>
+      <div className={`p-2 rounded-xl border ${isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-zinc-200 bg-zinc-50'}`}>
+        <Activity className="w-4 h-4 text-indigo-500" />
+      </div>
+    </div>
+
+    {/* Timeline Content */}
+    <div className="relative">
+      {/* Slimmer Vertical Line */}
+      <div className={`absolute left-[11px] top-2 bottom-2 w-[1px] ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+
+      <div className="space-y-3"> {/* Tight spacing */}
+        
+        {/* EVENT: Deal Created */}
+        <motion.div variants={entryVariants} className="relative pl-8 group">
+          <div className={`absolute left-0 top-[18px] z-10 w-6 h-6 -ml-[1px] rounded-full flex items-center justify-center border ${
+            isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-200'
+          }`}>
+             <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+          </div>
+          
+          <div className={`p-4 rounded-xl border transition-all ${
+            isDark ? 'bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/60' : 'bg-white border-zinc-100 hover:shadow-sm'
+          }`}>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className={`text-sm font-bold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>Agreement Drafted</h3>
+                <p className={`text-xs mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                  Campaign initiated with <span className="text-indigo-500 font-medium">{formatCurrency(deal.budget)}</span> budget.
+                </p>
+              </div>
+              <span className={`text-[9px] font-mono whitespace-nowrap px-2 py-1 rounded border ${isDark ? 'border-zinc-800 text-zinc-600' : 'border-zinc-100 text-zinc-400'}`}>
+                {formatDate(deal.createdAt)}
+              </span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* EVENT: Deal Accepted */}
+        {deal.status !== 'pending' && (
+          <motion.div variants={entryVariants} className="relative pl-8 group">
+            <div className={`absolute left-0 top-[18px] z-10 w-6 h-6 -ml-[1px] rounded-full flex items-center justify-center border ${
+              isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-200'
+            }`}>
+               <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            </div>
+            
+            <div className={`p-4 rounded-xl border transition-all border-l-2 border-l-emerald-500/50 ${
+              isDark ? 'bg-zinc-900/30 border-zinc-800/50' : 'bg-white border-zinc-100'
+            }`}>
+              <h3 className={`text-sm font-bold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>Terms Accepted</h3>
+              <p className={`text-xs mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Partner has confirmed all contract deliverables.</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* EVENT: Deliverables (Compact Grid) */}
+        {deal.deliverables?.some(d => d.status === 'submitted' || d.status === 'approved') && (
+          <motion.div variants={entryVariants} className="relative pl-8 group">
+            <div className={`absolute left-0 top-[18px] z-10 w-6 h-6 -ml-[1px] rounded-full flex items-center justify-center border ${
+              isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-200'
+            }`}>
+               <div className="w-2 h-2 rounded-full bg-blue-500" />
+            </div>
+            
+            <div className={`p-4 rounded-xl border ${
+              isDark ? 'bg-zinc-900/30 border-zinc-800/50' : 'bg-white border-zinc-100'
+            }`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Upload className="w-3 h-3 text-blue-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500">Submissions</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {deal.deliverables?.filter(d => d.status === 'submitted' || d.status === 'approved').map((del, i) => (
+                  <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+                    isDark ? 'bg-zinc-950 border-zinc-800 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-600'
+                  }`}>
+                    <span className="text-[10px] font-bold">{del.type}</span>
+                    <div className={`w-1 h-1 rounded-full ${del.status === 'approved' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* EVENT: Current Status (Minimal Footer) */}
+        <motion.div variants={entryVariants} className="relative pl-8 pt-4">
+          <div className={`absolute left-0 top-[34px] z-10 w-6 h-6 -ml-[1px] rounded-full flex items-center justify-center border animate-pulse ${
+            deal.status === 'completed' ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-orange-500/50 bg-orange-500/10'
+          }`}>
+             <div className={`w-1.5 h-1.5 rounded-full ${deal.status === 'completed' ? 'bg-emerald-500' : 'bg-orange-500'}`} />
+          </div>
+          
+          <div className={`p-4 rounded-xl border border-dashed transition-all ${
+            isDark ? 'bg-zinc-950/40 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                deal.status === 'completed' ? 'text-emerald-500' : 'text-orange-500'
+              }`}>
+                Current: {deal.status}
+              </span>
+              {deal.deadline && (
+                <span className="text-[9px] font-medium text-zinc-500">Due {formatDate(deal.deadline)}</span>
+              )}
+            </div>
+          </div>
+        </motion.div>
+
+      </div>
+    </div>
+  </motion.div>
+)}
+
+      {/* Modals */}
+      <Modal
+        isOpen={showCounterModal}
+        onClose={() => setShowCounterModal(false)}
+        title="Counter Offer"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-100' : 'text-gray-700'}`}>
+              Budget (optional)
+            </label>
+            <input
+              type="number"
+              value={counterData.budget}
+              onChange={(e) => setCounterData({ ...counterData, budget: e.target.value })}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300'
+              }`}
+              placeholder="Your proposed budget"
+            />
+          </div>
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-100' : 'text-gray-700'}`}>
+              Deadline (optional)
+            </label>
+            <input
+              type="date"
+              value={counterData.deadline}
+              onChange={(e) => setCounterData({ ...counterData, deadline: e.target.value })}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300'
+              }`}
+            />
+          </div>
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-100' : 'text-gray-700'}`}>
+              Message *
+            </label>
+            <textarea
+              rows="4"
+              value={counterData.message}
+              onChange={(e) => setCounterData({ ...counterData, message: e.target.value })}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300'
+              }`}
+              placeholder="Explain your counter offer..."
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowCounterModal(false)}
+              disabled={submittingCounter}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCounterOffer}
+              loading={submittingCounter}
+              disabled={!counterData.message}
+            >
+              Send Counter Offer
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={showDisputeModal}
         onClose={() => setShowDisputeModal(false)}
-        title="Report Issue"
+        title="Report an Issue"
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-100' : 'text-gray-700'}`}>
               Issue Type
             </label>
             <select
               value={disputeData.type}
               onChange={(e) => setDisputeData({ ...disputeData, type: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300'
+              }`}
             >
               <option value="payment">Payment</option>
               <option value="delivery">Delivery</option>
@@ -1083,128 +1610,51 @@ const DealDetails = () => {
               <option value="contract_breach">Contract Breach</option>
             </select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-100' : 'text-gray-700'}`}>
               Title
             </label>
             <input
               type="text"
               value={disputeData.title}
               onChange={(e) => setDisputeData({ ...disputeData, title: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300'
+              }`}
               placeholder="Short summary of the issue"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-100' : 'text-gray-700'}`}>
               Description
             </label>
             <textarea
               rows="5"
               value={disputeData.description}
               onChange={(e) => setDisputeData({ ...disputeData, description: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Describe what happened and what resolution you are expecting"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-white border-gray-300'
+              }`}
+              placeholder="Detailed description of the issue..."
             />
           </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowDisputeModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleCreateDispute} loading={submittingDispute}>
-            Submit Issue
-          </Button>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={showCounterModal}
-        onClose={() => setShowCounterModal(false)}
-        title="Negotiate Terms"
-      >
-        <div className="space-y-4">
-          {counterSuggestion && (
-            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-              <p className="text-xs font-semibold text-indigo-800 mb-1">Suggested Offer</p>
-              <p className="text-sm text-indigo-900">Budget: {formatCurrency(counterSuggestion.suggestedBudget || 0)}</p>
-              {counterSuggestion.suggestedDeadline && (
-                <p className="text-sm text-indigo-900">Deadline: {formatDate(counterSuggestion.suggestedDeadline)}</p>
-              )}
-              <p className="text-xs text-indigo-700 mt-1">Confidence: {counterSuggestion.confidence || 0}%</p>
-            </div>
-          )}
-
-          {suggestionLoading && (
-            <p className="text-xs text-gray-500">Loading AI suggestion...</p>
-          )}
-
-          {manualCounterDisabled && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm text-amber-800">
-                Manual counter is disabled because you started AI Counter Dealing.
-              </p>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Proposed Budget (optional)
-            </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="number"
-                value={counterData.budget}
-                onChange={(e) => setCounterData({ ...counterData, budget: e.target.value })}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder={`Current: ${formatCurrency(deal.budget || 0)}`}
-                disabled={manualCounterDisabled}
-              />
-            </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowDisputeModal(false)}
+              disabled={submittingDispute}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleCreateDispute}
+              loading={submittingDispute}
+              disabled={!disputeData.title.trim() || !disputeData.description.trim()}
+            >
+              Report Issue
+            </Button>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Proposed Deadline (optional)
-            </label>
-            <input
-              type="date"
-              value={counterData.deadline}
-              onChange={(e) => setCounterData({ ...counterData, deadline: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              disabled={manualCounterDisabled}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Message to Brand *
-            </label>
-            <textarea
-              rows="4"
-              value={counterData.message}
-              onChange={(e) => setCounterData({ ...counterData, message: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Explain your proposed changes..."
-              disabled={manualCounterDisabled}
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowCounterModal(false)}>Cancel</Button>
-          <Button
-            variant="primary"
-            onClick={handleCounterOffer}
-            loading={submittingCounter}
-            disabled={manualCounterDisabled}
-          >
-            Send Counter Offer
-          </Button>
         </div>
       </Modal>
     </div>

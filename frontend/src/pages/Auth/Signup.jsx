@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import ReCAPTCHA from "react-google-recaptcha";
 import {
@@ -6,10 +6,22 @@ import {
   ArrowRight, Eye, EyeOff, Shield, CheckCircle, Building2, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { useGlobalSettings } from '../../context/GlobalSettingsContext';
 import OTPVerification from '../../components/Auth/OTPVerification';
+import WireframeSphere from '../../components/WireframeSphere';
 import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
 
 const Signup = () => {
+  const { 
+    getPlatformName, 
+    getVerificationFlow, 
+    getEmailVerificationRequired, 
+    // getPhoneVerificationRequired removed - phone verification is now optional
+    getPasswordRequirements,
+    securitySettings,
+    loading: settingsLoading
+  } = useGlobalSettings();
   const [searchParams] = useSearchParams();
   const defaultType = searchParams.get('type') || 'brand';
   const [userType, setUserType] = useState(defaultType);
@@ -17,6 +29,8 @@ const Signup = () => {
   const [showOTP, setShowOTP] = useState(false);
   const [otpDestination, setOtpDestination] = useState('');
   const [otpType, setOtpType] = useState('email');
+  const [verificationSteps, setVerificationSteps] = useState([]);
+  const [currentVerificationStep, setCurrentVerificationStep] = useState(0);
   const navigate = useNavigate();
 
   const [captchaToken, setCaptchaToken] = useState(null);
@@ -46,6 +60,19 @@ const Signup = () => {
     handle: '',
     niche: '',
   });
+
+  // Helper function to format phone numbers
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return '';
+    let cleaned = phone.replace(/[^\d+]/g, '');
+    if (!cleaned.startsWith('+')) {
+      if (cleaned.startsWith('1')) {
+        cleaned = cleaned.substring(1);
+      }
+      cleaned = '+1' + cleaned;
+    }
+    return cleaned;
+  };
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -79,12 +106,35 @@ const Signup = () => {
 
   const validateStep1 = () => {
     const newErrors = {};
+    const passwordReq = getPasswordRequirements();
+    
     if (!formData.email) newErrors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
+    
     if (!formData.password) newErrors.password = 'Password is required';
-    else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters';
-    else if (!/[A-Z]/.test(formData.password)) newErrors.password = 'Password must contain at least one uppercase letter';
-    else if (!/[0-9]/.test(formData.password)) newErrors.password = 'Password must contain at least one number';
+    else {
+      const passwordErrors = [];
+      if (formData.password.length < passwordReq.minLength) {
+        passwordErrors.push(`at least ${passwordReq.minLength} characters`);
+      }
+      if (passwordReq.requireUppercase && !/[A-Z]/.test(formData.password)) {
+        passwordErrors.push('uppercase letter');
+      }
+      if (passwordReq.requireLowercase && !/[a-z]/.test(formData.password)) {
+        passwordErrors.push('lowercase letter');
+      }
+      if (passwordReq.requireNumbers && !/[0-9]/.test(formData.password)) {
+        passwordErrors.push('number');
+      }
+      if (passwordReq.requireSymbols && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(formData.password)) {
+        passwordErrors.push('special character');
+      }
+      
+      if (passwordErrors.length > 0) {
+        newErrors.password = `Password must contain ${passwordErrors.join(', ')}`;
+      }
+    }
+    
     if (!formData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
     else if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
     if (!formData.fullName) newErrors.fullName = 'Full name is required';
@@ -94,6 +144,8 @@ const Signup = () => {
 
   const validateStep2 = () => {
     const newErrors = {};
+    // Phone verification is now optional - don't require phone
+    
     if (userType === 'brand') {
       if (!formData.brandName) newErrors.brandName = 'Brand name is required';
       if (!formData.industry) newErrors.industry = 'Industry is required';
@@ -102,6 +154,10 @@ const Signup = () => {
       if (!formData.handle) newErrors.handle = 'Handle is required';
       if (!formData.niche) newErrors.niche = 'Please select a niche';
     }
+    
+    // Phone validation removed - phone verification is now optional
+    // Phone field is always shown but verification is optional
+    
     if (!captchaToken) newErrors.captcha = 'Please verify reCAPTCHA';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -119,9 +175,18 @@ const Signup = () => {
 
   const handlePhoneOTP = async () => {
     if (!formData.phone) { toast.error('Please enter phone number'); return; }
-    const result = await sendPhoneOTP(formData.phone);
+    
+    const formattedPhone = formatPhoneNumber(formData.phone);
+    
+    // Basic validation for international format
+    if (!/^\+?[1-9]\d{1,14}$/.test(formattedPhone.replace(/[\s-]/g, ''))) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
+    
+    const result = await sendPhoneOTP(formattedPhone);
     if (result.success) {
-      setOtpDestination(formData.phone);
+      setOtpDestination(formattedPhone);
       setOtpType('phone');
       setShowOTP(true);
     }
@@ -131,7 +196,28 @@ const Signup = () => {
     let result;
     if (otpType === 'email') result = await verifyEmailOTP(otpDestination, code);
     else result = await verifyPhoneOTP(otpDestination, code);
-    if (result.success) { setShowOTP(false); setStep(3); }
+    
+    if (result.success) { 
+      setShowOTP(false); 
+      
+      // Check if there are more verification steps
+      const emailRequired = getEmailVerificationRequired();
+      // Phone verification is now optional - no additional steps
+      const nextStepIndex = currentVerificationStep + 1;
+      
+      if (nextStepIndex < verificationSteps.length) {
+        setCurrentVerificationStep(nextStepIndex);
+        const nextStep = verificationSteps[nextStepIndex];
+        
+        if (nextStep === 'phone') {
+          handlePhoneOTP();
+        } else {
+          setStep(3); // Move to completion
+        }
+      } else {
+        setStep(3); // All verifications complete
+      }
+    }
   };
 
   const handleResendOTP = async () => {
@@ -149,38 +235,62 @@ const Signup = () => {
     if (step === 1) {
       if (validateStep1()) setStep(2);
     } else if (step === 2) {
-      if (validateStep2()) handleEmailOTP();
-    } else {
-      setLoading(true);
-      const signupData = {
-        email: formData.email,
-        password: formData.password,
-        fullName: formData.fullName,
-        userType,
-        phone: formData.phone || '',
-        captchaToken,
-      };
-      if (userType === 'brand') {
-        signupData.brandName = formData.brandName;
-        signupData.industry = formData.industry;
-        signupData.website = formData.website || '';
-      } else {
-        signupData.displayName = formData.displayName;
-        const cleanHandle = formData.handle.startsWith('@') ? formData.handle.substring(1) : formData.handle;
-        signupData.handle = cleanHandle;
-        signupData.niches = formData.niche ? [formData.niche] : [];
-      }
-      try {
-        const result = await signup(signupData);
-        if (result.success) {
-          navigate(userType === 'brand' ? '/brand/dashboard' : '/creator/dashboard');
+      if (validateStep2()) {
+        // Wait for settings to load before proceeding
+        if (settingsLoading) {
+          toast.error('Loading security settings, please wait...');
+          return;
         }
-      } catch (error) {
-        console.error('Signup error:', error);
-        if (captchaRef.current) { captchaRef.current.reset(); setCaptchaToken(null); }
-      } finally {
-        setLoading(false);
+        
+        // Start verification flow based on admin settings (phone now optional)
+        const emailRequired = getEmailVerificationRequired();
+        // Phone verification is now optional - proceed with email only
+        
+        if (!emailRequired) {
+          // No verification required, proceed directly to signup
+          performSignup();
+        } else {
+          // Email verification required (phone is optional)
+          handleEmailOTP();
+        }
       }
+    } else {
+      // Step 3 - Complete signup
+      performSignup();
+    }
+  };
+
+  const performSignup = async () => {
+    setLoading(true);
+    
+    const signupData = {
+      email: formData.email,
+      password: formData.password,
+      fullName: formData.fullName,
+      userType,
+      phone: formatPhoneNumber(formData.phone),
+      captchaToken,
+    };
+    if (userType === 'brand') {
+      signupData.brandName = formData.brandName;
+      signupData.industry = formData.industry;
+      signupData.website = formData.website || '';
+    } else {
+      signupData.displayName = formData.displayName;
+      const cleanHandle = formData.handle.startsWith('@') ? formData.handle.substring(1) : formData.handle;
+      signupData.handle = cleanHandle;
+      signupData.niches = formData.niche ? [formData.niche] : [];
+    }
+    try {
+      const result = await signup(signupData);
+      if (result.success) {
+        navigate(userType === 'brand' ? '/brand/dashboard' : '/creator/dashboard');
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      if (captchaRef.current) { captchaRef.current.reset(); setCaptchaToken(null); }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -190,7 +300,37 @@ const Signup = () => {
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
   };
 
+  // Initialize verification steps based on admin settings (phone verification now optional)
+  useEffect(() => {
+    if (!settingsLoading) {
+      const emailRequired = getEmailVerificationRequired();
+      // Phone verification is now optional - always include as optional step
+      const phoneOptional = true;
+      const steps = [];
+      
+      if (emailRequired) steps.push('email');
+      // Phone verification is optional - user can choose to add it
+      // Don't automatically add to verification steps
+      
+      setVerificationSteps(steps);
+      setCurrentVerificationStep(0);
+      
+      console.log('Verification flow initialized:', {
+        emailRequired,
+        phoneOptional,
+        steps,
+        securitySettings
+      });
+    }
+  }, [getEmailVerificationRequired, settingsLoading]);
+
   if (showOTP) {
+    const emailRequired = getEmailVerificationRequired();
+    const isLastStep = currentVerificationStep >= verificationSteps.length - 1;
+    // Phone verification is optional - don't show next button
+    const showNextButton = false;
+    const nextButtonText = 'Verify';
+
     return (
       <OTPVerification
         type={otpType}
@@ -199,638 +339,640 @@ const Signup = () => {
         onResend={handleResendOTP}
         onBack={() => setShowOTP(false)}
         loading={authLoading}
+        showNextButton={showNextButton}
+        nextButtonText={nextButtonText}
+        onNextStep={handleVerifyOTP}
       />
     );
   }
 
-  const stepLabels = ['Basic Info', 'Details', 'Verification'];
+  const getSubmitButtonText = () => {
+    const emailRequired = getEmailVerificationRequired();
+    // Phone verification is now optional - don't check it
+    
+    if (step === 1) return 'Continue';
+    if (step === 2) {
+      if (!emailRequired) return 'Go to Dashboard';
+      return 'Create Account';
+    }
+    // Step 3 or any final step should always be "Go to Dashboard"
+    return 'Go to Dashboard';
+  };
+
+  const getStepLabels = () => {
+    const emailRequired = getEmailVerificationRequired();
+    // Phone verification is now optional - don't check it
+    const baseLabels = ['Account Info', 'Profile Details'];
+    
+    if (!emailRequired) {
+      return baseLabels;
+    }
+    
+    return [...baseLabels, 'Email Verification'];
+  };
+
+  const stepLabels = getStepLabels();
+  const totalSteps = stepLabels.length;
+  const currentStep = showOTP ? step + currentVerificationStep : step;
 
   return (
-    <div
-      className="min-h-screen flex"
-      style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      }}
-    >
-      {/* ── Left decorative panel ── */}
-      <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden">
-        {/* floating blobs */}
-        <div
-          style={{
-            position: 'absolute', width: 340, height: 340, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.08)', top: -80, left: -80,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute', width: 220, height: 220, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)', bottom: 80, right: -40,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute', width: 140, height: 140, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)', top: '45%', left: '60%',
-          }}
-        />
-
-        {/* brand mark */}
-        <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div
-              style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: 'rgba(255,255,255,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              <Shield className="text-white" size={22} />
-            </div>
-            <span style={{ color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px' }}>
-              InfluenceX
-            </span>
-          </div>
+    <>
+      <div
+        className="min-h-screen flex items-center justify-center relative"
+        style={{
+          background: '#000000',
+        }}
+      >
+        {/* Wireframe Sphere Background Animation */}
+        <div className="absolute inset-0 overflow-hidden">
+          <WireframeSphere />
         </div>
-
-        {/* hero copy */}
-        <div className="relative z-10">
-          <h1
+        
+        <motion.div 
+          className="relative z-10"
+          style={{ maxWidth: '480px', width: '100%', margin: '0 24px' }}
+        >
+        {/* mobile logo */}
+        <div className="flex lg:hidden items-center gap-2 mb-8">
+          <div
             style={{
-              color: '#fff', fontSize: 42, fontWeight: 800,
-              lineHeight: 1.15, letterSpacing: '-1px', marginBottom: 20,
+              width: 36, height: 36, borderRadius: 10,
+              background: '#1a1a1a',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
-            Connect brands<br />with creators.
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 17, lineHeight: 1.7, maxWidth: 360 }}>
-           join thousand of brands and creators collaborating on impactful campaigns 
-          </p>
+            <Shield className="text-white" size={18} />
+          </div>
+          <span
+            style={{
+              fontSize: 18, fontWeight: 700,
+              color: '#111827',
+            }}
+          >
+            {getPlatformName()}
+          </span>
+        </div>
 
-          {/* stats row */}
-          <div className="flex gap-10 mt-10">
-            {[
-              { n: '12K+', label: 'Creators' },
-              { n: '3K+', label: 'Brands' },
-              { n: '98%', label: 'Satisfaction' },
-            ].map(({ n, label }) => (
-              <div key={label}>
-                <p style={{ color: '#fff', fontSize: 26, fontWeight: 800 }}>{n}</p>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{label}</p>
-              </div>
+        {/* heading */}
+        <div className="mb-8">
+          <h2
+            style={{
+              fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px',
+              color: '#ffffff', marginBottom: 8,
+            }}
+          >
+            Create Account
+          </h2>
+          <p style={{ color: '#cccccc', fontSize: 15, lineHeight: 1.5 }}>
+            Already have an account?{' '}
+            <Link
+              to="/login"
+              style={{ fontWeight: 700, color: '#ffffff', textDecoration: 'none' }}
+              onMouseEnter={(e) => { e.target.style.color = '#cccccc'; }}
+              onMouseLeave={(e) => { e.target.style.color = '#ffffff'; }}
+            >
+              Sign in
+            </Link>
+          </p>
+        </div>
+
+        {/* Step progress bar */}
+        <div className="mb-8">
+          <div style={{ display: 'flex', gap: 0, marginBottom: 8 }}>
+            {Array.from({ length: totalSteps }, (_, i) => (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  height: 4,
+                  background: currentStep >= i + 1 ? '#ffffff' : '#333333',
+                  borderRadius: i === 0 ? '10px 0 0 10px' : i === totalSteps - 1 ? '0 10px 10px 0' : '0',
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            {stepLabels.map((lbl, i) => (
+              <span
+                key={lbl}
+                style={{
+                  fontSize: 11,
+                  color: currentStep >= i + 1 ? '#ffffff' : '#cccccc',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.4px',
+                }}
+              >
+                {lbl}
+              </span>
             ))}
           </div>
         </div>
 
-        {/* bottom tag */}
-        <div
-          className="relative z-10 flex items-center gap-2"
-          style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}
-        >
-          <Shield size={13} />
-          <span>Your data is always secure and encrypted</span>
-        </div>
-      </div>
-
-      {/* ── Right form panel ── */}
-      <div
-        className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-10"
-        style={{
-          background: '#fff',
-          borderRadius: '0',
-        }}
-      >
-        <div className="w-full" style={{ maxWidth: 420 }}>
-
-          {/* mobile logo */}
-          <div className="flex lg:hidden items-center gap-2 mb-8">
-            <div
-              style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'linear-gradient(135deg,#667eea,#764ba2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Shield className="text-white" size={18} />
-            </div>
-            <span
-              style={{
-                fontSize: 18, fontWeight: 700,
-                color: '#111827',
-              }}
-            >
-              InfluenceX
-            </span>
-          </div>
-
-          {/* heading */}
-          <div className="mb-8">
-            <h2
-              style={{
-                fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px',
-                color: '#111827', marginBottom: 6,
-              }}
-            >
-              Create Account
-            </h2>
-            <p style={{ color: '#6b7280', fontSize: 15 }}>
-              Already have an account?{' '}
-              <Link
-                to="/login"
-                style={{ fontWeight: 700, color: '#667eea', textDecoration: 'none' }}
-              >
-                Sign in
-              </Link>
-            </p>
-          </div>
-
-          {/* Step progress bar */}
-          <div className="mb-6">
-            <div style={{ display: 'flex', gap: 0, marginBottom: 8 }}>
-              {[1, 2, 3].map(s => (
-                <div
-                  key={s}
-                  style={{
-                    flex: 1,
-                    height: 4,
-                    background: step >= s ? 'linear-gradient(90deg, #667eea, #764ba2)' : '#e5e7eb',
-                    borderRadius: s === 1 ? '10px 0 0 10px' : s === 3 ? '0 10px 10px 0' : '0',
-                  }}
-                />
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              {stepLabels.map((lbl, i) => (
-                <span
-                  key={lbl}
-                  style={{
-                    fontSize: 11,
-                    color: step >= i + 1 ? '#667eea' : '#9ca3af',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.4px',
-                  }}
-                >
-                  {lbl}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* ── Account type selector ── */}
-            <div>
-              <label
-                style={{
-                  display: 'block', fontSize: 11, fontWeight: 700,
-                  letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: '#9ca3af', marginBottom: 10,
-                }}
-              >
-                Sign up as
-              </label>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {/* Brand */}
-                <button
-                  type="button"
-                  onClick={() => setUserType('brand')}
-                  style={{
-                    padding: '14px 12px',
-                    borderRadius: 12,
-                    border: userType === 'brand'
-                      ? '2px solid #667eea'
-                      : '2px solid #e5e7eb',
-                    background: userType === 'brand'
-                      ? '#f5f3ff'
-                      : '#fff',
-                    cursor: 'pointer',
-                    transition: 'all 0.18s ease',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', gap: 8,
-                  }}
-                >
-                  <div
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Step 1: Basic Account Information */}
+            {step === 1 && (
+              <>
+                {/* ── Full Name (Full width) ── */}
+                <div className="lg:col-span-2">
+                  <label
                     style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: userType === 'brand'
-                        ? 'linear-gradient(135deg,#667eea,#764ba2)'
-                        : '#f3f4f6',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.18s ease',
+                      display: 'block', fontSize: 13, fontWeight: 600,
+                      color: '#ffffff', marginBottom: 8,
                     }}
                   >
-                    <Building2
-                      size={18}
-                      style={{ color: userType === 'brand' ? '#fff' : '#6b7280' }}
+                    Full Name
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <User
+                      size={16}
+                      style={{
+                        position: 'absolute', left: 14, top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: errors.fullName ? '#ef4444' : '#9ca3af',
+                      }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Enter your full name"
+                      value={formData.fullName}
+                      name="fullName"
+                      onChange={handleChange}
+                      style={{
+                        width: '100%',
+                        padding: '14px 16px 14px 44px',
+                        borderRadius: 12,
+                        border: `1.5px solid ${errors.fullName ? '#ef4444' : '#333333'}`,
+                        background: '#1a1a1a',
+                        color: '#ffffff',
+                        fontSize: 15,
+                        outline: 'none',
+                        transition: 'all 0.2s ease',
+                        boxSizing: 'border-box',
+                      }}
+                      onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                      onBlur={(e) => { e.target.style.borderColor = errors.fullName ? '#ef4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
                     />
                   </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <p
+                  {errors.fullName && (
+                    <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.fullName}</p>
+                  )}
+                </div>
+
+                {/* ── Email and Phone (Side by side on desktop) ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Email */}
+                  <div>
+                    <label
                       style={{
-                        fontSize: 14, fontWeight: 600,
-                        color: userType === 'brand'
-                          ? '#667eea'
-                          : '#374151',
+                        display: 'block', fontSize: 13, fontWeight: 600,
+                        color: '#ffffff', marginBottom: 8,
                       }}
                     >
-                      Brand
-                    </p>
-                    <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
-                      Find creators
-                    </p>
+                      Email address
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <Mail
+                        size={16}
+                        style={{
+                          position: 'absolute', left: 14, top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: errors.email ? '#ef4444' : '#9ca3af',
+                        }}
+                      />
+                      <input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={formData.email}
+                        name="email"
+                        onChange={handleChange}
+                        style={{
+                          width: '100%',
+                          padding: '14px 16px 14px 44px',
+                          borderRadius: 12,
+                          border: `1.5px solid ${errors.email ? '#ef4444' : '#333333'}`,
+                          background: '#1a1a1a',
+                          color: '#ffffff',
+                          fontSize: 15,
+                          outline: 'none',
+                          transition: 'all 0.2s ease',
+                          boxSizing: 'border-box',
+                        }}
+                        onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                        onBlur={(e) => { e.target.style.borderColor = errors.email ? '#ef4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
+                      />
+                    </div>
+                    {errors.email && (
+                      <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.email}</p>
+                    )}
                   </div>
-                </button>
 
-                {/* Creator */}
-                <button
-                  type="button"
-                  onClick={() => setUserType('creator')}
-                  style={{
-                    padding: '14px 12px',
-                    borderRadius: 12,
-                    border: userType === 'creator'
-                      ? '2px solid #667eea'
-                      : '2px solid #e5e7eb',
-                    background: userType === 'creator'
-                      ? '#f5f3ff'
-                      : '#fff',
-                    cursor: 'pointer',
-                    transition: 'all 0.18s ease',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', gap: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: userType === 'creator'
-                        ? 'linear-gradient(135deg,#667eea,#764ba2)'
-                        : '#f3f4f6',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.18s ease',
-                    }}
-                  >
-                    <Sparkles
-                      size={18}
-                      style={{ color: userType === 'creator' ? '#fff' : '#6b7280' }}
-                    />
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <p
+                  {/* Phone - Always show since phone verification is now optional */}
+                  <div>
+                    <label
                       style={{
-                        fontSize: 14, fontWeight: 600,
-                        color: userType === 'creator'
-                          ? '#667eea'
-                          : '#374151',
+                        display: 'block', fontSize: 13, fontWeight: 600,
+                        color: '#ffffff', marginBottom: 8,
                       }}
                     >
-                      Creator
-                    </p>
-                    <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
-                      Monetize audience
-                    </p>
+                      Phone Number
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <Phone
+                        size={16}
+                        style={{
+                          position: 'absolute', left: 14, top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: '#9ca3af',
+                        }}
+                      />
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="+1 (555) 000-0000"
+                        style={{
+                          width: '100%',
+                          padding: '12px 12px 12px 42px',
+                          borderRadius: 12,
+                          border: `2px solid ${errors.phone ? '#ef4444' : '#333333'}`,
+                          backgroundColor: '#1a1a1a',
+                          color: '#ffffff',
+                          fontSize: 14,
+                          outline: 'none',
+                          transition: 'all 0.3s ease',
+                          boxSizing: 'border-box',
+                        }}
+                        onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#333333'; e.target.style.background = '#1a1a1a'; }}
+                      />
+                    </div>
+                    {errors.phone && (
+                      <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.phone}</p>
+                    )}
                   </div>
-                </button>
-              </div>
-            </div>
+                </div>
 
-            {/* ── Full Name ── */}
-            <div>
-              <label
-                style={{
-                  display: 'block', fontSize: 13, fontWeight: 600,
-                  color: '#374151', marginBottom: 6,
-                }}
-              >
-                Full Name
-              </label>
-              <div style={{ position: 'relative' }}>
-                <User
-                  size={16}
-                  style={{
-                    position: 'absolute', left: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: errors.fullName ? '#ef4444' : '#9ca3af',
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Enter your full name"
-                  value={formData.fullName}
-                  name="fullName"
-                  onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px 12px 40px',
-                    borderRadius: 10,
-                    border: `1.5px solid ${errors.fullName ? '#ef4444' : '#e5e7eb'}`,
-                    background: '#f9fafb',
-                    color: '#111827',
-                    fontSize: 14,
-                    outline: 'none',
-                    transition: 'border-color 0.15s',
-                    boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = errors.fullName ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                />
-              </div>
-              {errors.fullName && (
-                <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.fullName}</p>
-              )}
-            </div>
+                {/* ── Password and Confirm Password (Side by side on desktop) ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Password */}
+                  <div>
+                    <label
+                      style={{
+                        display: 'block', fontSize: 13, fontWeight: 600,
+                        color: '#ffffff', marginBottom: 8,
+                      }}
+                    >
+                      Password
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <Lock
+                        size={16}
+                        style={{
+                          position: 'absolute', left: 14, top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: errors.password ? '#ef4444' : '#9ca3af',
+                        }}
+                      />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Create a password"
+                        value={formData.password}
+                        name="password"
+                        onChange={handleChange}
+                        style={{
+                          width: '100%',
+                          padding: '14px 48px 14px 44px',
+                          borderRadius: 12,
+                          border: `1.5px solid ${errors.password ? '#ef4444' : '#333333'}`,
+                          background: '#1a1a1a',
+                          color: '#ffffff',
+                          fontSize: 15,
+                          outline: 'none',
+                          transition: 'all 0.2s ease',
+                          boxSizing: 'border-box',
+                        }}
+                        onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                        onBlur={(e) => { e.target.style.borderColor = errors.password ? '#ef4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{
+                          position: 'absolute', right: 16, top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                          color: '#9ca3af',
+                        }}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.password}</p>
+                    )}
+                  </div>
 
-            {/* ── Email ── */}
-            <div>
-              <label
-                style={{
-                  display: 'block', fontSize: 13, fontWeight: 600,
-                  color: '#374151', marginBottom: 6,
-                }}
-              >
-                Email address
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Mail
-                  size={16}
-                  style={{
-                    position: 'absolute', left: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: errors.email ? '#ef4444' : '#9ca3af',
-                  }}
-                />
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={formData.email}
-                  name="email"
-                  onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px 12px 40px',
-                    borderRadius: 10,
-                    border: `1.5px solid ${errors.email ? '#ef4444' : '#e5e7eb'}`,
-                    background: '#f9fafb',
-                    color: '#111827',
-                    fontSize: 14,
-                    outline: 'none',
-                    transition: 'border-color 0.15s',
-                    boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = errors.email ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                />
-              </div>
-              {errors.email && (
-                <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.email}</p>
-              )}
-            </div>
+                  {/* Confirm Password */}
+                  <div>
+                    <label
+                      style={{
+                        display: 'block', fontSize: 13, fontWeight: 600,
+                        color: '#ffffff', marginBottom: 8,
+                      }}
+                    >
+                      Confirm Password
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <Lock
+                        size={16}
+                        style={{
+                          position: 'absolute', left: 14, top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: errors.confirmPassword ? '#ef4444' : '#9ca3af',
+                        }}
+                      />
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Confirm your password"
+                        value={formData.confirmPassword}
+                        name="confirmPassword"
+                        onChange={handleChange}
+                        style={{
+                          width: '100%',
+                          padding: '14px 48px 14px 44px',
+                          borderRadius: 12,
+                          border: `1.5px solid ${errors.confirmPassword ? '#ef4444' : '#333333'}`,
+                          background: '#1a1a1a',
+                          color: '#ffffff',
+                          fontSize: 15,
+                          outline: 'none',
+                          transition: 'all 0.2s ease',
+                          boxSizing: 'border-box',
+                        }}
+                        onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                        onBlur={(e) => { e.target.style.borderColor = errors.confirmPassword ? '#ef4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        style={{
+                          position: 'absolute', right: 16, top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                          color: '#9ca3af',
+                        }}
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    {errors.confirmPassword && (
+                      <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.confirmPassword}</p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
 
-            {/* ── Phone ── */}
-            <div>
-              <label
-                style={{
-                  display: 'block', fontSize: 13, fontWeight: 600,
-                  color: '#374151', marginBottom: 6,
-                }}
-              >
-                Phone Number
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Phone
-                  size={16}
-                  style={{
-                    position: 'absolute', left: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#9ca3af',
-                  }}
-                />
-                <input
-                  type="tel"
-                  placeholder="Enter your phone number"
-                  value={formData.phone}
-                  name="phone"
-                  onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px 12px 40px',
-                    borderRadius: 10,
-                    border: '1.5px solid #e5e7eb',
-                    background: '#f9fafb',
-                    color: '#111827',
-                    fontSize: 14,
-                    outline: 'none',
-                    transition: 'border-color 0.15s',
-                    boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                />
-              </div>
-            </div>
-
-            {/* ── Password ── */}
-            <div>
-              <label
-                style={{
-                  display: 'block', fontSize: 13, fontWeight: 600,
-                  color: '#374151', marginBottom: 6,
-                }}
-              >
-                Password
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Lock
-                  size={16}
-                  style={{
-                    position: 'absolute', left: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: errors.password ? '#ef4444' : '#9ca3af',
-                  }}
-                />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Create a password"
-                  value={formData.password}
-                  name="password"
-                  onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px 44px 12px 40px',
-                    borderRadius: 10,
-                    border: `1.5px solid ${errors.password ? '#ef4444' : '#e5e7eb'}`,
-                    background: '#f9fafb',
-                    color: '#111827',
-                    fontSize: 14,
-                    outline: 'none',
-                    transition: 'border-color 0.15s',
-                    boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = errors.password ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: 'absolute', right: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                    color: '#9ca3af',
-                  }}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              {errors.password && (
-                <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.password}</p>
-              )}
-            </div>
-
-            {/* ── Confirm Password ── */}
-            <div>
-              <label
-                style={{
-                  display: 'block', fontSize: 13, fontWeight: 600,
-                  color: '#374151', marginBottom: 6,
-                }}
-              >
-                Confirm Password
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Lock
-                  size={16}
-                  style={{
-                    position: 'absolute', left: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: errors.confirmPassword ? '#ef4444' : '#9ca3af',
-                  }}
-                />
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="Confirm your password"
-                  value={formData.confirmPassword}
-                  name="confirmPassword"
-                  onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px 44px 12px 40px',
-                    borderRadius: 10,
-                    border: `1.5px solid ${errors.confirmPassword ? '#ef4444' : '#e5e7eb'}`,
-                    background: '#f9fafb',
-                    color: '#111827',
-                    fontSize: 14,
-                    outline: 'none',
-                    transition: 'border-color 0.15s',
-                    boxSizing: 'border-box',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                  onBlur={(e) => { e.target.style.borderColor = errors.confirmPassword ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={{
-                    position: 'absolute', right: 14, top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                    color: '#9ca3af',
-                  }}
-                >
-                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              {errors.confirmPassword && (
-                <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.confirmPassword}</p>
-              )}
-            </div>
-
+            {/* Step 2: Profile Details */}
             {step === 2 && (
               <>
-                {userType === 'brand' ? (
+                <div>
+                  <label
+                    style={{
+                      display: 'block', fontSize: 12, fontWeight: 700,
+                      letterSpacing: '0.08em', textTransform: 'uppercase',
+                      color: '#ffffff', marginBottom: 12,
+                    }}
+                  >
+                    Sign up as
+                  </label>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    {/* Brand */}
+                    <button
+                      type="button"
+                      onClick={() => setUserType('brand')}
+                      style={{
+                        padding: '20px 16px',
+                        borderRadius: 12,
+                        border: userType === 'brand'
+                          ? '2px solid #ffffff'
+                          : '2px solid #333333',
+                        background: userType === 'brand'
+                          ? '#1a1a1a'
+                          : '#000000',
+                        cursor: 'pointer',
+                        transition: 'all 0.18s ease',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', gap: 10,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 32, height: 32, borderRadius: 10,
+                          background: userType === 'brand'
+                            ? '#ffffff'
+                            : '#333333',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.18s ease',
+                        }}
+                      >
+                        <Building2
+                          size={16}
+                          style={{ color: userType === 'brand' ? '#000000' : '#ffffff' }}
+                        />
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <p
+                          style={{
+                            fontSize: 14, fontWeight: 600,
+                            color: userType === 'brand'
+                              ? '#ffffff'
+                              : '#ffffff',
+                          }}
+                        >
+                          Brand
+                        </p>
+                        <p style={{ fontSize: 11, color: '#cccccc', marginTop: 2 }}>
+                          Find creators
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* Creator */}
+                    <button
+                      type="button"
+                      onClick={() => setUserType('creator')}
+                      style={{
+                        padding: '20px 16px',
+                        borderRadius: 12,
+                        border: userType === 'creator'
+                          ? '2px solid #ffffff'
+                          : '2px solid #333333',
+                        background: userType === 'creator'
+                          ? '#1a1a1a'
+                          : '#000000',
+                        cursor: 'pointer',
+                        transition: 'all 0.18s ease',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', gap: 10,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 32, height: 32, borderRadius: 10,
+                          background: userType === 'creator'
+                            ? '#ffffff'
+                            : '#333333',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.18s ease',
+                        }}
+                      >
+                        <Sparkles
+                          size={18}
+                          style={{ color: userType === 'creator' ? '#000000' : '#ffffff' }}
+                        />
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <p
+                          style={{
+                            fontSize: 14, fontWeight: 600,
+                            color: userType === 'creator'
+                              ? '#ffffff'
+                              : '#ffffff',
+                          }}
+                        >
+                          Creator
+                        </p>
+                        <p style={{ fontSize: 11, color: '#cccccc', marginTop: 2 }}>
+                          Monetize audience
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+            {/* Brand specific fields */}
+                {userType === 'brand' && (
                   <>
-                    {/* ── Brand Name ── */}
-                    <div>
-                      <label
-                        style={{
-                          display: 'block', fontSize: 13, fontWeight: 600,
-                          color: '#374151', marginBottom: 6,
-                        }}
-                      >
-                        Brand Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Enter your brand name"
-                        value={formData.brandName}
-                        name="brandName"
-                        onChange={handleChange}
-                        style={{
-                          width: '100%',
-                          padding: '12px 14px',
-                          borderRadius: 10,
-                          border: `1.5px solid ${errors.brandName ? '#ef4444' : '#e5e7eb'}`,
-                          background: '#f9fafb',
-                          color: '#111827',
-                          fontSize: 14,
-                          outline: 'none',
-                          transition: 'border-color 0.15s',
-                          boxSizing: 'border-box',
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                        onBlur={(e) => { e.target.style.borderColor = errors.brandName ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                      />
-                      {errors.brandName && (
-                        <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.brandName}</p>
-                      )}
+                    {/* ── Brand Name and Industry (Side by side on desktop) ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Brand Name */}
+                      <div>
+                        <label
+                          style={{
+                            display: 'block', fontSize: 13, fontWeight: 600,
+                            color: '#ffffff', marginBottom: 8,
+                          }}
+                        >
+                          Brand Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter your brand name"
+                          value={formData.brandName}
+                          name="brandName"
+                          onChange={handleChange}
+                          style={{
+                            width: '100%',
+                            padding: '14px 16px',
+                            borderRadius: 12,
+                            border: `1.5px solid ${errors.brandName ? '#ef4444' : '#333333'}`,
+                            background: '#1a1a1a',
+                            color: '#ffffff',
+                            fontSize: 15,
+                            outline: 'none',
+                            transition: 'all 0.2s ease',
+                            boxSizing: 'border-box',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                          onBlur={(e) => { e.target.style.borderColor = errors.brandName ? '#ef4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
+                        />
+                        {errors.brandName && (
+                          <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.brandName}</p>
+                        )}
+                      </div>
+
+                      {/* Industry */}
+         <div style={{ position: 'relative', width: '100%' }}>
+  <label
+    style={{
+      display: 'block',
+      fontSize: 13,
+      fontWeight: 600,
+      color: '#ffffff',
+      marginBottom: 8,
+    }}
+  >
+    Industry
+  </label>
+  
+  <div style={{ position: 'relative' }}>
+    <select
+      value={formData.industry}
+      name="industry"
+      onChange={handleChange}
+      style={{
+        width: '100%',
+        padding: '14px 16px',
+        borderRadius: 12,
+        border: `1.5px solid ${errors.industry ? '#ef4444' : '#333333'}`,
+        background: '#1a1a1a',
+        color: '#ffffff',
+        fontSize: 15,
+        outline: 'none',
+        cursor: 'pointer',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+        MozAppearance: 'none',
+        transition: 'all 0.2s ease',
+        boxSizing: 'border-box',
+      }}
+      onFocus={(e) => {
+        e.target.style.borderColor = '#ffffff';
+        e.target.style.background = '#000000';
+      }}
+      onBlur={(e) => {
+        e.target.style.borderColor = errors.industry ? '#ef4444' : '#333333';
+        e.target.style.background = '#1a1a1a';
+      }}
+    >
+      <option value="" style={{ background: '#1a1a1a', color: '#ffffff' }}>Select industry</option>
+      {brandIndustries.map((i) => (
+        <option key={i.value} value={i.value} style={{ background: '#1a1a1a', color: '#ffffff' }}>
+          {i.label}
+        </option>
+      ))}
+    </select>
+    <div style={{
+      position: 'absolute',
+      right: '16px',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      pointerEvents: 'none',
+      color: '#9ca3af'
+    }}>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M2 4L6 8L10 4" />
+      </svg>
+    </div>
+  </div>
+
+  {errors.industry && (
+    <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.industry}</p>
+  )}
+
+</div>
                     </div>
 
-                    {/* ── Industry ── */}
+                    {/* ── Website (Full width) ── */}
                     <div>
                       <label
                         style={{
                           display: 'block', fontSize: 13, fontWeight: 600,
-                          color: '#374151', marginBottom: 6,
-                        }}
-                      >
-                        Industry
-                      </label>
-                      <select
-                        value={formData.industry}
-                        name="industry"
-                        onChange={handleChange}
-                        style={{
-                          width: '100%',
-                          padding: '12px 14px',
-                          borderRadius: 10,
-                          border: `1.5px solid ${errors.industry ? '#ef4444' : '#e5e7eb'}`,
-                          background: '#f9fafb',
-                          color: '#111827',
-                          fontSize: 14,
-                          outline: 'none',
-                          transition: 'border-color 0.15s',
-                          boxSizing: 'border-box',
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                        onBlur={(e) => { e.target.style.borderColor = errors.industry ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                      >
-                        <option value="">Select industry</option>
-                        {brandIndustries.map(i => (
-                          <option key={i.value} value={i.value}>{i.label}</option>
-                        ))}
-                      </select>
-                      {errors.industry && (
-                        <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.industry}</p>
-                      )}
-                    </div>
-
-                    {/* ── Website ── */}
-                    <div>
-                      <label
-                        style={{
-                          display: 'block', fontSize: 13, fontWeight: 600,
-                          color: '#374151', marginBottom: 6,
+                          color: '#ffffff', marginBottom: 8,
                         }}
                       >
                         Website
@@ -852,132 +994,162 @@ const Signup = () => {
                           onChange={handleChange}
                           style={{
                             width: '100%',
-                            padding: '12px 14px 12px 40px',
-                            borderRadius: 10,
-                            border: '1.5px solid #e5e7eb',
-                            background: '#f9fafb',
-                            color: '#111827',
-                            fontSize: 14,
+                            padding: '14px 16px 14px 44px',
+                            borderRadius: 12,
+                            border: '1.5px solid #333333',
+                            background: '#1a1a1a',
+                            color: '#ffffff',
+                            fontSize: 15,
                             outline: 'none',
-                            transition: 'border-color 0.15s',
+                            transition: 'all 0.2s ease',
                             boxSizing: 'border-box',
                           }}
-                          onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                          onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
+                          onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                          onBlur={(e) => { e.target.style.borderColor = '#333333'; e.target.style.background = '#1a1a1a'; }}
                         />
                       </div>
                     </div>
                   </>
-                ) : (
+                )}
+
+                {/* Creator specific fields */}
+                {userType === 'creator' && (
                   <>
-                    {/* ── Display Name ── */}
-                    <div>
-                      <label
-                        style={{
-                          display: 'block', fontSize: 13, fontWeight: 600,
-                          color: '#374151', marginBottom: 6,
-                        }}
-                      >
-                        Display Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="How should brands address you?"
-                        value={formData.displayName}
-                        name="displayName"
-                        onChange={handleChange}
-                        style={{
-                          width: '100%',
-                          padding: '12px 14px',
-                          borderRadius: 10,
-                          border: `1.5px solid ${errors.displayName ? '#ef4444' : '#e5e7eb'}`,
-                          background: '#f9fafb',
-                          color: '#111827',
-                          fontSize: 14,
-                          outline: 'none',
-                          transition: 'border-color 0.15s',
-                          boxSizing: 'border-box',
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                        onBlur={(e) => { e.target.style.borderColor = errors.displayName ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                      />
-                      {errors.displayName && (
-                        <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.displayName}</p>
-                      )}
+                    {/* ── Display Name and Handle (Side by side on desktop) ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Display Name */}
+                      <div>
+                        <label
+                          style={{
+                            display: 'block', fontSize: 13, fontWeight: 600,
+                            color: '#ffffff', marginBottom: 8,
+                          }}
+                        >
+                          Display Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="How should brands address you?"
+                          value={formData.displayName}
+                          name="displayName"
+                          onChange={handleChange}
+                          style={{
+                            width: '100%',
+                            padding: '14px 16px',
+                            borderRadius: 12,
+                            border: `1.5px solid ${errors.displayName ? '#ef4444' : '#333333'}`,
+                            background: '#1a1a1a',
+                            color: '#ffffff',
+                            fontSize: 15,
+                            outline: 'none',
+                            transition: 'all 0.2s ease',
+                            boxSizing: 'border-box',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                          onBlur={(e) => { e.target.style.borderColor = errors.displayName ? '#ef4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
+                        />
+                        {errors.displayName && (
+                          <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.displayName}</p>
+                        )}
+                      </div>
+
+                      {/* Handle */}
+                      <div>
+                        <label
+                          style={{
+                            display: 'block', fontSize: 13, fontWeight: 600,
+                            color: '#ffffff', marginBottom: 8,
+                          }}
+                        >
+                          Handle
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="username (without @)"
+                          value={formData.handle}
+                          name="handle"
+                          onChange={handleChange}
+                          style={{
+                            width: '100%',
+                            padding: '14px 16px',
+                            borderRadius: 12,
+                            border: `1.5px solid ${errors.handle ? '#ef4444' : '#333333'}`,
+                            background: '#1a1a1a',
+                            color: '#ffffff',
+                            fontSize: 15,
+                            outline: 'none',
+                            transition: 'all 0.2s ease',
+                            boxSizing: 'border-box',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = '#ffffff'; e.target.style.background = '#000000'; }}
+                          onBlur={(e) => { e.target.style.borderColor = errors.handle ? '#ef4444' : '#333333'; e.target.style.background = '#1a1a1a'; }}
+                        />
+                        {errors.handle && (
+                          <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.handle}</p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* ── Handle ── */}
+                    {/* ── Primary Niche (Full width) ── */}
                     <div>
                       <label
                         style={{
                           display: 'block', fontSize: 13, fontWeight: 600,
-                          color: '#374151', marginBottom: 6,
-                        }}
-                      >
-                        Handle
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="username (without @)"
-                        value={formData.handle}
-                        name="handle"
-                        onChange={handleChange}
-                        style={{
-                          width: '100%',
-                          padding: '12px 14px',
-                          borderRadius: 10,
-                          border: `1.5px solid ${errors.handle ? '#ef4444' : '#e5e7eb'}`,
-                          background: '#f9fafb',
-                          color: '#111827',
-                          fontSize: 14,
-                          outline: 'none',
-                          transition: 'border-color 0.15s',
-                          boxSizing: 'border-box',
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                        onBlur={(e) => { e.target.style.borderColor = errors.handle ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                      />
-                      {errors.handle && (
-                        <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.handle}</p>
-                      )}
-                    </div>
-
-                    {/* ── Primary Niche ── */}
-                    <div>
-                      <label
-                        style={{
-                          display: 'block', fontSize: 13, fontWeight: 600,
-                          color: '#374151', marginBottom: 6,
+                          color: '#ffffff', marginBottom: 8,
                         }}
                       >
                         Primary Niche
                       </label>
-                      <select
-                        value={formData.niche}
-                        name="niche"
-                        onChange={handleChange}
-                        style={{
-                          width: '100%',
-                          padding: '12px 14px',
-                          borderRadius: 10,
-                          border: `1.5px solid ${errors.niche ? '#ef4444' : '#e5e7eb'}`,
-                          background: '#f9fafb',
-                          color: '#111827',
-                          fontSize: 14,
-                          outline: 'none',
-                          transition: 'border-color 0.15s',
-                          boxSizing: 'border-box',
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = '#667eea'; e.target.style.background = '#fff'; }}
-                        onBlur={(e) => { e.target.style.borderColor = errors.niche ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb'; }}
-                      >
-                        <option value="">Select your niche</option>
-                        {creatorNiches.map(n => (
-                          <option key={n.value} value={n.value}>{n.label}</option>
-                        ))}
-                      </select>
+                      <div style={{ position: 'relative' }}>
+                        <select
+                          value={formData.niche}
+                          name="niche"
+                          onChange={handleChange}
+                          style={{
+                            width: '100%',
+                            padding: '14px 16px',
+                            borderRadius: 12,
+                            border: `1.5px solid ${errors.niche ? '#ef4444' : '#333333'}`,
+                            background: '#1a1a1a',
+                            color: '#ffffff',
+                            fontSize: 15,
+                            outline: 'none',
+                            cursor: 'pointer',
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'none',
+                            transition: 'all 0.2s ease',
+                            boxSizing: 'border-box',
+                          }}
+                          onFocus={(e) => {
+                            e.target.style.borderColor = '#ffffff';
+                            e.target.style.background = '#000000';
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = errors.niche ? '#ef4444' : '#333333';
+                            e.target.style.background = '#1a1a1a';
+                          }}
+                        >
+                          <option value="" style={{ background: '#1a1a1a', color: '#ffffff' }}>Select your niche</option>
+                          {creatorNiches.map(n => (
+                            <option key={n.value} value={n.value} style={{ background: '#1a1a1a', color: '#ffffff' }}>{n.label}</option>
+                          ))}
+                        </select>
+                        <div style={{
+                          position: 'absolute',
+                          right: '16px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          pointerEvents: 'none',
+                          color: '#9ca3af'
+                        }}>
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M2 4L6 8L10 4" />
+                          </svg>
+                        </div>
+                      </div>
                       {errors.niche && (
-                        <p style={{ marginTop: 5, fontSize: 12, color: '#ef4444' }}>{errors.niche}</p>
+                        <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444' }}>{errors.niche}</p>
                       )}
                     </div>
                   </>
@@ -986,25 +1158,28 @@ const Signup = () => {
                 {/* ── reCAPTCHA ── */}
                 {RECAPTCHA_SITE_KEY ? (
                   <div
+                    className="recaptcha-container"
                     style={{
-                      padding: '14px 16px',
-                      borderRadius: 10,
-                      border: `1.5px solid ${errors.captcha ? '#ef4444' : '#e5e7eb'}`,
-                      background: '#f9fafb',
+                      padding: '16px 18px',
+                      borderRadius: 12,
+                      border: `1.5px solid ${errors.captcha ? '#ef4444' : '#333333'}`,
+                      background: '#1a1a1a',
                     }}
                   >
                     <ReCAPTCHA
                       ref={captchaRef}
                       sitekey={RECAPTCHA_SITE_KEY}
                       onChange={handleCaptchaChange}
+                      theme="dark"
+                      size="normal"
                     />
                     {errors.captcha && (
                       <p style={{ marginTop: 8, fontSize: 12, color: '#ef4444' }}>{errors.captcha}</p>
                     )}
                   </div>
                 ) : (
-                  <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 10 }}>
-                    <p style={{ fontSize: 12, color: '#92400e' }}>⚠️ reCAPTCHA not configured. Set VITE_RECAPTCHA_SITE_KEY in .env</p>
+                  <div style={{ padding: '12px 16px', background: '#1a1a1a', border: '1.5px solid #333333', borderRadius: 12 }}>
+                    <p style={{ fontSize: 12, color: '#9ca3af' }}>⚠️ reCAPTCHA not configured. Set VITE_RECAPTCHA_SITE_KEY in .env</p>
                   </div>
                 )}
               </>
@@ -1015,24 +1190,23 @@ const Signup = () => {
                 <div
                   style={{
                     width: 80, height: 80, borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #d0f4ff, #e0fbff)',
-                    border: '3px solid #667eea',
+                    background: 'linear-gradient(135deg, #ffffff, #cccccc)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     margin: '0 auto 18px',
-                    boxShadow: '0 8px 24px rgba(102, 126, 234, 0.2)',
+                    boxShadow: '0 8px 24px rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  <CheckCircle size={38} color="#667eea" />
+                  <CheckCircle size={38} color="#ffffff" />
                 </div>
                 <div
                   style={{
                     fontSize: 20, fontWeight: 700,
-                    color: '#111827', marginBottom: 10,
+                    color: '#ffffff', marginBottom: 10,
                   }}
                 >
                   Almost there!
                 </div>
-                <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.6, marginBottom: 14 }}>
+                <p style={{ fontSize: 14, color: '#ffffff', lineHeight: 1.6, marginBottom: 14 }}>
                   We've sent a verification code to your email.<br />
                   Please check your inbox and verify your email address.
                 </p>
@@ -1043,7 +1217,7 @@ const Signup = () => {
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#667eea',
+                      color: '#ffffff',
                       fontSize: 13,
                       fontWeight: 700,
                       cursor: 'pointer',
@@ -1056,52 +1230,145 @@ const Signup = () => {
               </div>
             )}
 
-            {/* ── Submit ── */}
-            <button
-              type="submit"
-              disabled={loading || authLoading || (step === 2 && !captchaToken)}
-              style={{
-                width: '100%',
-                padding: '13px 20px',
-                borderRadius: 10,
-                border: 'none',
-                background: (loading || authLoading || (step === 2 && !captchaToken))
-                  ? '#a5b4fc'
-                  : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: '#fff',
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: (loading || authLoading || (step === 2 && !captchaToken)) ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'opacity 0.2s, transform 0.1s',
-                letterSpacing: '0.01em',
-              }}
-              onMouseEnter={(e) => { if (!loading && !authLoading && !(step === 2 && !captchaToken)) e.target.style.opacity = '0.92'; }}
-              onMouseLeave={(e) => { e.target.style.opacity = '1'; }}
-            >
-              {loading || authLoading ? (
-                <div
-                  style={{
-                    width: 20, height: 20, borderRadius: '50%',
-                    border: '2px solid rgba(255,255,255,0.4)',
-                    borderTopColor: '#fff',
-                    animation: 'spin 0.7s linear infinite',
-                  }}
-                />
-              ) : (
-                <>
-                  {step === 1 ? 'Continue' : step === 2 ? 'Create Account' : 'Go to Dashboard'}
-                  <ArrowRight size={17} />
-                </>
-              )}
-            </button>
+           {/* Terms and Conditions */}
+           {step === 2 && (
+             <div style={{ marginBottom: 16 }}>
+               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                 <input
+                   type="checkbox"
+                   required
+                   style={{
+                     marginTop: 2,
+                     width: 16,
+                     height: 16,
+                     accentColor: '#ffffff',
+                     cursor: 'pointer'
+                   }}
+                 />
+                 <span style={{ fontSize: 13, color: '#cccccc', lineHeight: 1.4 }}>
+                   I agree to the{' '}
+                   <Link 
+                     to="/terms" 
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     style={{ color: '#ffffff', textDecoration: 'none', fontWeight: 600 }}
+                     onMouseEnter={(e) => { e.target.style.textDecoration = 'underline'; }}
+                     onMouseLeave={(e) => { e.target.style.textDecoration = 'none'; }}
+                   >
+                     Terms of Service
+                   </Link>
+                   {' '}and{' '}
+                   <Link 
+                     to="/privacypolicy" 
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     style={{ color: '#ffffff', textDecoration: 'none', fontWeight: 600 }}
+                     onMouseEnter={(e) => { e.target.style.textDecoration = 'underline'; }}
+                     onMouseLeave={(e) => { e.target.style.textDecoration = 'none'; }}
+                   >
+                     Privacy Policy
+                   </Link>
+                 </span>
+               </label>
+             </div>
+           )}
 
+           {/* ── Submit Button ── */}
+<button
+  type="submit"
+  disabled={loading || authLoading || (step === 2 && !captchaToken)}
+  style={{
+    width: '100%',
+    padding: '16px 24px',
+    borderRadius: 12,
+    border: 'none',
+    outline: 'none',
+    position: 'relative',
+    overflow: 'hidden', // Shimmer effect ke liye zaroori hai
+    
+    // Background logic
+    background: (loading || authLoading || (step === 2 && !captchaToken))
+      ? '#333333'
+      : 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)',
+    
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: (loading || authLoading || (step === 2 && !captchaToken)) ? 'not-allowed' : 'pointer',
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 10,
+    
+    // Smooth Transitions
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: (loading || authLoading || (step === 2 && !captchaToken)) 
+      ? 'none' 
+      : '0 4px 12px rgba(0,0,0,0.1)',
+    marginTop: 8,
+    transform: 'scale(1)',
+  }}
+  
+  // Interactive Animations
+  onMouseEnter={(e) => { 
+    if (!loading && !authLoading && !(step === 2 && !captchaToken)) {
+      e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+      e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.15)';
+      e.currentTarget.style.filter = 'brightness(1.1)';
+    }
+  }}
+  onMouseLeave={(e) => { 
+    e.currentTarget.style.transform = 'translateY(0px) scale(1)';
+    e.currentTarget.style.boxShadow = (loading || authLoading || (step === 2 && !captchaToken)) 
+      ? 'none' 
+      : '0 4px 12px rgba(0,0,0,0.1)';
+    e.currentTarget.style.filter = 'brightness(1)';
+  }}
+  onMouseDown={(e) => {
+    if (!loading && !authLoading) {
+      e.currentTarget.style.transform = 'translateY(0px) scale(0.98)';
+    }
+  }}
+  onMouseUp={(e) => {
+    if (!loading && !authLoading) {
+      e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+    }
+  }}
+>
+  {loading || authLoading ? (
+    <div
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        border: '3px solid rgba(0,0,0,0.1)',
+        borderTopColor: '#000',
+        animation: 'spin 0.8s cubic-bezier(0.6, 0.2, 0.4, 1) infinite',
+      }}
+    />
+  ) : (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, animation: 'fadeIn 0.3s ease' }}>
+      <span>
+        {getSubmitButtonText()}
+      </span>
+      <ArrowRight 
+        size={18} 
+        style={{ 
+          transition: 'transform 0.3s ease',
+          transform: 'translateX(0px)' 
+        }} 
+      />
+    </div>
+  )}
+</button>
             {/* ── Footer links ── */}
-            <p style={{ textAlign: 'center', fontSize: 14, color: '#6b7280' }}>
+            <p style={{ textAlign: 'center', fontSize: 14, color: '#cccccc', marginTop: 16 }}>
               Already have an account?{' '}
               <Link
                 to="/login"
-                style={{ fontWeight: 700, color: '#667eea', textDecoration: 'none' }}
+                style={{ fontWeight: 700, color: '#ffffff', textDecoration: 'none' }}
+                onMouseEnter={(e) => { e.target.style.color = '#cccccc'; }}
+                onMouseLeave={(e) => { e.target.style.color = '#ffffff'; }}
               >
                 Sign in
               </Link>
@@ -1110,25 +1377,20 @@ const Signup = () => {
             <div
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: 6, paddingTop: 4,
+                gap: 8, paddingTop: 8,
               }}
             >
-              <Shield size={11} style={{ color: '#d1d5db' }} />
-              <span style={{ fontSize: 11, color: '#9ca3af' }}>
+              <Shield size={12} style={{ color: '#9ca3af' }} />
+              <span style={{ fontSize: 12, color: '#9ca3af' }}>
                 Your information is secure and encrypted
               </span>
             </div>
 
           </form>
-        </div>
-      </div>
 
-      {/* spin keyframe injected inline */}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        input::placeholder { color: #9ca3af; }
-      `}</style>
-    </div>
+        </motion.div>
+      </div>
+    </>
   );
 };
 

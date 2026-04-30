@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Phone, Edit2, Camera, Save, X, Calendar,
-  Instagram, Youtube, Twitter, TrendingUp, Award, Star,
+  Instagram, Youtube, TrendingUp, Award, Star,
   AlertCircle, CheckCircle, Loader, MapPin, Globe, Link2
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -35,8 +35,7 @@ const CreatorProfile = () => {
     socialMedia: {
       instagram: '',
       youtube: '',
-      tiktok: '',
-      twitter: ''
+      tiktok: ''
     },
     location: {
       city: '',
@@ -63,8 +62,7 @@ const CreatorProfile = () => {
         socialMedia: profileFromHook.socialMedia || {
           instagram: '',
           youtube: '',
-          tiktok: '',
-          twitter: ''
+          tiktok: ''
         },
         location: profileFromHook.location || {
           city: '',
@@ -203,7 +201,10 @@ const CreatorProfile = () => {
   if (hookLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader className="w-8 h-8 animate-spin text-[#667eea]" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading profile...</p>
+        </div>
       </div>
     );
   }
@@ -507,34 +508,6 @@ const CreatorProfile = () => {
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Twitter className="w-4 h-4" />
-              Twitter
-            </label>
-            {isEditing ? (
-              <input
-                type="text"
-                value={formData.socialMedia.twitter}
-                onChange={(e) => handleSocialMediaChange('twitter', e.target.value)}
-                placeholder="https://twitter.com/username"
-                className="w-full px-4 py-2 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            ) : (
-              formData.socialMedia.twitter ? (
-                <a
-                  href={formData.socialMedia.twitter}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-indigo-600 hover:text-indigo-700"
-                >
-                  {formData.socialMedia.twitter}
-                </a>
-              ) : (
-                <p className="text-gray-600">—</p>
-              )
-            )}
-          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">

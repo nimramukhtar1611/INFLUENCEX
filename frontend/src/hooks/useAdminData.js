@@ -4,7 +4,8 @@ import { useAuth } from './useAuth';
 import toast from 'react-hot-toast';
 
 export const useAdminData = () => {
-  const { user } = useAuth();
+  const auth = useAuth();
+  const user = auth?.user;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboard, setDashboard] = useState(null);
@@ -50,7 +51,7 @@ export const useAdminData = () => {
   });
 
   const fetchAllData = useCallback(async (showToast = false) => {
-    if (!user) return;
+    if (!user || !auth) return;
 
     try {
       if (showToast) {
@@ -295,13 +296,13 @@ export const useAdminData = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, [user, auth]);
 
   useEffect(() => {
-    if (user) {
+    if (user && auth) {
       fetchAllData();
     }
-  }, [user, fetchAllData]);
+  }, [user, auth, fetchAllData]);
 
   const refreshData = () => fetchAllData(true);
 
@@ -419,7 +420,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to verify user');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to verify user';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -433,7 +435,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to suspend user');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to suspend user';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -447,7 +450,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to activate user');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to activate user';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -461,7 +465,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to delete user');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to delete user';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -475,7 +480,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to approve item');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to approve item';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -489,7 +495,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to reject item');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to reject item';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -503,7 +510,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to resolve dispute');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to resolve dispute';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -517,7 +525,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to refund payment');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to refund payment';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -531,7 +540,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to approve withdrawal');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to approve withdrawal';
+      toast.error(errorMessage);
       return false;
     }
   }, [fetchAllData]);
@@ -545,7 +555,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to update settings');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to update settings';
+      toast.error(errorMessage);
       return false;
     }
   }, []);
@@ -559,7 +570,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to update fees');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to update fees';
+      toast.error(errorMessage);
       return false;
     }
   }, []);
@@ -568,7 +580,8 @@ export const useAdminData = () => {
     try {
       return await adminService.get2FAStatus();
     } catch (error) {
-      toast.error('Failed to get 2FA status');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to get 2FA status';
+      toast.error(errorMessage);
       return null;
     }
   }, []);
@@ -577,7 +590,8 @@ export const useAdminData = () => {
     try {
       return await adminService.generate2FA();
     } catch (error) {
-      toast.error('Failed to generate 2FA secret');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to generate 2FA secret';
+      toast.error(errorMessage);
       return null;
     }
   }, []);
@@ -590,7 +604,8 @@ export const useAdminData = () => {
         return response;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to verify 2FA code');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to verify 2FA code';
+      toast.error(errorMessage);
       return null;
     }
   }, []);
@@ -603,7 +618,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to disable 2FA');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to disable 2FA';
+      toast.error(errorMessage);
       return false;
     }
   }, []);
@@ -616,7 +632,8 @@ export const useAdminData = () => {
         return true;
       }
     } catch (error) {
-      toast.error(error.error || 'Failed to clear cache');
+      const errorMessage = (error && error.error) || (error && error.message) || 'Failed to clear cache';
+      toast.error(errorMessage);
       return false;
     }
   }, []);

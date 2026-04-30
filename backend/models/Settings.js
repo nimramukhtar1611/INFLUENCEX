@@ -251,10 +251,7 @@ const settingsSchema = new mongoose.Schema({
       type: Boolean,
       default: true
     },
-    phoneVerification: {
-      type: Boolean,
-      default: false
-    },
+    // phoneVerification removed - now optional in signup flow
     maxLoginAttempts: {
       type: Number,
       default: 5,
@@ -267,13 +264,7 @@ const settingsSchema = new mongoose.Schema({
       min: 1,
       max: 1440
     },
-    sessionTimeout: {
-      type: Number,
-      default: 30, // minutes
-      min: 5,
-      max: 480
-    },
-    passwordMinLength: {
+        passwordMinLength: {
       type: Number,
       default: 8,
       min: 6,
@@ -315,11 +306,30 @@ const settingsSchema = new mongoose.Schema({
       type: String,
       default: '30d'
     },
-    allowedIPs: [String],
-    blockedIPs: [String],
-    ipWhitelistEnabled: {
-      type: Boolean,
-      default: false
+    // OTP and verification expiry times
+    otpExpiryMinutes: {
+      type: Number,
+      default: 10,
+      min: 1,
+      max: 60
+    },
+    emailVerificationExpiryHours: {
+      type: Number,
+      default: 24,
+      min: 1,
+      max: 168
+    },
+    passwordResetExpiryHours: {
+      type: Number,
+      default: 1,
+      min: 1,
+      max: 24
+    },
+    twoFactorCodeExpiryMinutes: {
+      type: Number,
+      default: 5,
+      min: 1,
+      max: 60
     }
   },
 
@@ -358,15 +368,215 @@ const settingsSchema = new mongoose.Schema({
     supportedPlatforms: [{
       platform: {
         type: String,
-        enum: ['instagram', 'youtube', 'tiktok', 'twitter', 'facebook', 'linkedin']
+        enum: ['instagram', 'youtube', 'tiktok', 'facebook']
       },
       required: { type: Boolean, default: true },
       minFollowers: { type: Number, default: 0 }
     }]
   },
 
+  // ==================== USER APPROVAL SETTINGS ====================
+  userApproval: {
+    autoApproveBrands: {
+      type: Boolean,
+      default: false,
+      description: "Automatically approve brand registrations"
+    },
+    autoApproveCreators: {
+      type: Boolean,
+      default: false,
+      description: "Automatically approve creator registrations"
+    },
+    requireVerification: {
+      type: Boolean,
+      default: true,
+      description: "Require verification before full access"
+    },
+    verificationMethod: {
+      type: String,
+      enum: ['automatic', 'manual', 'hybrid'],
+      default: 'manual',
+      description: "How users get verified"
+    },
+    brandVerificationCriteria: {
+      minBusinessAge: {
+        type: Number,
+        default: 30,
+        description: "Minimum business age in days"
+      },
+      requireBusinessEmail: {
+        type: Boolean,
+        default: true
+      },
+      requireBusinessDocuments: {
+        type: Boolean,
+        default: false
+      }
+    },
+    creatorVerificationCriteria: {
+      minFollowers: {
+        type: Number,
+        default: 1000
+      },
+      minEngagementRate: {
+        type: Number,
+        default: 2.0
+      },
+      requireContentSamples: {
+        type: Boolean,
+        default: true
+      },
+      contentSampleCount: {
+        type: Number,
+        default: 3
+      }
+    }
+  },
+
+  // ==================== CONTENT MODERATION SETTINGS ====================
+  contentModeration: {
+    moderationType: {
+      type: String,
+      enum: ['ai', 'manual', 'hybrid'],
+      default: 'ai',
+      description: "Type of content moderation"
+    },
+    autoApproveContent: {
+      type: Boolean,
+      default: false,
+      description: "Automatically approve content that passes moderation"
+    },
+    manualReviewRequired: {
+      type: Boolean,
+      default: true,
+      description: "Require manual review for flagged content"
+    },
+    flagThreshold: {
+      type: Number,
+      default: 0.7,
+      min: 0,
+      max: 1,
+      description: "AI confidence threshold for flagging content"
+    },
+    autoFlagContent: {
+      type: Boolean,
+      default: true,
+      description: "Automatically flag suspicious content"
+    },
+    bannedWords: [{
+      word: String,
+      severity: {
+        type: String,
+        enum: ['low', 'medium', 'high'],
+        default: 'medium'
+      }
+    }],
+    bannedPhrases: [{
+      phrase: String,
+      severity: {
+        type: String,
+        enum: ['low', 'medium', 'high'],
+        default: 'medium'
+      }
+    }],
+    allowedDomains: [String],
+    blockedDomains: [String],
+    profanityFilter: {
+      type: Boolean,
+      default: true
+    },
+    spamFilter: {
+      type: Boolean,
+      default: true
+    },
+    duplicateContentFilter: {
+      type: Boolean,
+      default: true
+    },
+    contentTypes: {
+      campaigns: {
+        requireApproval: { type: Boolean, default: true },
+        moderationType: { type: String, enum: ['ai', 'manual', 'hybrid'], default: 'hybrid' }
+      },
+      deals: {
+        requireApproval: { type: Boolean, default: true },
+        moderationType: { type: String, enum: ['ai', 'manual', 'hybrid'], default: 'hybrid' }
+      },
+      messages: {
+        requireApproval: { type: Boolean, default: false },
+        moderationType: { type: String, enum: ['ai', 'manual', 'hybrid'], default: 'ai' }
+      },
+      reviews: {
+        requireApproval: { type: Boolean, default: true },
+        moderationType: { type: String, enum: ['ai', 'manual', 'hybrid'], default: 'ai' }
+      },
+      deliverables: {
+        requireApproval: { type: Boolean, default: true },
+        moderationType: { type: String, enum: ['ai', 'manual', 'hybrid'], default: 'hybrid' }
+      }
+    }
+  },
+
   // ==================== NOTIFICATION SETTINGS ====================
   notifications: {
+    // Admin notification settings for system events
+    admin: {
+      email: {
+        newUser: { 
+          type: Boolean, 
+          default: true,
+          description: "Send email when new user registers"
+        },
+        newCampaign: { 
+          type: Boolean, 
+          default: true,
+          description: "Send email when new campaign is created"
+        },
+        paymentReceived: { 
+          type: Boolean, 
+          default: true,
+          description: "Send email when payment is received"
+        },
+        disputeRaised: { 
+          type: Boolean, 
+          default: true,
+          description: "Send email when dispute is raised"
+        },
+        reportGenerated: { 
+          type: Boolean, 
+          default: true,
+          description: "Send email when report is generated"
+        },
+        systemAlerts: { 
+          type: Boolean, 
+          default: true,
+          description: "Send email for system alerts and errors"
+        },
+        maintenance: { 
+          type: Boolean, 
+          default: true,
+          description: "Send email for maintenance notifications"
+        }
+      },
+      push: {
+        newUser: { type: Boolean, default: true },
+        newCampaign: { type: Boolean, default: true },
+        paymentReceived: { type: Boolean, default: true },
+        disputeRaised: { type: Boolean, default: true },
+        reportGenerated: { type: Boolean, default: true },
+        systemAlerts: { type: Boolean, default: true },
+        maintenance: { type: Boolean, default: false }
+      },
+      inApp: {
+        newUser: { type: Boolean, default: true },
+        newCampaign: { type: Boolean, default: true },
+        paymentReceived: { type: Boolean, default: true },
+        disputeRaised: { type: Boolean, default: true },
+        reportGenerated: { type: Boolean, default: true },
+        systemAlerts: { type: Boolean, default: true },
+        maintenance: { type: Boolean, default: true }
+      }
+    },
     email: {
       enabled: { type: Boolean, default: true },
       provider: {
@@ -398,12 +608,51 @@ const settingsSchema = new mongoose.Schema({
         type: String,
         default: 'support@influencex.com'
       },
+      footer: {
+        type: String,
+        default: '© 2024 InfluenceX. All rights reserved.'
+      },
       templates: {
         welcome: { type: String, default: 'welcome' },
         verifyEmail: { type: String, default: 'verify-email' },
         resetPassword: { type: String, default: 'reset-password' },
         dealOffer: { type: String, default: 'deal-offer' },
         paymentReceived: { type: String, default: 'payment-received' }
+      },
+      // Message templates
+      messageTemplates: {
+        otpSms: {
+          type: String,
+          default: 'Your {platformName} verification code: {otp}. Valid for {expiryMinutes} minutes. Do not share this code.'
+        },
+        otpEmail: {
+          type: String,
+          default: 'Your verification code is: {otp}. This code will expire in {expiryMinutes} minutes.'
+        },
+        passwordResetSms: {
+          type: String,
+          default: '{platformName}: Use this link to reset your password: {resetLink}. Valid for {expiryHours} hour.'
+        },
+        twoFactorSms: {
+          type: String,
+          default: '{platformName}: Your 2FA code is {code}. Valid for {expiryMinutes} minutes. Do not share.'
+        },
+        dealOfferSms: {
+          type: String,
+          default: '{platformName}: New deal offer from {brandName} for ${budget}. View: {dealUrl}'
+        },
+        paymentReceivedSms: {
+          type: String,
+          default: '{platformName}: Payment of ${amount} received. View details in your dashboard.'
+        },
+        deadlineReminderSms: {
+          type: String,
+          default: '{platformName}: Deal deadline in {days} days. Submit deliverables in your dashboard.'
+        },
+        accountLockedSms: {
+          type: String,
+          default: '{platformName}: Account locked due to failed attempts. Reset your password to continue.'
+        }
       }
     },
     sms: {
@@ -512,6 +761,64 @@ const settingsSchema = new mongoose.Schema({
     endTime: Date
   },
 
+  // ==================== SYSTEM SETTINGS ====================
+  system: {
+    // Data retention periods
+    dataRetention: {
+      notificationsDays: {
+        type: Number,
+        default: 90,
+        min: 1,
+        max: 365
+      },
+      auditLogsDays: {
+        type: Number,
+        default: 90,
+        min: 1,
+        max: 365
+      },
+      tempDataHours: {
+        type: Number,
+        default: 24,
+        min: 1,
+        max: 168
+      },
+      cacheHours: {
+        type: Number,
+        default: 1,
+        min: 0.5,
+        max: 24
+      }
+    },
+    // Rate limits
+    rateLimits: {
+      apiWindowMinutes: {
+        type: Number,
+        default: 15,
+        min: 1,
+        max: 60
+      },
+      apiMaxRequests: {
+        type: Number,
+        default: 100,
+        min: 10,
+        max: 1000
+      },
+      authWindowMinutes: {
+        type: Number,
+        default: 60,
+        min: 1,
+        max: 1440
+      },
+      authMaxRequests: {
+        type: Number,
+        default: 10,
+        min: 1,
+        max: 100
+      }
+    }
+  },
+
   // ==================== GDPR SETTINGS ====================
   gdpr: {
     cookieConsentRequired: {
@@ -568,7 +875,97 @@ const settingsSchema = new mongoose.Schema({
     }
   },
 
-  // ==================== UPLOAD SETTINGS ====================
+  // ==================== USAGE LIMITS ====================
+  usageLimits: {
+    maxCampaignsPerBrand: {
+      type: Number,
+      default: 50,
+      min: 1,
+      max: 1000,
+      description: "Maximum number of campaigns a brand can create",
+      required: true
+    },
+    maxActiveDealsPerCreator: {
+      type: Number,
+      default: 20,
+      min: 1,
+      max: 500,
+      description: "Maximum number of active deals a creator can have",
+      required: true
+    },
+    maxFileSize: {
+      type: Number,
+      default: 100, // MB
+      min: 1,
+      max: 500,
+      description: "Maximum file size for uploads in MB",
+      required: true
+    },
+    maxFilesPerUpload: {
+      type: Number,
+      default: 10,
+      min: 1,
+      max: 50,
+      description: "Maximum number of files per upload session",
+      required: true
+    },
+    dailyUploadLimit: {
+      type: Number,
+      default: 100,
+      min: 1,
+      max: 1000,
+      description: "Maximum files a user can upload per day",
+      required: true
+    },
+    storageQuotaPerUser: {
+      type: Number,
+      default: 1000, // MB
+      min: 100,
+      max: 10000,
+      description: "Storage quota per user in MB",
+      required: true
+    }
+  },
+
+  // ==================== FILE UPLOAD SETTINGS ====================
+  fileUpload: {
+    allowedFileTypes: [{
+      type: String,
+      enum: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx', 'xls', 'zip']
+    }],
+    imageOptimization: {
+      enabled: { type: Boolean, default: true },
+      maxWidth: { type: Number, default: 1920 },
+      maxHeight: { type: Number, default: 1080 },
+      quality: { type: Number, default: 80, min: 1, max: 100 }
+    },
+    videoOptimization: {
+      enabled: { type: Boolean, default: true },
+      maxDuration: { type: Number, default: 300 }, // seconds
+      maxBitrate: { type: Number, default: 5000 } // kbps
+    },
+    storage: {
+      provider: {
+        type: String,
+        enum: ['local', 's3', 'cloudinary'],
+        default: 'local'
+      },
+      s3: {
+        bucket: String,
+        region: String,
+        accessKey: String,
+        secretKey: String,
+        endpoint: String
+      },
+      cloudinary: {
+        cloudName: String,
+        apiKey: String,
+        apiSecret: String
+      }
+    }
+  },
+
+  // ==================== LEGACY UPLOAD SETTINGS (BACKWARD COMPATIBILITY) ====================
   upload: {
     maxFileSize: {
       type: Number,
@@ -629,16 +1026,6 @@ const settingsSchema = new mongoose.Schema({
       clientId: String,
       clientSecret: String
     },
-    twitter: {
-      enabled: { type: Boolean, default: false },
-      consumerKey: String,
-      consumerSecret: String
-    },
-    linkedin: {
-      enabled: { type: Boolean, default: false },
-      clientId: String,
-      clientSecret: String
-    }
   },
 
   // ==================== THIRD PARTY INTEGRATIONS ====================
@@ -751,9 +1138,33 @@ settingsSchema.methods.getSetting = function(path) {
  * @param {string} userId - User ID making the update
  */
 settingsSchema.methods.updateSettings = async function(updates, userId) {
-  Object.assign(this, updates);
+  // Deep merge updates for nested objects
+  const deepMerge = (target, source) => {
+    for (const key in source) {
+      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+        if (!target[key]) target[key] = {};
+        deepMerge(target[key], source[key]);
+      } else {
+        target[key] = source[key];
+      }
+    }
+    return target;
+  };
+
+  // Apply deep merge for all updates
+  deepMerge(this, updates);
+  
   this.updatedBy = userId;
   this.version += 1;
+  
+  // Mark all potentially modified nested fields
+  if (updates.usageLimits) this.markModified('usageLimits');
+  if (updates.fileUpload) this.markModified('fileUpload');
+  if (updates.fees) this.markModified('fees');
+  if (updates.payments) this.markModified('payments');
+  if (updates.notifications) this.markModified('notifications');
+  if (updates.features) this.markModified('features');
+  
   await this.save();
   return this;
 };
@@ -920,27 +1331,6 @@ settingsSchema.statics.getDefaultLanguage = async function() {
   return defaultLang || { code: settings.platform.language, name: 'English' };
 };
 
-/**
- * Validate IP against whitelist/blacklist
- * @param {string} ip - IP address
- */
-settingsSchema.statics.validateIP = async function(ip) {
-  const settings = await this.getSettings();
-  
-  // Check whitelist
-  if (settings.security.ipWhitelistEnabled && settings.security.allowedIPs.length > 0) {
-    if (!settings.security.allowedIPs.includes(ip)) {
-      return { allowed: false, reason: 'IP not in whitelist' };
-    }
-  }
-  
-  // Check blacklist
-  if (settings.security.blockedIPs.includes(ip)) {
-    return { allowed: false, reason: 'IP is blacklisted' };
-  }
-  
-  return { allowed: true };
-};
 
 /**
  * Get maintenance status
@@ -975,6 +1365,7 @@ settingsSchema.statics.getFeatureFlag = async function(feature) {
   const settings = await this.getSettings();
   return settings.isFeatureEnabled(feature);
 };
+
 
 // ==================== EXPORT ====================
 const Settings = mongoose.model('Settings', settingsSchema);

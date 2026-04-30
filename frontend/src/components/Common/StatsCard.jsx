@@ -94,7 +94,7 @@ const StatsCard = ({
   if (loading) {
     return (
       <div className={`p-6 rounded-xl shadow-sm animate-pulse ${
-        isDark ? 'bg-gray-800' : 'bg-white'
+        isDark ? 'bg-zinc-900/50' : 'bg-white'
       }`}>
         <div className={`h-12 w-12 rounded-lg mb-4 ${
           isDark ? 'bg-gray-700' : 'bg-gray-200'
@@ -114,7 +114,7 @@ const StatsCard = ({
     const gradientColor = color.replace('gradient-', '');
     return (
       <div 
-        className={`bg-gradient-to-br ${colors[gradientColor]?.gradient || colors.indigo.gradient} p-6 rounded-xl shadow-lg text-white cursor-pointer transition-transform hover:scale-105 min-h-[180px] flex flex-col justify-between ${className}`}
+        className={`bg-gradient-to-br ${colors[gradientColor]?.gradient || colors.indigo.gradient} p-6 rounded-xl shadow-lg text-white cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-white/20 border border-transparent min-h-[180px] flex flex-col justify-between ${className}`}
         onClick={onClick}
       >
         <div className="flex flex-col items-center justify-center text-center w-full overflow-hidden">
@@ -148,8 +148,10 @@ const StatsCard = ({
   // ==================== REGULAR CARD ====================
   return (
     <div 
-      className={`p-6 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer min-h-[180px] flex flex-col justify-between ${className} ${
-        isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'
+      className={`p-6 rounded-xl shadow-sm transition-all duration-300 cursor-pointer min-h-[180px] flex flex-col justify-between hover:shadow-lg hover:-translate-y-1 border ${className} ${
+        isDark 
+          ? 'bg-zinc-900/50 hover:bg-zinc-900/50 border-zinc-800 hover:border-zinc-700' 
+          : 'bg-white hover:bg-gray-50 border-zinc-200 hover:border-zinc-300'
       }`}
       onClick={onClick}
     >
@@ -201,7 +203,7 @@ const StatsCard = ({
         <div
           ref={tooltipRef}
           className={`fixed z-50 px-3 py-2 text-sm rounded-lg shadow-lg ${
-            isDark ? 'text-white bg-gray-900' : 'text-gray-900 bg-white'
+            isDark ? 'text-white bg-zinc-900/50' : 'text-gray-900 bg-white'
           }`}
           style={{
             top: tooltipPosition.top,

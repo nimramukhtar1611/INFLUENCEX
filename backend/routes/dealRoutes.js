@@ -12,11 +12,13 @@ const { protect, authorize, hasPermission, resolveBrandContext } = require('../m
 const { validateRequest }  = require('../middleware/validation');
 const { dealValidations }  = require('../middleware/validators');
 const dealController       = require('../controllers/dealController');
+const { dealCreationLimiter, brandLimiter, creatorLimiter } = require('../middleware/rateLimiter');
 
 router.use(protect, resolveBrandContext);
 
 // ── Create ────────────────────────────────────────────────────────────────
 router.post('/',
+  dealCreationLimiter, // 🔒 SECURITY: Prevent deal spam (20 deals per hour)
   authorize('brand'),
   hasPermission('create_deals'),
   dealValidations.create,
@@ -25,6 +27,7 @@ router.post('/',
 );
 
 router.post('/performance',
+  dealCreationLimiter, // 🔒 SECURITY: Prevent performance deal spam
   authorize('brand'),
   hasPermission('create_deals'),
   dealController.createPerformanceDeal

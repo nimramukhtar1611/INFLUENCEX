@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { CheckCircle, History, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CheckCircle, History, Loader2, RefreshCw, ShieldCheck, CreditCard, Activity, ArrowUpRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useTheme } from '../../hooks/useTheme';
+import BrandLayout from '../../components/Brand/BrandLayout';
 
 const formatCurrency = (value, currency = 'usd') => {
   const numeric = Number(value || 0);
@@ -18,102 +19,35 @@ const formatCurrency = (value, currency = 'usd') => {
 const formatDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
 };
 
 const formatLimitValue = (value) => {
   const numeric = Number(value);
-  if (numeric === -1) return 'Infinite';
+  if (numeric === -1) return '∞';
   return Number.isFinite(numeric) ? String(numeric) : '-';
 };
 
 const normalizePlanId = (value) => {
-  if (value === null || value === undefined) return '';
-
-  if (typeof value === 'string') {
-    return value.trim().toLowerCase();
-  }
-
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim().toLowerCase();
   if (typeof value === 'object') {
-    if (typeof value.planId === 'string') return value.planId.trim().toLowerCase();
-    if (typeof value.id === 'string') return value.id.trim().toLowerCase();
-    if (typeof value._id === 'string') return value._id.trim().toLowerCase();
+    return (value.planId || value.id || value._id || '').trim().toLowerCase();
   }
-
   return String(value).trim().toLowerCase();
 };
 
 const ROLE_PLAN_COPY = {
   brand: {
-    starter: {
-      description: 'For early-stage brands launching creator campaigns',
-      features: [
-        'Campaign launch workflows for small teams',
-        'Advanced creator search and filtering',
-        'Basic collaboration and deal tracking',
-        'Performance visibility for active deals'
-      ]
-    },
-    professional: {
-      description: 'For scaling brand teams running performance campaigns',
-      features: [
-        'AI Creator Matching Engine with campaign context',
-        'Priority support and faster campaign operations',
-        'Higher collaboration limits for growing teams',
-        'Advanced ROI and performance intelligence'
-      ]
-    },
-    enterprise: {
-      description: 'For enterprise brands and agencies with complex operations',
-      features: [
-        'AI Counter Dealing for negotiation automation',
-        'High-volume workflow support for large portfolios',
-        'Advanced account controls and service guarantees',
-        'Custom integrations and enterprise-scale operations'
-      ]
-    }
+    starter: { description: 'For early-stage brands launching creator campaigns', features: ['Campaign launch workflows', 'Advanced creator search', 'Basic collaboration', 'Performance visibility'] },
+    professional: { description: 'For scaling brand teams running performance campaigns', features: ['AI Creator Matching Engine', 'Priority support', 'Higher collaboration limits', 'Advanced ROI intelligence'] },
+    enterprise: { description: 'For enterprise brands and agencies', features: ['AI Counter Dealing', 'High-volume workflow support', 'Advanced account controls', 'Custom integrations'] }
   },
   creator: {
-    free: {
-      description: 'Perfect for getting started as a creator',
-      features: [
-        'Completed deals cap: 2 total',
-        'Basic creator visibility',
-        'Core deal collaboration tools',
-        'Standard support'
-      ]
-    },
-    starter: {
-      description: 'For creators building paid-collab momentum',
-      features: [
-        'Completed deals cap: 10 total',
-        'More active deals and collaboration capacity',
-        'Improved campaign visibility and discoverability',
-        'Better performance tracking for ongoing work',
-        'Core tools to grow recurring brand partnerships'
-      ]
-    },
-    professional: {
-      description: 'For creators focused on predictable growth and premium deals',
-      features: [
-        'Completed deals cap: 30 total',
-        'Creator Growth OS access for strategic content direction',
-        'Deeper performance insights to optimize outcomes',
-        'Priority support for faster issue resolution',
-        'Expanded professional toolkit for higher-value partnerships'
-      ]
-    },
-    enterprise: {
-      description: 'For top creators and teams running at scale',
-      features: [
-        'Completed deals cap: Infinite',
-        'AI Counter Dealing for enterprise negotiation workflows',
-        'Maximum collaboration scale and workflow headroom',
-        'Enterprise-level support and reliability',
-        'Advanced controls for high-volume campaign execution'
-      ]
-    }
+    free: { description: 'Perfect for getting started', features: ['2 completed deals total', 'Basic visibility', 'Core collaboration tools', 'Standard support'] },
+    starter: { description: 'For creators building paid-collab momentum', features: ['10 completed deals total', 'More active deals capacity', 'Improved discoverability', 'Performance tracking'] },
+    professional: { description: 'For creators focused on premium growth', features: ['30 completed deals total', 'Creator Growth OS access', 'Deeper performance insights', 'Priority support'] },
+    enterprise: { description: 'For top creators running at scale', features: ['Infinite deals', 'AI Counter Dealing', 'Maximum workflow headroom', 'Enterprise support'] }
   }
 };
 
@@ -121,19 +55,9 @@ const getRoleSpecificPlanCopy = ({ userType, planId, fallbackDescription, fallba
   const role = String(userType || '').toLowerCase();
   const normalizedPlanId = normalizePlanId(planId);
   const roleCopy = ROLE_PLAN_COPY[role]?.[normalizedPlanId];
-
-  if (!roleCopy) {
-    return {
-      description: fallbackDescription,
-      features: fallbackFeatures
-    };
-  }
-
   return {
-    description: roleCopy.description || fallbackDescription,
-    features: Array.isArray(roleCopy.features) && roleCopy.features.length
-      ? roleCopy.features
-      : fallbackFeatures
+    description: roleCopy?.description || fallbackDescription,
+    features: (roleCopy?.features?.length ? roleCopy.features : fallbackFeatures)
   };
 };
 
@@ -143,396 +67,279 @@ const SubscriptionManager = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const {
-    plans,
-    currentSubscription,
-    invoices,
-    upcomingInvoice,
-    limits,
-    usage,
-    loading,
-    busy,
-    isSubscriptionUser,
-    refreshAll,
-    startCheckout,
-    startPlanChange,
-    openBillingPortal,
-    downloadInvoice
+    plans, currentSubscription, invoices, upcomingInvoice, limits, usage,
+    loading, busy, isSubscriptionUser, refreshAll, startCheckout,
+    startPlanChange, openBillingPortal, downloadInvoice
   } = useSubscription();
 
   const [interval, setInterval] = useState('month');
   const [selectedPlanId, setSelectedPlanId] = useState('');
 
+  const tabs = [
+    { id: 'plans', label: 'Plans', icon: ShieldCheck },
+    { id: 'billing', label: 'Billing', icon: CreditCard },
+    { id: 'usage', label: 'Usage', icon: Activity }
+  ];
+
+  const [activeTab, setActiveTab] = useState('plans');
+
+  const actionButton = (
+    <button
+      onClick={refreshAll}
+      disabled={loading}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+        isDark 
+          ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' 
+          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+      }`}
+    >
+      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+    </button>
+  );
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const requestedPlan = params.get('plan');
-    const requestedInterval = params.get('interval');
-    const checkoutStatus = params.get('checkout');
-
-    if (requestedPlan) setSelectedPlanId(requestedPlan);
-    if (requestedInterval === 'year' || requestedInterval === 'month') {
-      setInterval(requestedInterval);
-    }
-
-    if (checkoutStatus === 'success') {
-      toast.success('Stripe checkout completed. Refreshing subscription status...');
+    if (params.get('plan')) setSelectedPlanId(params.get('plan'));
+    if (['year', 'month'].includes(params.get('interval'))) setInterval(params.get('interval'));
+    if (params.get('checkout') === 'success') {
+      toast.success('Subscription updated successfully.');
       refreshAll();
       window.history.replaceState({}, '', window.location.pathname);
     }
-
-    if (checkoutStatus === 'cancel') {
-      toast('Stripe checkout was canceled.');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [location.search, refreshAll]);
-
-  const selectedPlan = useMemo(
-    () => plans.find((plan) => normalizePlanId(plan.id) === normalizePlanId(selectedPlanId)) || null,
-    [plans, selectedPlanId]
-  );
+  }, [location.search, refreshAll, setInterval]);
 
   const activePlanId = useMemo(() => {
     if (!currentSubscription) return null;
+    return normalizePlanId(currentSubscription.planDetails?.planId || currentSubscription.planId);
+  }, [currentSubscription]);
 
-    const planIdCandidates = [
-      currentSubscription.planDetails?.planId,
-      currentSubscription.planDetails?.id,
-      currentSubscription.planId?.planId,
-      currentSubscription.planId,
-      currentSubscription.planDetails?._id,
-      currentSubscription.planId?._id
-    ];
-
-    for (const candidate of planIdCandidates) {
-      const normalized = normalizePlanId(candidate);
-      if (normalized) {
-        return normalized;
-      }
-    }
-
-    const currentPlanName = String(currentSubscription.planDetails?.name || '').trim().toLowerCase();
-    if (currentPlanName) {
-      const matchedPlan = plans.find((plan) => String(plan.name || '').trim().toLowerCase() === currentPlanName);
-      if (matchedPlan?.id) {
-        return normalizePlanId(matchedPlan.id);
-      }
-    }
-
-    return null;
-  }, [currentSubscription, plans]);
-
-  useEffect(() => {
-    if (plans.length === 0) return;
-
-    const selectedExists = plans.some((plan) => normalizePlanId(plan.id) === normalizePlanId(selectedPlanId));
-
-    if (selectedExists && normalizePlanId(selectedPlanId) !== 'free') {
-      return;
-    }
-
-    if (activePlanId) {
-      const activePlan = plans.find((plan) => normalizePlanId(plan.id) === activePlanId);
-      if (activePlan?.id) {
-        setSelectedPlanId(activePlan.id);
-        return;
-      }
-    }
-
-    const firstPaidPlan = plans.find((plan) => normalizePlanId(plan.id) !== 'free');
-    setSelectedPlanId(firstPaidPlan?.id || plans[0].id);
-  }, [plans, selectedPlanId, activePlanId]);
-
-  const hasActiveStripeSubscription = Boolean(currentSubscription?.stripeSubscriptionId)
-    && ['active', 'trialing', 'past_due'].includes(currentSubscription?.status);
-
-  const canManageBilling = Boolean(currentSubscription?.stripeSubscriptionId);
-
-  const selectedPlanIdNormalized = normalizePlanId(selectedPlan?.id || selectedPlanId);
+  const selectedPlanIdNormalized = normalizePlanId(selectedPlanId);
   const isSelectedPlanFree = selectedPlanIdNormalized === 'free';
+  const hasActiveStripeSubscription = Boolean(currentSubscription?.stripeSubscriptionId) && ['active', 'trialing', 'past_due'].includes(currentSubscription?.status);
 
   const handleSubscribeOrChange = async () => {
-    if (!selectedPlan) return;
-
-    if (normalizePlanId(selectedPlan.id) === 'free') {
-      toast('Free plan is included by default and cannot be subscribed through Stripe.');
-      return;
-    }
-
-    const selectedId = normalizePlanId(selectedPlan.id);
+    const selectedPlan = plans.find(p => normalizePlanId(p.id) === selectedPlanIdNormalized);
+    if (!selectedPlan || isSelectedPlanFree) return;
 
     if (hasActiveStripeSubscription) {
-      if (selectedId !== activePlanId) {
-        await startPlanChange({
-          planId: selectedPlan.id,
-          interval
-        });
-        return;
+      if (normalizePlanId(selectedPlan.id) !== activePlanId) {
+        await startPlanChange({ planId: selectedPlan.id, interval });
+      } else {
+        await openBillingPortal();
       }
-
-      await openBillingPortal();
-      return;
+    } else {
+      await startCheckout({ planId: selectedPlan.id, interval });
     }
-
-    await startCheckout({
-      planId: selectedPlan.id,
-      interval
-    });
   };
 
   if (!isSubscriptionUser) {
     return (
-      <div className={`p-6 rounded-xl border ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-        <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Subscription</h1>
-        <p className={`mt-2 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Subscriptions are available for brand and creator accounts.</p>
+      <div className={`p-12 text-center rounded-3xl border-2 border-dashed ${isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-zinc-100 bg-white'}`}>
+        <div className="relative z-10">
+          <h1 className="text-2xl font-bold tracking-tight">Access Restricted</h1>
+          <p className="mt-2 text-zinc-500">Subscription management is for Brands and Creators only.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
-        <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Subscription & Billing</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Manage plans, invoices, and billing through Stripe Checkout.</p>
+    <div className="min-h-screen">
+      <div className="relative z-10">
+        <BrandLayout
+          title="Subscription"
+          subtitle="Manage your billing, invoices and premium features."
+          actionButton={actionButton}
+          tabs={tabs}
+          onTabChange={setActiveTab}
+          activeTab={activeTab}
+        >
+          <div className="p-6">
+          {/* Top Status Bar */}
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Current</span>
+              <span className="text-xs font-bold">{currentSubscription?.planDetails?.name || 'Free Tier'}</span>
+            </div>
+            <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Status</span>
+              <span className="text-xs font-bold uppercase text-emerald-500">{currentSubscription?.status || 'Active'}</span>
+            </div>
+            <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Renewal</span>
+              <span className="text-xs font-bold">{formatDate(currentSubscription?.billingPeriod?.end)}</span>
+            </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={refreshAll}
-            disabled={loading || busy}
-            className={`inline-flex items-center px-4 py-2 rounded-lg border disabled:opacity-60 transition-colors ${
-              isDark ? 'border-gray-700 text-gray-200 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          {currentSubscription ? (
-            <button
-              type="button"
-              onClick={openBillingPortal}
-              disabled={busy || !canManageBilling}
-              className="inline-flex items-center px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-black disabled:opacity-60"
-            >
-              Manage Billing
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      <section className={`rounded-xl border p-5 ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Current Subscription</h2>
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
-            {currentSubscription?.status || 'none'}
-          </span>
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Plan</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{currentSubscription?.planDetails?.name || 'No active plan'}</p>
-          </div>
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Billing Period Ends</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatDate(currentSubscription?.billingPeriod?.end)}</p>
-          </div>
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Upcoming Invoice</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-              {upcomingInvoice ? formatCurrency(upcomingInvoice.amount, upcomingInvoice.currency) : '-'}
-            </p>
+        
+      {/* Plan Selection Grid */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500">Available Plans</h2>
+          <div className={`flex p-1 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-100 border-zinc-200'}`}>
+            {['month', 'year'].map((i) => (
+              <button
+                key={i}
+                onClick={() => setInterval(i)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                  interval === i 
+                    ? (isDark ? 'bg-white text-white' : 'bg-black text-white shadow-lg') 
+                    : 'text-zinc-500 hover:text-zinc-400'
+                }`}
+              >
+                {i}ly
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={openBillingPortal}
-            disabled={!canManageBilling || busy}
-            className="px-4 py-2 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-          >
-            Manage Billing in Stripe
-          </button>
-        </div>
-      </section>
-
-      <section className={`rounded-xl border p-5 ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-          <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Choose Plan</h2>
-          <div className={`inline-flex rounded-lg p-1 ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
-            <button
-              type="button"
-              onClick={() => setInterval('month')}
-              className={`px-3 py-1.5 rounded-md text-sm ${interval === 'month' ? (isDark ? 'bg-gray-700 shadow text-gray-100' : 'bg-white shadow text-gray-900') : (isDark ? 'text-gray-300' : 'text-gray-600')}`}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              onClick={() => setInterval('year')}
-              className={`px-3 py-1.5 rounded-md text-sm ${interval === 'year' ? (isDark ? 'bg-gray-700 shadow text-gray-100' : 'bg-white shadow text-gray-900') : (isDark ? 'text-gray-300' : 'text-gray-600')}`}
-            >
-              Yearly
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {plans.map((plan) => {
             const planId = normalizePlanId(plan.id);
-            const isSelected = selectedPlanIdNormalized === planId;
             const isActive = activePlanId === planId;
-            const isFreePlan = planId === 'free';
-            const displayPrice = interval === 'year' ? Number(plan.price || 0) * 12 : Number(plan.price || 0);
-            const fallbackFeatures = Array.isArray(plan.features)
-              ? plan.features.slice(0, 4)
-              : (typeof plan.features === 'string' && plan.features ? [plan.features] : []);
-            const roleCopy = getRoleSpecificPlanCopy({
-              userType: user?.userType,
-              planId,
-              fallbackDescription: plan.description,
-              fallbackFeatures
-            });
+            const isSelected = selectedPlanIdNormalized === planId;
+            const isFree = planId === 'free';
+            const copy = getRoleSpecificPlanCopy({ userType: user?.userType, planId, fallbackDescription: plan.description, fallbackFeatures: plan.features });
 
             return (
-              <button
+              <div
                 key={plan.id}
-                type="button"
-                onClick={() => {
-                  if (!isFreePlan) {
-                    setSelectedPlanId(plan.id);
-                  }
-                }}
-                disabled={isFreePlan}
-                className={`text-left p-4 rounded-xl border-2 transition-all flex flex-col text-start items-start ${
-                  isActive
-                    ? (isDark ? 'border-indigo-500 bg-gradient-to-br from-gray-800 to-gray-900 ring-2 ring-indigo-700 shadow-lg' : 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-purple-50 ring-2 ring-indigo-200 shadow-lg')
+                onClick={() => !isFree && setSelectedPlanId(plan.id)}
+                className={`group relative p-6 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between min-h-[320px] ${
+                  isActive 
+                    ? (isDark ? 'bg-white border-white text-white' : 'bg-black border-black text-white shadow-2xl scale-[1.02]')
                     : isSelected
-                      ? (isDark ? 'border-indigo-500 bg-gradient-to-br from-gray-800 to-gray-900 ring-2 ring-indigo-700 shadow-lg transform scale-105' : 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-purple-50 ring-2 ring-indigo-200 shadow-lg transform scale-105')
-                      : (isDark ? 'border-indigo-600 bg-gradient-to-br from-gray-800 to-gray-900' : 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-purple-50')
-                } ${isFreePlan ? 'cursor-not-allowed opacity-80' : ''}`}
+                      ? (isDark ? 'bg-zinc-800 border-zinc-600' : 'bg-white border-zinc-900 shadow-xl scale-[1.02]')
+                      : (isDark ? 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700' : 'bg-white border-zinc-100 hover:border-zinc-300')
+                }`}
               >
-                <div className="flex items-center justify-between w-full">
-                  <h3 className={`font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{plan.name}</h3>
-                  <div className="flex items-center gap-2">
-                    {isFreePlan ? (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white">Included</span>
-                    ) : (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white">Premium</span>
-                    )}
-                    {isActive ? <CheckCircle className="w-5 h-5 text-blue-600" /> : null}
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-lg font-bold tracking-tight">{plan.name}</h3>
+                    {isActive && <CheckCircle className={`w-5 h-5 ${isDark && isActive ? 'text-white' : 'text-emerald-500'}`} />}
                   </div>
-                </div>
-                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{roleCopy.description}</p>
-                <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatCurrency(displayPrice, plan.currency)}</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>per {interval}</p>
-                <ul className={`space-y-1 text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                    {roleCopy.features.map((feature) => (
-                      <li key={String(feature)} className="flex items-start">
-                        <ShieldCheck className="w-4 h-4 text-indigo-600 mr-2 mt-0.5" />
-                        <span>{typeof feature === 'string' ? feature : feature?.name || 'Feature'}</span>
+                  <div className="mb-6">
+                    <span className="text-3xl font-bold tracking-tighter">
+                      {formatCurrency(interval === 'year' ? plan.price * 12 : plan.price, plan.currency)}
+                    </span>
+                    <span className={`text-xs ml-1 ${isActive ? (isDark ? 'text-white' : 'text-zinc-400') : 'text-zinc-500'}`}>/{interval}</span>
+                  </div>
+                  <ul className="space-y-3 mb-8">
+                    {copy.features.slice(0, 4).map((f, idx) => (
+                      <li key={idx} className="flex items-start text-xs font-medium">
+                        <ShieldCheck className={`w-3.5 h-3.5 mr-2 mt-0.5 shrink-0 ${isActive ? (isDark ? 'text-zinc-400' : 'text-zinc-500') : 'text-indigo-500'}`} />
+                        <span className="opacity-80 leading-relaxed">{typeof f === 'string' ? f : f.name}</span>
                       </li>
                     ))}
                   </ul>
-              </button>
+                </div>
+                {!isFree && !isActive && (
+                  <div className={`mt-auto text-center py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border ${
+                    isSelected ? (isDark ? 'bg-white text-white border-white' : 'bg-black text-white border-black') : 'border-zinc-700 text-zinc-500 group-hover:border-zinc-500'
+                  }`}>
+                    {isSelected ? 'Ready to Upgrade' : 'Select Plan'}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        {/* Action Button */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-6 rounded-3xl bg-zinc-900 text-white border border-zinc-800">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-zinc-800 rounded-2xl">
+              <CreditCard className="w-6 h-6 text-zinc-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold">Secure Billing</p>
+              <p className="text-xs text-zinc-500">Payments are processed securely via Stripe.</p>
+            </div>
+          </div>
           <button
-            type="button"
             onClick={handleSubscribeOrChange}
-            disabled={!selectedPlan || busy || isSelectedPlanFree}
-            className="inline-flex items-center px-4 py-2 rounded-lg bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white hover:from-[#5a67d8] hover:to-[#6b46a2] disabled:opacity-60"
+            disabled={busy || isSelectedPlanFree || (!selectedPlanId && !hasActiveStripeSubscription)}
+            className="w-full md:w-auto px-8 py-3 rounded-full bg-white text-gray-700 text-xs font-bold uppercase tracking-widest hover:scale-105 transition-all disabled:opacity-50 inline-flex items-center justify-center"
           >
-            {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-            {isSelectedPlanFree
-              ? 'Free Plan Included'
-              : hasActiveStripeSubscription
-                ? (normalizePlanId(selectedPlan?.id) !== activePlanId ? 'Change Plan in Stripe' : 'Manage Billing in Stripe')
-              : 'Subscribe via Stripe'}
+            {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {hasActiveStripeSubscription ? 'Update Subscription' : 'Get Started Now'}
           </button>
         </div>
+      </div>
 
-        <div className="mt-4 p-4 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
-          Stripe Checkout handles all billing details and payment methods securely. No card information is collected in-app.
+      {/* Grid for Usage and Invoices */}
+      <div className="grid grid-cols-1 mt-4 lg:grid-cols-2 gap-8">
+        {/* Usage Section */}
+        <div className={`p-8 rounded-3xl border ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 flex items-center">
+              <Activity className="w-4 h-4 mr-2" /> Plan Usage
+            </h2>
+          </div>
+          <div className="space-y-6">
+            {(user?.userType === 'brand' ? [
+              { label: 'Campaigns', used: usage?.campaignsUsed, total: limits?.campaigns },
+              { label: 'Deals', used: usage?.activeDealsUsed, total: limits?.activeDeals }
+            ] : [
+              { label: 'Active Deals', used: usage?.activeDealsUsed, total: limits?.activeDeals },
+              { label: 'Completed', used: usage?.completedDealsUsed, total: limits?.completedDeals }
+            ]).map((item, idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                  <span className={isDark ? 'text-zinc-400' : 'text-zinc-500'}>{item.label}</span>
+                  <span>{item.used ?? 0} / {formatLimitValue(item.total)}</span>
+                </div>
+                <div className={`h-1.5 w-full rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
+                  <div 
+                    className="h-full rounded-full bg-zinc-400" 
+                    style={{ width: `${Math.min(((item.used || 0) / (item.total === -1 ? 100 : item.total || 1)) * 100, 100)}%` }} 
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </section>
 
-      <section className={`rounded-xl border p-5 ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-          <h2 className={`text-lg font-semibold flex items-center ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-            <History className="w-5 h-5 mr-2" />
-            Invoices
-          </h2>
-
-          <div className="mt-4 space-y-2">
+        {/* Invoices Section */}
+        <div className={`p-8 rounded-3xl border ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 flex items-center">
+              <History className="w-4 h-4 mr-2" /> Billing History
+            </h2>
+          </div>
+          <div className="space-y-3">
             {invoices.length === 0 ? (
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No invoices available.</p>
+              <p className="text-center py-10 text-xs text-zinc-500 italic">No transaction records found.</p>
             ) : (
-              invoices.map((invoice) => (
-                <div key={invoice.id || invoice._id} className={`p-3 rounded-lg flex items-center justify-between ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+              invoices.map((inv) => (
+                <div key={inv.id || inv._id} className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-600' : 'bg-gray-50 border-transparent hover:border-zinc-200'}`}>
                   <div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{invoice.number || invoice.id || invoice._id}</p>
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{formatDate(invoice.date || invoice.createdAt)} - {formatCurrency(invoice.amount, invoice.currency)}</p>
+                    <p className="text-xs font-bold tracking-tight">{inv.number || 'Invoice ID'}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">{formatDate(inv.date || inv.createdAt)}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => downloadInvoice(invoice.id || invoice._id)}
-                    className={`text-xs px-3 py-1.5 rounded border transition-colors ${
-                      isDark ? 'border-gray-700 text-gray-200 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    Download
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs font-bold">{formatCurrency(inv.amount, inv.currency)}</span>
+                    <button 
+                      onClick={() => downloadInvoice(inv.id || inv._id)}
+                      className="p-2 rounded-full hover:bg-zinc-800 transition-colors"
+                    >
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
           </div>
-      </section>
-
-      <section className={`rounded-xl border p-5 ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-        <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Plan Usage</h2>
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          {user?.userType === 'brand' && (
-          <>
-          <div className={`p-3 rounded ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Campaigns</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{usage?.campaignsUsed ?? 0} / {formatLimitValue(limits?.campaigns)}</p>
-          </div>
-          <div className={`p-3 rounded ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Team Members</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{usage?.teamMembersUsed ?? 0} / {formatLimitValue(limits?.teamMembers)}</p>
-          </div>
-          <div className={`p-3 rounded ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Active Deals</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{usage?.activeDealsUsed ?? 0} / {formatLimitValue(limits?.activeDeals)}</p>
-          </div>
-          </>
-          )}
-          {user?.userType === 'creator' && (
-          <>
-          <div className={`p-3 rounded ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Active Deals</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{usage?.activeDealsUsed ?? 0} / {formatLimitValue(limits?.activeDeals)}</p>
-          </div>
-          <div className={`p-3 rounded ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Completed Deals</p>
-            <p className={`font-semibold mt-1 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{usage?.completedDealsUsed ?? 0} / {formatLimitValue(limits?.completedDeals)}</p>
-          </div>
-          </>
-          )}
         </div>
-      </section>
-
-      {loading ? (
-        <div className="fixed bottom-5 right-5 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm shadow-lg inline-flex items-center">
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          Loading subscription data...
         </div>
-      ) : null}
 
-      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Signed in as {user?.email}</p>
+        <div className="pt-6 text-center border-t border-zinc-800/10">
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">
+            Securely logged in as <span className="text-zinc-400">{user?.email}</span>
+          </p>
+        </div>
+        </div>
+        </BrandLayout>
+      </div>
     </div>
   );
 };

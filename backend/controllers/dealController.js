@@ -1,18 +1,156 @@
 // controllers/dealController.js - COMPLETE PRODUCTION-READY VERSION
+const mongoose = require('mongoose');
 const Deal = require('../models/Deal');
 const Campaign = require('../models/Campaign');
 const Creator = require('../models/Creator');
-const Payment = require('../models/Payment');
-const { Conversation } = require('../models/Conversation');
+const Brand = require('../models/Brand');
 const Message = require('../models/Message');
-const Notification = require('../models/Notification');
-const User = require('../models/User');
-const Subscription = require('../models/Subscription');
+const { protect } = require('../middleware/auth');
 const { catchAsync } = require('../utils/catchAsync');
-const { isValidObjectId, isValidBudget, isValidFutureDate } = require('../utils/validators');
+const { isValidObjectId } = require('../utils/validation');
+
+// ==================== INPUT VALIDATION HELPERS ====================
+const validateDealInput = (req) => {
+  const errors = [];
+  
+  // Sanitize and validate campaignId
+  const campaignId = req.body.campaignId?.trim();
+  if (!campaignId) {
+    errors.push('Campaign ID is required');
+  } else if (!isValidObjectId(campaignId)) {
+    errors.push('Invalid campaign ID format');
+  }
+  
+  // Sanitize and validate creatorId
+  const creatorId = req.body.creatorId?.trim();
+  if (!creatorId) {
+    errors.push('Creator ID is required');
+  } else if (!isValidObjectId(creatorId)) {
+    errors.push('Invalid creator ID format');
+  }
+  
+  // Validate budget
+  const budget = parseFloat(req.body.budget);
+  if (!budget || isNaN(budget)) {
+    errors.push('Budget is required and must be a number');
+  } else if (budget < 10) {
+    errors.push('Budget must be at least $10');
+  } else if (budget > 1000000) {
+    errors.push('Budget cannot exceed $1,000,000');
+  }
+  
+  // Validate deadline
+  const deadline = req.body.deadline?.trim();
+  if (!deadline) {
+    errors.push('Deadline is required');
+  } else {
+    const deadlineDate = new Date(deadline);
+    const now = new Date();
+    const minDeadline = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // 24 hours from now
+    const maxDeadline = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000)); // 1 year from now
+    
+    if (isNaN(deadlineDate.getTime())) {
+      errors.push('Invalid deadline format');
+    } else if (deadlineDate <= minDeadline) {
+      errors.push('Deadline must be at least 24 hours from now');
+    } else if (deadlineDate > maxDeadline) {
+      errors.push('Deadline cannot be more than 1 year from now');
+    }
+  }
+  
+  // Validate deliverables
+  const deliverables = req.body.deliverables;
+  if (!deliverables || !Array.isArray(deliverables) || deliverables.length === 0) {
+    errors.push('At least one deliverable is required');
+  } else {
+    deliverables.forEach((del, index) => {
+      if (!del.type || typeof del.type !== 'string' || del.type.trim().length === 0) {
+        errors.push(`Deliverable ${index + 1}: Type is required`);
+      }
+      if (!del.description || typeof del.description !== 'string' || del.description.trim().length === 0) {
+        errors.push(`Deliverable ${index + 1}: Description is required`);
+      }
+      if (del.description && del.description.length > 500) {
+        errors.push(`Deliverable ${index + 1}: Description cannot exceed 500 characters`);
+      }
+    });
+  }
+  
+  // Validate terms (optional but if provided, sanitize)
+  const terms = req.body.terms?.trim();
+  if (terms && terms.length > 2000) {
+    errors.push('Terms cannot exceed 2000 characters');
+  }
+  
+  // Validate payment terms
+  const validPaymentTerms = ['escrow', 'milestone', 'upon_completion'];
+  const paymentTerms = req.body.paymentTerms?.trim();
+  if (paymentTerms && !validPaymentTerms.includes(paymentTerms)) {
+    errors.push('Invalid payment terms. Must be: escrow, milestone, or upon_completion');
+  }
+  
+  // Validate payment type
+  const validPaymentTypes = ['fixed', 'hourly', 'commission'];
+  const paymentType = req.body.paymentType?.trim();
+  if (paymentType && !validPaymentTypes.includes(paymentType)) {
+    errors.push('Invalid payment type. Must be: fixed, hourly, or commission');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    sanitized: {
+      campaignId,
+      creatorId,
+      budget,
+      deadline,
+      deliverables,
+      terms: terms || '',
+      paymentTerms: paymentTerms || 'escrow',
+      paymentType: paymentType || 'fixed'
+    }
+  };
+};
+
+const validateDealStatusUpdate = (status) => {
+  const validStatuses = ['pending', 'accepted', 'rejected', 'in-progress', 'completed', 'cancelled', 'disputed'];
+  return validStatuses.includes(status);
+};
+
+const sanitizeDealUpdate = (req) => {
+  const allowedFields = ['status', 'notes', 'completionDate', 'rating', 'feedback'];
+  const sanitized = {};
+  
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      if (field === 'status') {
+        if (validateDealStatusUpdate(req.body[field])) {
+          sanitized[field] = req.body[field];
+        }
+      } else if (field === 'notes' || field === 'feedback') {
+        sanitized[field] = req.body[field].trim().substring(0, 1000); // Limit to 1000 chars
+      } else if (field === 'completionDate') {
+        const date = new Date(req.body[field]);
+        if (!isNaN(date.getTime())) {
+          sanitized[field] = date;
+        }
+      } else if (field === 'rating') {
+        const rating = parseInt(req.body[field]);
+        if (!isNaN(rating) && rating >= 1 && rating <= 5) {
+          sanitized[field] = rating;
+        }
+      }
+    }
+  });
+  
+  return sanitized;
+};
+
+const Subscription = require('../models/Subscription');
+const { isValidBudget, isValidFutureDate } = require('../utils/validators');
 const { getBrandFinancials } = require('./paymentController');
 const PaymentCalculator = require('../services/paymentCalculator');
-const mongoose = require('mongoose');
+const feeService = require('../services/feeService');
 
 const buildConversationId = (dealId) => `deal_${dealId}_${Date.now()}`;
 
@@ -98,7 +236,6 @@ const getAiCounterAccess = async (deal, req) => {
 
   // Check brand's global AI counter setting for brand users
   if (actorRole === 'brand') {
-    const Brand = require('../models/Brand');
     try {
       const brand = await Brand.findById(getBrandContextId(req));
       if (!brand?.preferences?.aiCounterEnabled) {
@@ -491,9 +628,12 @@ const getInsufficientFundsPayload = ({ financials, requiredAmount, message }) =>
 
 const ensureBrandCanFundDeal = async ({ deal, message }) => {
   const financials = await getBrandFinancials(deal.brandId);
-  // Include 10% platform fee in required amount
+  
+  // Use dynamic fee service instead of hardcoded 10%
+  const commission = await feeService.calculateCommission(deal?.budget || 0);
+  
   const budgetAmount = Number(deal?.budget || 0);
-  const platformFee = parseFloat((budgetAmount * 0.1).toFixed(2));
+  const platformFee = commission.commissionAmount;
   const requiredAmount = budgetAmount + platformFee;
 
   if (requiredAmount > Number(financials?.available || 0)) {
@@ -523,9 +663,12 @@ const ensureEscrowForAcceptedDeal = async ({ deal, acceptedByUserId }) => {
     return existingEscrow;
   }
 
-  // Calculate 10% platform fee
-  const platformFee = parseFloat((deal.budget * 0.1).toFixed(2));
+  // Use dynamic fee service instead of hardcoded 10%
+  const commission = await feeService.calculateCommission(deal.budget);
+  
+  const platformFee = commission.commissionAmount;
   deal.platformFee = platformFee;
+  deal.commissionRate = commission.commissionRate;
 
   // Total amount to charge brand (budget + platform fee)
   const totalAmount = deal.budget + platformFee;
@@ -624,7 +767,19 @@ const ensureReleasedPaymentRecord = async (deal, releasedByUserId) => {
 
 // ==================== CREATE DEAL ====================
 exports.createDeal = catchAsync(async (req, res) => {
-  const brandId = getBrandContextId(req);
+  // Comprehensive input validation
+  const validation = validateDealInput(req);
+  
+  if (!validation.isValid) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: validation.errors,
+      message: 'Please check your input and try again'
+    });
+  }
+
+  // Use sanitized values
   const {
     campaignId,
     creatorId,
@@ -632,32 +787,11 @@ exports.createDeal = catchAsync(async (req, res) => {
     deadline,
     deliverables,
     terms,
-    paymentTerms = 'escrow',
-    paymentType = 'fixed',
-  } = req.body;
+    paymentTerms,
+    paymentType
+  } = validation.sanitized;
 
-  // Validate required fields
-  if (!campaignId || !creatorId || !budget || !deadline || !deliverables?.length) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing required fields: campaignId, creatorId, budget, deadline, deliverables',
-    });
-  }
-
-  // Validate IDs
-  if (!isValidObjectId(campaignId) || !isValidObjectId(creatorId)) {
-    return res.status(400).json({ success: false, error: 'Invalid campaign or creator ID' });
-  }
-
-  // Validate budget
-  if (!isValidBudget(budget)) {
-    return res.status(400).json({ success: false, error: 'Budget must be between $10 and $1,000,000' });
-  }
-
-  // Validate deadline
-  if (!isValidFutureDate(deadline)) {
-    return res.status(400).json({ success: false, error: 'Deadline must be in the future' });
-  }
+  const brandId = getBrandContextId(req);
 
   // Check campaign exists and belongs to brand
   const campaign = await Campaign.findOne({ _id: campaignId, brandId });
@@ -682,85 +816,185 @@ exports.createDeal = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'A deal already exists with this creator' });
   }
 
-  // Create deal
-  const deal = new Deal({
-    campaignId,
-    brandId,
-    creatorId,
-    budget,
-    deadline,
-    deliverables,
-    terms,
-    paymentTerms,
-    paymentType,
-    status: 'pending',
-    createdBy: req.user._id,
-  });
-  addTimelineEvent(deal, 'Deal Created', `Deal offer sent to ${creator.displayName}`, req.user._id);
+  // Check brand balance for deal budget
+  const brandFinancials = await getBrandFinancials(brandId);
+  const availableBalance = brandFinancials.availableBalance || 0;
 
-  await deal.save();
-
-  // Create conversation for deal (non-blocking - deal still succeeds if this fails)
-  try {
-    const conversation = new Conversation({
-      conversation_id: buildConversationId(deal._id),
-      type: 'deal',
-      deal_id: deal._id,
-      participants: [
-        { user_id: deal.brandId, user_type: 'brand' },
-        { user_id: deal.creatorId, user_type: 'creator' },
-      ],
-      participant_count: 2,
-      created_by: { user_id: deal.brandId, user_type: 'brand' },
+  if (availableBalance < budget) {
+    return res.status(400).json({
+      success: false,
+      error: `Insufficient balance for deal. Available: $${availableBalance.toFixed(2)}, Required: $${budget.toFixed(2)}`,
+      code: 'INSUFFICIENT_BALANCE',
+      availableBalance,
+      required: budget
     });
-    await conversation.save();
-
-    // Add initial deal message in conversation
-    await Message.create({
-      message_id: buildMessageId(conversation.conversation_id),
-      conversation_id: conversation._id,
-      sender: {
-        user_id: deal.brandId,
-        user_type: 'brand',
-      },
-      message_type: 'deal_update',
-      content: `A new deal has been created. Budget: $${budget}, Deadline: ${new Date(deadline).toLocaleDateString()}`,
-      metadata: {
-        deal_update_data: {
-          dealId: deal._id,
-          event: 'deal_created',
-        },
-      },
-    });
-
-    deal.conversationId = conversation._id;
-    await deal.save();
-  } catch (convError) {
-    console.error('Failed to create conversation for deal:', convError.message);
-    // Deal is still valid, conversation can be created later
   }
 
-  // Update campaign invited creators
-  await Campaign.findByIdAndUpdate(campaignId, {
-    $push: {
-      invitedCreators: {
-        creatorId,
-        status: 'pending',
-        invitedAt: new Date(),
+  // Start transaction for deal creation and payment processing
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Create deal
+    const deal = new Deal({
+      campaignId,
+      brandId,
+      creatorId,
+      budget,
+      deadline,
+      deliverables,
+      terms,
+      paymentTerms,
+      paymentType,
+      status: 'pending',
+      createdBy: req.user._id,
+    });
+    addTimelineEvent(deal, 'Deal Created', `Deal offer sent to ${creator.displayName}`, req.user._id);
+
+    await deal.save({ session });
+
+    // Calculate fees and create escrow payment
+    const PaymentCalculator = require('../services/paymentCalculator');
+    const fees = await PaymentCalculator.calculateFees(budget, 'deal');
+    
+    // Create escrow payment for deal budget
+    const payment = new Payment({
+      transactionId: `DEAL-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      type: 'escrow',
+      status: 'pending', // Will be moved to in-escrow when deal is accepted
+      amount: budget,
+      fee: fees.total,
+      netAmount: budget - fees.total,
+      from: { userId: brandId, accountType: 'brand' },
+      to: { userId: creatorId, accountType: 'creator' },
+      dealId: deal._id,
+      campaignId: campaign._id,
+      description: `Escrow for deal: ${campaign.title} - ${creator.displayName}`,
+      metadata: { 
+        fees, 
+        source: 'deal_creation',
+        createdBy: req.user._id,
+        paymentTerms,
+        paymentType
+      }
+    });
+    await payment.save({ session });
+
+    // Update deal with payment reference
+    deal.paymentId = payment._id;
+    deal.paymentStatus = 'pending';
+    await deal.save({ session });
+
+    // Update campaign invited creators
+    await Campaign.findByIdAndUpdate(campaignId, {
+      $push: {
+        invitedCreators: {
+          creatorId,
+          status: 'pending',
+          invitedAt: new Date(),
+        },
       },
-    },
-  });
+    }, { session });
 
-  // Notify creator
-  await Notification.create({
-    userId: creatorId,
-    type: 'deal',
-    title: 'New Deal Offer',
-    message: `You've received a new deal offer for "${campaign.title}" worth $${budget}`,
-    data: { dealId: deal._id, url: `/creator/deals/${deal._id}` },
-  });
+    // Commit transaction
+    await session.commitTransaction();
+    session.endSession();
 
-  res.status(201).json({ success: true, message: 'Deal offer sent', deal });
+    // Create conversation for deal (non-blocking - deal still succeeds if this fails)
+    setImmediate(async () => {
+      try {
+        const Conversation = require('../models/Conversation');
+        const conversation = new Conversation({
+          conversation_id: buildConversationId(deal._id),
+          type: 'deal',
+          deal_id: deal._id,
+          participants: [
+            { user_id: deal.brandId, user_type: 'brand' },
+            { user_id: deal.creatorId, user_type: 'creator' },
+          ],
+          participant_count: 2,
+          created_by: { user_id: deal.brandId, user_type: 'brand' },
+        });
+        await conversation.save();
+
+        // Add initial deal message in conversation
+        await Message.create({
+          message_id: buildMessageId(conversation.conversation_id),
+          conversation_id: conversation._id,
+          sender: {
+            user_id: deal.brandId,
+            user_type: 'brand',
+          },
+          message_type: 'deal_update',
+          content: `A new deal has been created. Budget: $${budget}, Deadline: ${new Date(deadline).toLocaleDateString()}`,
+          metadata: {
+            deal_update_data: {
+              dealId: deal._id,
+              event: 'deal_created',
+            },
+          },
+        });
+
+        deal.conversationId = conversation._id;
+        await deal.save();
+      } catch (convError) {
+        console.error('Failed to create conversation for deal:', convError.message);
+        // Deal is still valid, conversation can be created later
+      }
+    });
+
+    // Send notifications (async)
+    setImmediate(async () => {
+      try {
+        // Notify creator
+        await Notification.create({
+          userId: creatorId,
+          type: 'deal',
+          title: 'New Deal Offer',
+          message: `You've received a new deal offer for "${campaign.title}" worth $${budget}`,
+          data: { dealId: deal._id, url: `/creator/deals/${deal._id}` },
+        });
+
+        // Send real-time notification
+        const notificationService = require('../services/notificationService');
+        await notificationService.createNotification({
+          userId: creatorId,
+          type: 'deal_received',
+          title: 'New Deal Offer',
+          message: `${campaign.title} - Deal offer: $${budget}`,
+          data: {
+            dealId: deal._id,
+            campaignId: campaign._id,
+            brandId: brandId,
+            budget
+          }
+        });
+      } catch (notifError) {
+        console.error('Failed to send notifications for deal:', notifError.message);
+      }
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Deal offer sent successfully',
+      deal: {
+        ...deal.toObject(),
+        paymentId: payment._id,
+        paymentStatus: 'pending'
+      },
+      payment: {
+        id: payment._id,
+        amount: payment.amount,
+        fee: payment.fee,
+        netAmount: payment.netAmount,
+        status: payment.status
+      }
+    });
+  } catch (transactionError) {
+    await session.abortTransaction();
+    session.endSession();
+    throw transactionError;
+  }
 });
 
 // ==================== GET BRAND DEALS ====================
@@ -2367,7 +2601,6 @@ exports.updatePerformanceMetrics = catchAsync(async (req, res) => {
 
   // For performance-based deals, calculate payment
   if (deal.paymentType !== 'fixed' && deal.performancePaymentId && finalize) {
-    const PaymentCalculator = require('../services/paymentCalculator');
     const calculation = await PaymentCalculator.calculatePerformancePayment(deal, deal.paymentType, metrics);
 
     deal.budget = calculation.finalAmount;
@@ -2650,19 +2883,20 @@ exports.createPerformanceDeal = catchAsync(async (req, res) => {
 exports.updateDeal = catchAsync(async (req, res) => {
   const { id } = req.params;
   const brandContextId = getBrandContextId(req);
-  const {
-    budget,
-    deadline,
-    deliverables,
-    terms,
-    requirements,
-    paymentTerms,
-    paymentType,
-    performanceMetrics,
-  } = req.body;
 
   if (!isValidObjectId(id)) {
     return res.status(400).json({ success: false, error: 'Invalid deal ID' });
+  }
+
+  // Sanitize and validate update data
+  const sanitizedUpdate = sanitizeDealUpdate(req);
+  
+  if (Object.keys(sanitizedUpdate).length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'No valid fields provided for update',
+      message: 'Allowed fields: status, notes, completionDate, rating, feedback'
+    });
   }
 
   const deal = await Deal.findById(id)
@@ -2690,8 +2924,21 @@ exports.updateDeal = catchAsync(async (req, res) => {
   // Track changes for the timeline
   const changes = [];
 
+  // Validate specific fields if provided
+  const {
+    budget,
+    deadline,
+    deliverables,
+    terms,
+    requirements,
+    paymentTerms,
+    paymentType,
+    performanceMetrics,
+  } = req.body;
+
   if (budget !== undefined) {
-    if (!isValidBudget(budget)) {
+    const budgetValue = parseFloat(budget);
+    if (!budgetValue || isNaN(budgetValue) || budgetValue < 10 || budgetValue > 1000000) {
       return res.status(400).json({ success: false, error: 'Budget must be between $10 and $1,000,000' });
     }
     if (deal.budget !== budget) {

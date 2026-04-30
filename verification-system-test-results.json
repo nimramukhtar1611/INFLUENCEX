@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-04-24T15:37:08.129Z",
+  "summary": {
+    "total": 10,
+    "passed": 0,
+    "failed": 10,
+    "successRate": "0.00%"
+  },
+  "details": [
+    {
+      "name": "Admin Settings Update",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "User Registration Flow",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "Pending Verifications Fetch",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "Moderation Statistics",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "User Approval Process",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "User Rejection Process",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "Bulk Operations",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "Content Moderation Endpoints",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "Verification Details Endpoint",
+      "status": "FAILED",
+      "error": ""
+    },
+    {
+      "name": "Settings Validation",
+      "status": "FAILED",
+      "error": ""
+    }
+  ]
+}

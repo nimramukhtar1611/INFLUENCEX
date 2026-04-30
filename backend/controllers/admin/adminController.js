@@ -19,6 +19,7 @@ const stripe = require('../../config/stripe');
 const { sendEmail } = require('../../services/emailService');
 const notificationService = require('../../services/notificationService');
 const TwoFactorService = require('../../services/twoFactorService');
+const settingsService = require('../../services/settingsService');
 
 // ==================== ADMIN LOGIN WITH 2FA ====================
 
@@ -30,11 +31,19 @@ exports.adminLogin = async (req, res) => {
   try {
     const { email, password, two_factor_code } = req.body;
     const Admin = require('../../models/Admin');
+    const Settings = require('../../models/Settings');
 
     // ✅ FIX 1: email aur password dono validate karo pehle
     if (!email || !password) {
       return res.status(400).json({ success: false, error: 'Email and password are required' });
     }
+
+    // Get security settings for dynamic enforcement
+    // settingsService already required above
+    const settings = await settingsService.getSettings();
+    const securitySettings = settings.security || {};
+    const maxAttempts = securitySettings.maxLoginAttempts || 5;
+    const lockoutDuration = (securitySettings.lockoutDuration || 30) * 60 * 1000; // Convert to milliseconds
 
     const admin = await Admin.findOne({ email: email.toLowerCase() }).select(
       '+password +twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +loginAttempts +lockUntil'
@@ -49,8 +58,8 @@ exports.adminLogin = async (req, res) => {
       return res.status(401).json({ success: false, error: 'Admin account is deactivated' });
     }
 
-    // Account lock check
-    if (admin.isLocked && admin.isLocked()) {
+    // Account lock check using dynamic settings
+    if (admin.lockUntil && admin.lockUntil > Date.now()) {
       const minutesLeft = Math.ceil((admin.lockUntil - Date.now()) / (60 * 1000));
       return res.status(401).json({
         success: false,
@@ -62,10 +71,10 @@ exports.adminLogin = async (req, res) => {
     const isMatch = await admin.comparePassword(password);
 
     if (!isMatch) {
-      // increment attempts
+      // increment attempts using dynamic settings
       admin.loginAttempts = (admin.loginAttempts || 0) + 1;
-      if (admin.loginAttempts >= 5) {
-        admin.lockUntil = Date.now() + 30 * 60 * 1000; // 30 min lock
+      if (admin.loginAttempts >= maxAttempts) {
+        admin.lockUntil = Date.now() + lockoutDuration;
       }
       await admin.save();
       return res.status(401).json({ success: false, error: 'Invalid email or password' });
@@ -79,7 +88,7 @@ exports.adminLogin = async (req, res) => {
           require2FA: true,
           userId: admin._id,
           message: '2FA code required',
-          expiresIn: 300
+          expiresIn: (securitySettings.twoFactorCodeExpiryMinutes || 5) * 60
         });
       }
 
@@ -88,8 +97,8 @@ exports.adminLogin = async (req, res) => {
 
       if (!verification.success) {
         admin.loginAttempts = (admin.loginAttempts || 0) + 1;
-        if (admin.loginAttempts >= 5) {
-          admin.lockUntil = Date.now() + 30 * 60 * 1000;
+        if (admin.loginAttempts >= maxAttempts) {
+          admin.lockUntil = Date.now() + lockoutDuration;
         }
         await admin.save();
         return res.status(401).json({ success: false, error: 'Invalid 2FA code' });
@@ -102,18 +111,41 @@ exports.adminLogin = async (req, res) => {
     admin.lastLogin = new Date();
     await admin.save();
 
-    // Generate JWT token
-    const jwt = require('jsonwebtoken');
- const token = jwt.sign(
-  { id: admin._id, type: 'admin' }, 
-  process.env.JWT_SECRET,
-  { expiresIn: '1d' }
-);
+    // Generate JWT token with dynamic expiry
+    const jwtExpiry = securitySettings.jwtExpiry || '7d';
+    const refreshTokenExpiry = securitySettings.refreshTokenExpiry || '30d';
+    
+    const token = jwt.sign(
+      { 
+        id: admin._id, 
+        userId: admin._id,
+        userType: 'admin', 
+        email: admin.email,
+        jti: require('crypto').randomUUID()
+      }, 
+      process.env.JWT_SECRET, 
+      {
+        expiresIn: jwtExpiry,
+        algorithm: 'HS256',
+        issuer: 'influencex',
+        audience: 'influencex-users'
+      }
+    );
 
     const refreshToken = jwt.sign(
-      { id: admin._id },
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
+      { 
+        id: admin._id, 
+        tokenType: 'refresh',
+        iat: Math.floor(Date.now() / 1000),
+        jti: require('crypto').randomUUID()
+      }, 
+      process.env.JWT_REFRESH_SECRET, 
+      {
+        expiresIn: refreshTokenExpiry,
+        algorithm: 'HS256',
+        issuer: 'influencex',
+        audience: 'influencex-users'
+      }
     );
 
     // Audit log (optional — error hone pe ignore)
@@ -325,6 +357,295 @@ exports.adminGet2FAStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to get 2FA status'
+    });
+  }
+};
+
+// ==================== ADMIN ACCOUNT MANAGEMENT ====================
+
+/**
+ * Update admin email
+ */
+exports.updateAdminEmail = async (req, res) => {
+  try {
+    const { newEmail, confirmNewEmail } = req.body;
+    const Admin = require('../../models/Admin');
+    const crypto = require('crypto');
+
+    // Validate inputs
+    if (!newEmail || !confirmNewEmail) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both email fields are required'
+      });
+    }
+
+    if (newEmail !== confirmNewEmail) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email addresses do not match'
+      });
+    }
+
+    // Check if new email is already in use
+    const existingAdmin = await Admin.findOne({ email: newEmail.toLowerCase() });
+    if (existingAdmin) {
+      return res.status(400).json({
+        success: false,
+        error: 'This email is already in use'
+      });
+    }
+
+    // Get current admin
+    const admin = await Admin.findById(req.admin._id);
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        error: 'Admin not found'
+      });
+    }
+
+    // Generate email verification token
+    const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+    const emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+    // Update admin with new email (unverified) and verification token
+    admin.email = newEmail.toLowerCase();
+    admin.isEmailVerified = false;
+    admin.emailVerificationToken = emailVerificationToken;
+    admin.emailVerificationExpires = emailVerificationExpires;
+    await admin.save();
+
+    // Send verification email
+    try {
+      const { sendEmail } = require('../../services/emailService');
+      const verificationUrl = `${process.env.FRONTEND_URL}/admin/verify-email?token=${emailVerificationToken}`;
+      
+      await sendEmail({
+        email: newEmail,
+        subject: 'Verify Your New Email Address - InfluenceX Admin',
+        html: `
+          <h2>Email Verification Required</h2>
+          <p>Hi ${admin.fullName},</p>
+          <p>You have requested to change your email address. Please click the link below to verify your new email address:</p>
+          <p><a href="${verificationUrl}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verify Email</a></p>
+          <p>This link will expire in 24 hours.</p>
+          <p>If you didn't request this change, please contact support immediately.</p>
+        `
+      });
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Revert email change if email fails
+      admin.email = req.admin.email;
+      admin.isEmailVerified = true;
+      admin.emailVerificationToken = undefined;
+      admin.emailVerificationExpires = undefined;
+      await admin.save();
+      
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email'
+      });
+    }
+
+    // Log the action
+    await AuditLog.create({
+      adminId: req.admin._id,
+      action: 'admin_email_change',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      metadata: { 
+        oldEmail: req.admin.email,
+        newEmail: newEmail 
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Email updated successfully. Please check your new email for verification.'
+    });
+
+  } catch (error) {
+    console.error('Update admin email error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update email'
+    });
+  }
+};
+
+/**
+ * Update admin password
+ */
+exports.updateAdminPassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+    const Admin = require('../../models/Admin');
+
+    // Validate inputs
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'All password fields are required'
+      });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'New passwords do not match'
+      });
+    }
+
+    // Get current admin
+    const admin = await Admin.findById(req.admin._id).select('+password');
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        error: 'Admin not found'
+      });
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await admin.comparePassword(currentPassword);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
+
+    // Check if new password is same as current
+    const isSamePassword = await admin.comparePassword(newPassword);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be different from current password'
+      });
+    }
+
+    // Update password
+    admin.password = newPassword;
+    await admin.save();
+
+    // Log the action
+    await AuditLog.create({
+      adminId: req.admin._id,
+      action: 'admin_password_change',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    // Send notification email (optional)
+    try {
+      const { sendEmail } = require('../../services/emailService');
+      await sendEmail({
+        email: admin.email,
+        subject: 'Password Changed - InfluenceX Admin',
+        html: `
+          <h2>Password Changed Successfully</h2>
+          <p>Hi ${admin.fullName},</p>
+          <p>Your admin password has been changed successfully.</p>
+          <p>If you didn't make this change, please contact support immediately.</p>
+          <p>For security reasons, we recommend:</p>
+          <ul>
+            <li>Using a strong, unique password</li>
+            <li>Enabling two-factor authentication</li>
+            <li>Not sharing your password with anyone</li>
+          </ul>
+        `
+      });
+    } catch (emailError) {
+      console.error('Failed to send password change notification:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Password updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update admin password error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update password'
+    });
+  }
+};
+
+/**
+ * Verify admin email change
+ */
+exports.verifyAdminEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+    const Admin = require('../../models/Admin');
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Verification token is required'
+      });
+    }
+
+    // Find admin by verification token
+    const admin = await Admin.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: Date.now() }
+    });
+
+    if (!admin) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired verification token'
+      });
+    }
+
+    // Verify email
+    admin.isEmailVerified = true;
+    admin.emailVerificationToken = undefined;
+    admin.emailVerificationExpires = undefined;
+    await admin.save();
+
+    // Log the action
+    await AuditLog.create({
+      adminId: admin._id,
+      action: 'admin_email_verified',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      metadata: { email: admin.email }
+    });
+
+    // Send confirmation email
+    try {
+      const { sendEmail } = require('../../services/emailService');
+      await sendEmail({
+        email: admin.email,
+        subject: 'Email Verified Successfully - InfluenceX Admin',
+        html: `
+          <h2>Email Verified Successfully</h2>
+          <p>Hi ${admin.fullName},</p>
+          <p>Your email address has been verified successfully.</p>
+          <p>You can now use this email address to log in to your admin account.</p>
+          <p>If you didn't make this change, please contact support immediately.</p>
+        `
+      });
+    } catch (emailError) {
+      console.error('Failed to send email verification confirmation:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully'
+    });
+
+  } catch (error) {
+    console.error('Verify admin email error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to verify email'
     });
   }
 };
@@ -869,7 +1190,7 @@ exports.updateUserStatus = async (req, res) => {
       case 'verify':
         user.isVerified = true;
         user.verifiedAt = new Date();
-        user.verifiedBy = req.user._id;
+        user.verifiedBy = req.admin._id;
         message = 'User verified successfully';
         emailSubject = 'Account Verified - InfluenceX';
         emailMessage = `
@@ -896,7 +1217,7 @@ exports.updateUserStatus = async (req, res) => {
       case 'block':
         user.status = 'suspended';
         user.suspendedAt = new Date();
-        user.suspendedBy = req.user._id;
+        user.suspendedBy = req.admin._id;
         user.suspensionReason = reason;
         message = 'User blocked successfully';
         emailSubject = 'Account Suspended - InfluenceX';
@@ -934,7 +1255,7 @@ exports.updateUserStatus = async (req, res) => {
 
     // Log the action
     await AuditLog.create({
-      adminId: req.user._id,
+      adminId: req.admin._id,
       action: `user_${action}`,
       targetUser: user._id,
       reason,
@@ -1065,7 +1386,7 @@ exports.assignDispute = async (req, res) => {
       action: 'admin_assigned',
       description: `Admin assigned to dispute`,
       performed_by: {
-        user_id: req.user._id,
+        user_id: req.admin._id,
         user_type: 'admin'
       },
       timestamp: new Date()
@@ -1075,7 +1396,7 @@ exports.assignDispute = async (req, res) => {
 
     // Log the action
     await AuditLog.create({
-      adminId: req.user._id,
+      adminId: req.admin._id,
       action: 'dispute_assigned',
       targetResource: {
         type: 'dispute',
@@ -1133,7 +1454,7 @@ exports.resolveDispute = async (req, res) => {
       type,
       amount: amount || 0,
       details,
-      resolved_by: req.user._id,
+      resolved_by: req.admin._id,
       resolved_at: new Date()
     };
 
@@ -1142,7 +1463,7 @@ exports.resolveDispute = async (req, res) => {
       action: 'resolved',
       description: `Dispute resolved: ${type}`,
       performed_by: {
-        user_id: req.user._id,
+        user_id: req.admin._id,
         user_type: 'admin'
       },
       timestamp: new Date()
@@ -1201,7 +1522,7 @@ exports.resolveDispute = async (req, res) => {
 
     // Log the action
     await AuditLog.create({
-      adminId: req.user._id,
+      adminId: req.admin._id,
       action: 'dispute_resolved',
       targetResource: {
         type: 'dispute',
@@ -1620,10 +1941,441 @@ exports.getPlatformAnalytics = async (req, res) => {
   }
 };
 
+// ==================== GET SETTINGS ====================
+exports.getSettings = async (req, res) => {
+  try {
+    const settings = await settingsService.getSettings();
+    
+    // Transform nested structure to flat structure for frontend compatibility
+    console.log('=== GET SETTINGS DEBUG ===');
+    console.log('Raw settings from DB:', settings);
+    console.log('Settings.fees.withdrawalFee:', settings.fees?.withdrawalFee);
+    console.log('Settings.fees object:', settings.fees);
+    
+    const flatSettings = {
+      // Platform settings - Use actual saved values without hardcoded defaults
+      platformName: String(settings.platform?.name || 'InfluenceX').trim(),
+      platformDescription: String(settings.platform?.description || 'Influencer Deal Marketplace').trim(),
+      supportEmail: String(settings.platform?.supportEmail || 'snimramukhtar321@gmail.com').trim().toLowerCase(),
+      supportPhone: String(settings.platform?.supportPhone || '+1 (555) 123-4567').trim(),
+      supportHours: settings.platform?.supportHours || 'Mon-Fri, 9am-5pm EST',
+      timezone: settings.platform?.timezone || 'America/New_York',
+      dateFormat: settings.platform?.dateFormat || 'MM/DD/YYYY',
+      timeFormat: settings.platform?.timeFormat || '12h',
+      currency: settings.platform?.currency || 'USD',
+      language: settings.platform?.language || 'en',
+      
+      // Fee settings - Ensure proper float conversion and validation
+      commissionRate: parseFloat(settings.fees?.commissionRate ?? 10),
+      creatorPayoutMin: parseFloat(settings.payments?.minPayoutAmount ?? 50),
+      brandEscrowMin: parseFloat(settings.fees?.escrowFee ?? 100),
+      escrowFee: parseFloat(settings.fees?.escrowFee ?? 0),
+      featuredListingFee: parseFloat(settings.fees?.featuredListingFee?.base ?? 50),
+      taxRate: parseFloat(settings.fees?.taxRate ?? 0),
+      taxInclusive: Boolean(settings.fees?.taxInclusive ?? false),
+      withdrawalFeeType: String(settings.fees?.withdrawalFee?.type ?? 'fixed'),
+      // Return withdrawal fee from database without aggressive filtering
+      withdrawalFee: parseFloat(settings.fees?.withdrawalFee?.amount ?? 0),
+      
+      // Security settings
+      twoFactorRequired: settings.security?.twoFactorRequired ?? false,
+      emailVerification: settings.security?.emailVerification ?? true,
+      // phoneVerification removed - now optional in signup flow
+      maxLoginAttempts: settings.security?.maxLoginAttempts ?? 5,
+            lockoutDuration: settings.security?.lockoutDuration ?? 30,
+      passwordMinLength: settings.security?.passwordMinLength ?? 8,
+      passwordRequireUppercase: settings.security?.passwordRequireUppercase ?? true,
+      passwordRequireLowercase: settings.security?.passwordRequireLowercase ?? true,
+      passwordRequireNumbers: settings.security?.passwordRequireNumbers ?? true,
+      passwordRequireSymbols: settings.security?.passwordRequireSymbols ?? false,
+      passwordExpiryDays: settings.security?.passwordExpiryDays ?? 90,
+      passwordHistoryCount: settings.security?.passwordHistoryCount ?? 5,
+      jwtExpiry: settings.security?.jwtExpiry ?? '7d',
+      refreshTokenExpiry: settings.security?.refreshTokenExpiry ?? '30d',
+      
+      // OTP and verification expiry times
+      otpExpiryMinutes: settings.security?.otpExpiryMinutes ?? 10,
+      emailVerificationExpiryHours: settings.security?.emailVerificationExpiryHours ?? 24,
+      passwordResetExpiryHours: settings.security?.passwordResetExpiryHours ?? 1,
+      twoFactorCodeExpiryMinutes: settings.security?.twoFactorCodeExpiryMinutes ?? 5,
+      
+      // Email settings - Transform from nested to flat structure for frontend
+      senderEmail: settings.notifications?.email?.fromEmail || 'noreply@influencex.com',
+      senderName: settings.notifications?.email?.fromName || 'InfluenceX',
+      emailFooter: settings.notifications?.email?.footer || '© 2024 InfluenceX. All rights reserved.',
+      
+      // SMS Notifications - Transform from nested to flat structure for frontend compatibility
+      smsNotifications: {
+        enabled: settings.notifications?.sms?.enabled ?? false,
+        provider: settings.notifications?.sms?.provider || 'twilio',
+        accountSid: settings.notifications?.sms?.twilio?.accountSid || '',
+        authToken: settings.notifications?.sms?.twilio?.authToken || '',
+        phoneNumber: settings.notifications?.sms?.twilio?.phoneNumber || ''
+      },
+      
+      // OTP and verification expiry times
+      messageTemplates: {
+        twoFactorSms: '{platformName}: Your 2FA code is {code}. Valid for {expiryMinutes} minutes. Do not share.',
+        dealOfferSms: '{platformName}: New deal offer from {brandName} for ${budget}. View: {dealUrl}',
+        paymentReceivedSms: '{platformName}: Payment of ${amount} received. View details in your dashboard.',
+        deadlineReminderSms: '{platformName}: Deal deadline in {days} days. Submit deliverables in your dashboard.',
+        accountLockedSms: '{platformName}: Account locked due to failed attempts. Reset your password to continue.'
+      },
+      
+      // Notification settings - Fix email template toggles to use correct database structure
+      emailNotifications: {
+        newUser: Boolean(settings.notifications?.admin?.email?.newUser ?? false),
+        newCampaign: Boolean(settings.notifications?.admin?.email?.newCampaign ?? false),
+        paymentReceived: Boolean(settings.notifications?.admin?.email?.paymentReceived ?? false),
+        disputeRaised: Boolean(settings.notifications?.admin?.email?.disputeRaised ?? false),
+        reportGenerated: Boolean(settings.notifications?.admin?.email?.reportGenerated ?? false)
+      },
+      
+      // SMTP and Twilio credentials for frontend
+      notifications: {
+        email: {
+          smtp: {
+            host: settings.notifications?.email?.smtp?.host || '',
+            port: settings.notifications?.email?.smtp?.port || 587,
+            secure: settings.notifications?.email?.smtp?.secure || false,
+            auth: {
+              user: settings.notifications?.email?.smtp?.auth?.user || '',
+              pass: settings.notifications?.email?.smtp?.auth?.pass || ''
+            }
+          }
+        },
+        sms: {
+          twilio: {
+            accountSid: settings.notifications?.sms?.twilio?.accountSid || '',
+            authToken: settings.notifications?.sms?.twilio?.authToken || '',
+            phoneNumber: settings.notifications?.sms?.twilio?.phoneNumber || ''
+          }
+        }
+      },
+      
+      // User Approval and Content Moderation settings - Fix toggle handling
+      autoApproveBrands: Boolean(settings.userApproval?.autoApproveBrands ?? false),
+      autoApproveCreators: Boolean(settings.userApproval?.autoApproveCreators ?? false),
+      requireVerification: Boolean(settings.userApproval?.requireVerification ?? true),
+      verificationMethod: String(settings.userApproval?.verificationMethod ?? 'manual'),
+      contentModeration: String(settings.contentModeration?.moderationType ?? 'ai'),
+      autoApproveContent: Boolean(settings.contentModeration?.autoApproveContent ?? false),
+      autoFlagContent: Boolean(settings.contentModeration?.autoFlagContent ?? true),
+      flagThreshold: parseFloat(settings.contentModeration?.flagThreshold ?? 0.7),
+      manualReviewRequired: Boolean(settings.contentModeration?.manualReviewRequired ?? true),
+      bannedWords: settings.contentModeration?.bannedWords?.map(w => w.word).join('\n') || '',
+      bannedPhrases: settings.contentModeration?.bannedPhrases?.map(p => p.phrase).join('\n') || '',
+      allowedDomains: settings.contentModeration?.allowedDomains?.join('\n') || '',
+      blockedDomains: settings.contentModeration?.blockedDomains?.join('\n') || '',
+      profanityFilter: settings.contentModeration?.profanityFilter !== undefined ? settings.contentModeration.profanityFilter : true,
+      spamFilter: settings.contentModeration?.spamFilter !== undefined ? settings.contentModeration.spamFilter : true,
+      duplicateContentFilter: settings.contentModeration?.duplicateContentFilter !== undefined ? settings.contentModeration.duplicateContentFilter : true,
+      
+      // Limits
+      maxCampaignsPerBrand: settings.customLimits?.maxCampaignsPerBrand || 50,
+      maxActiveDealsPerCreator: settings.customLimits?.maxActiveDealsPerCreator || 20,
+      maxFileSize: settings.upload?.maxFileSize || 100,
+      allowedFileTypes: settings.upload?.allowedFileTypes || ['jpg', 'png', 'mp4', 'pdf', 'doc', 'docx'],
+      
+      // Payment gateway
+      paymentProvider: settings.integrations?.stripe?.enabled ? 'stripe' : 'manual',
+      stripePublishableKey: settings.integrations?.stripe?.publishableKey || '',
+      stripeSecretKeyMasked: settings.integrations?.stripe?.secretKey ? 
+        (settings.integrations.stripe.secretKey.startsWith('sk_') ? 
+          settings.integrations.stripe.secretKey.substring(0, 7) + '************************' : 
+          'sk_************************') : '',
+      stripeWebhookSecretMasked: settings.integrations?.stripe?.webhookSecret ? 
+        (settings.integrations.stripe.webhookSecret.startsWith('whsec_') ? 
+          settings.integrations.stripe.webhookSecret.substring(0, 8) + '************************' : 
+          'whsec_************************') : '',
+      paymentTestMode: settings.integrations?.stripe?.testMode ?? true,
+      autoCapturePayments: settings.payments?.autoCapture ?? false,
+      allowApplePay: settings.payments?.applePayEnabled ?? false,
+      allowGooglePay: settings.payments?.googlePayEnabled ?? false,
+      invoicePrefix: settings.payments?.invoicePrefix || 'INV'
+    };
+
+    res.json({
+      success: true,
+      settings: flatSettings,
+      debug: {
+        originalPlatformName: settings.platform?.name,
+        originalPlatformNameType: typeof settings.platform?.name,
+        transformedPlatformName: flatSettings.platformName,
+        transformedPlatformNameType: typeof flatSettings.platformName,
+        originalSupportEmail: settings.platform?.supportEmail,
+        originalSupportEmailType: typeof settings.platform?.supportEmail,
+        transformedSupportEmail: flatSettings.supportEmail,
+        transformedSupportEmailType: typeof flatSettings.supportEmail
+      }
+    });
+
+  } catch (error) {
+    console.error('Get settings error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get settings'
+    });
+  }
+};
+
+// ==================== GET FEES ====================
+exports.getFees = async (req, res) => {
+  try {
+    const fees = await settingsService.getFees();
+
+    res.json({
+      success: true,
+      fees
+    });
+
+  } catch (error) {
+    console.error('Get fees error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get fees'
+    });
+  }
+};
+
 // ==================== UPDATE SETTINGS ====================
 exports.updateSettings = async (req, res) => {
   try {
     const updates = req.body;
+    const startTime = Date.now();
+
+    // DEBUG: Log incoming request
+    console.log('\n🔥 === ADMIN SETTINGS UPDATE STARTED ===');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    console.log('📤 Request body keys:', Object.keys(updates));
+    console.log('👤 Admin ID:', req.admin?._id);
+    console.log('📧 Admin Email:', req.admin?.email);
+    
+    // Log security settings specifically
+    const securityUpdates = {};
+    Object.keys(updates).forEach(key => {
+      if (key.includes('password') || key.includes('login') || key.includes('session') || 
+          key.includes('otp') || key.includes('expiry') || key.includes('jwt') || key.includes('twoFactor')) {
+        securityUpdates[key] = updates[key];
+      }
+    });
+    
+    if (Object.keys(securityUpdates).length > 0) {
+      console.log('🔒 Security Settings Updates:', securityUpdates);
+    }
+    
+    // Log fee updates
+    const feeUpdates = {};
+    ['commissionRate', 'withdrawalFee', 'escrowFee', 'featuredListingFee', 'taxRate'].forEach(key => {
+      if (updates[key] !== undefined) {
+        feeUpdates[key] = updates[key];
+      }
+    });
+    
+    if (Object.keys(feeUpdates).length > 0) {
+      console.log('💰 Fee Settings Updates:', feeUpdates);
+    }
+
+    console.log('📋 Full Request Body:', JSON.stringify(updates, null, 2));
+
+    // Validate required fields
+    if (!updates || typeof updates !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid settings data provided'
+      });
+    }
+
+    // Enhanced validation for platform fields
+    if (updates.platformName !== undefined) {
+      if (typeof updates.platformName !== 'string' || updates.platformName.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Platform Name must be a non-empty string'
+        });
+      }
+    }
+
+    if (updates.supportEmail !== undefined) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(updates.supportEmail)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Support Email must be a valid email address'
+        });
+      }
+    }
+
+    if (updates.supportPhone !== undefined) {
+      const phoneRegex = /^[+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$/;
+      if (!phoneRegex.test(updates.supportPhone)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Support Phone must be a valid phone number (international format)'
+        });
+      }
+    }
+
+    // Enhanced validation for fee fields
+    if (updates.commissionRate !== undefined) {
+      const value = parseFloat(updates.commissionRate);
+      if (isNaN(value) || value < 0 || value > 100) {
+        return res.status(400).json({
+          success: false,
+          error: 'Commission Rate must be a number between 0 and 100'
+        });
+      }
+    }
+
+    if (updates.withdrawalFee !== undefined) {
+      const value = parseFloat(updates.withdrawalFee);
+      if (isNaN(value) || value < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Withdrawal Fee must be a non-negative number'
+        });
+      }
+    }
+
+    if (updates.escrowFee !== undefined) {
+      const value = parseFloat(updates.escrowFee);
+      if (isNaN(value) || value < 0 || value > 100) {
+        return res.status(400).json({
+          success: false,
+          error: 'Escrow Fee must be a number between 0 and 100'
+        });
+      }
+    }
+
+    if (updates.featuredListingFee !== undefined) {
+      const value = parseFloat(updates.featuredListingFee);
+      if (isNaN(value) || value < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Featured Listing Fee must be a non-negative number'
+        });
+      }
+    }
+
+    if (updates.taxRate !== undefined) {
+      const value = parseFloat(updates.taxRate);
+      if (isNaN(value) || value < 0 || value > 100) {
+        return res.status(400).json({
+          success: false,
+          error: 'Tax Rate must be a number between 0 and 100'
+        });
+      }
+    }
+
+    if (updates.creatorPayoutMin !== undefined) {
+      const value = parseFloat(updates.creatorPayoutMin);
+      if (isNaN(value) || value < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Minimum Payout Amount must be a non-negative number'
+        });
+      }
+    }
+
+    if (updates.brandEscrowMin !== undefined) {
+      const value = parseFloat(updates.brandEscrowMin);
+      if (isNaN(value) || value < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Minimum Brand Escrow must be a non-negative number'
+        });
+      }
+    }
+
+    // Validate SMTP settings only if values are provided (not empty)
+    if (updates.notifications?.email?.smtp?.host !== undefined) {
+      const host = updates.notifications.email.smtp.host;
+      if (typeof host === 'string' && host.trim().length > 0) {
+        const hostRegex = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!hostRegex.test(host)) {
+          return res.status(400).json({
+            success: false,
+            error: 'SMTP Host must be a valid hostname'
+          });
+        }
+      }
+    }
+
+    if (updates.notifications?.email?.smtp?.port !== undefined) {
+      const port = updates.notifications.email.smtp.port;
+      if (port !== undefined && port !== '') {
+        const portNum = parseInt(port);
+        if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+          return res.status(400).json({
+            success: false,
+            error: 'SMTP Port must be a number between 1 and 65535'
+          });
+        }
+      }
+    }
+
+    if (updates.notifications?.email?.smtp?.auth?.user !== undefined) {
+      const email = updates.notifications.email.smtp.auth.user;
+      if (typeof email === 'string' && email.trim().length > 0) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({
+            success: false,
+            error: 'SMTP Email must be a valid email address'
+          });
+        }
+      }
+    }
+
+    if (updates.notifications?.email?.smtp?.auth?.pass !== undefined) {
+      const pass = updates.notifications.email.smtp.auth.pass;
+      if (typeof pass === 'string' && pass.length > 0) {
+        if (pass.length < 1) {
+          return res.status(400).json({
+            success: false,
+            error: 'SMTP App Password is required'
+          });
+        }
+      }
+    }
+
+    // Validate Twilio settings only if values are provided (not empty)
+    if (updates.notifications?.sms?.twilio?.accountSid !== undefined) {
+      const accountSid = updates.notifications.sms.twilio.accountSid;
+      if (typeof accountSid === 'string' && accountSid.trim().length > 0) {
+        if (!accountSid.startsWith('AC')) {
+          return res.status(400).json({
+            success: false,
+            error: 'Twilio Account SID must start with "AC"'
+          });
+        }
+      }
+    }
+
+    if (updates.notifications?.sms?.twilio?.authToken !== undefined) {
+      const authToken = updates.notifications.sms.twilio.authToken;
+      if (typeof authToken === 'string' && authToken.trim().length > 0) {
+        if (authToken.length < 32) {
+          return res.status(400).json({
+            success: false,
+            error: 'Twilio Auth Token must be at least 32 characters long'
+          });
+        }
+      }
+    }
+
+    if (updates.notifications?.sms?.twilio?.phoneNumber !== undefined) {
+      const phoneNumber = updates.notifications.sms.twilio.phoneNumber;
+      if (typeof phoneNumber === 'string' && phoneNumber.trim().length > 0) {
+        const phoneRegex = /^\+[1-9]\d{1,14}$/;
+        if (!phoneRegex.test(phoneNumber)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Twilio Phone Number must be in international format (e.g., +1234567890)'
+          });
+        }
+      }
+    }
 
     let settings = await Settings.findOne();
     
@@ -1631,20 +2383,922 @@ exports.updateSettings = async (req, res) => {
       settings = new Settings();
     }
 
-    // Update settings
-    Object.assign(settings, updates);
-    settings.updatedBy = req.user._id;
-    settings.updatedAt = new Date();
-    
-    await settings.save();
+    // Handle Admin profile picture update if included
+    if (updates.profilePicture || updates.profileImage) {
+      console.log('=== PROFILE PICTURE UPDATE DEBUG ===');
+      const Admin = require('../../models/Admin');
+      const User = require('../../models/User');
+      
+      try {
+        const adminId = req.admin?._id || req.user?._id;
+        console.log('Admin ID found:', adminId);
+        
+        if (adminId) {
+          const profilePictureUrl = updates.profilePicture || updates.profileImage;
+          console.log('Profile picture URL to update:', profilePictureUrl);
+          
+          // Update Admin model
+          const adminUpdateResult = await Admin.findByIdAndUpdate(
+            adminId,
+            { 
+              profilePicture: profilePictureUrl,
+              profileImage: profilePictureUrl
+            },
+            { new: true }
+          );
+          console.log('Admin update result:', adminUpdateResult);
+          
+          // Update corresponding User model for consistency
+          const userUpdateResult = await User.findByIdAndUpdate(
+            adminId,
+            { 
+              profilePicture: profilePictureUrl,
+              profileImage: profilePictureUrl
+            },
+            { new: true }
+          );
+          console.log('User update result:', userUpdateResult);
+          
+          console.log('Admin profile picture updated in database');
+        } else {
+          console.log('No admin ID found for profile picture update');
+        }
+      } catch (adminUpdateError) {
+        console.error('Admin profile picture update error:', adminUpdateError);
+        // Don't fail the entire settings update if admin update fails
+      }
+    } else {
+      console.log('No profile picture in updates to process');
+    }
 
-    // Log the action
-    await AuditLog.create({
-      adminId: req.user._id,
-      action: 'settings_updated',
-      changes: updates,
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent')
+    // Transform flat structure to nested structure
+    const transformedUpdates = {};
+    let transformationErrors = [];
+    
+    console.log('\n🔄 Starting settings transformation...');
+    
+    try {
+      // Platform settings - Ensure string typing
+      if (updates.platformName !== undefined) {
+        try {
+          const platformName = String(updates.platformName).trim();
+          if (!platformName) {
+            transformationErrors.push('Platform name cannot be empty');
+          } else {
+            transformedUpdates.platform = {
+              ...settings.platform,
+              name: platformName
+            };
+            console.log('✅ Platform name transformed:', platformName);
+          }
+        } catch (error) {
+          transformationErrors.push(`Platform name transformation failed: ${error.message}`);
+        }
+      }
+      
+      if (updates.platformDescription !== undefined) {
+        try {
+          const platformDescription = String(updates.platformDescription).trim();
+          transformedUpdates.platform = {
+            ...transformedUpdates.platform || settings.platform,
+            description: platformDescription
+          };
+          console.log('✅ Platform description transformed:', platformDescription);
+        } catch (error) {
+          transformationErrors.push(`Platform description transformation failed: ${error.message}`);
+        }
+      }
+      
+      if (updates.supportEmail !== undefined) {
+        try {
+          const supportEmail = String(updates.supportEmail).trim().toLowerCase();
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(supportEmail)) {
+            transformationErrors.push('Support email format is invalid');
+          } else {
+            transformedUpdates.platform = {
+              ...transformedUpdates.platform || settings.platform,
+              supportEmail: supportEmail
+            };
+            console.log('✅ Support email transformed:', supportEmail);
+          }
+        } catch (error) {
+          transformationErrors.push(`Support email transformation failed: ${error.message}`);
+        }
+      }
+        if (updates.supportPhone !== undefined) {
+      transformedUpdates.platform = {
+        ...transformedUpdates.platform || settings.platform,
+        supportPhone: String(updates.supportPhone).trim()
+      };
+    }
+    if (updates.supportHours) {
+      transformedUpdates.platform = {
+        ...transformedUpdates.platform || settings.platform,
+        supportHours: updates.supportHours
+      };
+    }
+    if (updates.timezone) {
+      transformedUpdates.platform = {
+        ...transformedUpdates.platform || settings.platform,
+        timezone: updates.timezone
+      };
+    }
+    if (updates.dateFormat) {
+      transformedUpdates.platform = {
+        ...transformedUpdates.platform || settings.platform,
+        dateFormat: updates.dateFormat
+      };
+    }
+    if (updates.timeFormat) {
+      transformedUpdates.platform = {
+        ...transformedUpdates.platform || settings.platform,
+        timeFormat: updates.timeFormat
+      };
+    }
+    if (updates.currency) {
+      transformedUpdates.platform = {
+        ...transformedUpdates.platform || settings.platform,
+        currency: updates.currency
+      };
+    }
+    if (updates.language) {
+      transformedUpdates.platform = {
+        ...transformedUpdates.platform || settings.platform,
+        language: updates.language
+      };
+    }
+
+    // Fee settings - Ensure proper float conversion and merging
+    // Initialize fees object if any fee-related updates exist
+    const feeFields = ['commissionRate', 'creatorPayoutMin', 'brandEscrowMin', 'withdrawalFee', 'withdrawalFeeType', 'escrowFee', 'featuredListingFee', 'taxRate', 'taxInclusive'];
+    const hasFeeUpdates = feeFields.some(field => updates[field] !== undefined);
+    
+    if (hasFeeUpdates) {
+      // Initialize fees and payments objects properly
+      transformedUpdates.fees = {
+        ...settings.fees
+      };
+      transformedUpdates.payments = {
+        ...settings.payments
+      };
+    }
+
+    // Commission Rate
+    if (updates.commissionRate !== undefined) {
+      transformedUpdates.fees.commissionRate = parseFloat(updates.commissionRate);
+    }
+    
+    // Creator Payout Minimum (goes to payments.minPayoutAmount)
+    if (updates.creatorPayoutMin !== undefined) {
+      transformedUpdates.payments.minPayoutAmount = parseFloat(updates.creatorPayoutMin);
+    }
+    
+    // Brand Escrow Minimum (goes to fees.escrowFee)
+    if (updates.brandEscrowMin !== undefined) {
+      transformedUpdates.fees.escrowFee = parseFloat(updates.brandEscrowMin);
+    }
+    
+    // Withdrawal Fee
+    if (updates.withdrawalFee !== undefined) {
+      // Ensure withdrawalFee object exists
+      transformedUpdates.fees.withdrawalFee = {
+        ...settings.fees?.withdrawalFee,
+        type: settings.fees?.withdrawalFee?.type || 'fixed',
+        amount: parseFloat(updates.withdrawalFee)
+      };
+    }
+    
+    // Withdrawal Fee Type
+    if (updates.withdrawalFeeType !== undefined) {
+      transformedUpdates.fees.withdrawalFee = {
+        ...transformedUpdates.fees.withdrawalFee || settings.fees?.withdrawalFee || { type: 'fixed', amount: 0 },
+        type: String(updates.withdrawalFeeType)
+      };
+    }
+    
+    // Escrow Fee
+    if (updates.escrowFee !== undefined) {
+      transformedUpdates.fees.escrowFee = parseFloat(updates.escrowFee);
+    }
+    
+    // Featured Listing Fee
+    if (updates.featuredListingFee !== undefined) {
+      transformedUpdates.fees.featuredListingFee = {
+        ...settings.fees?.featuredListingFee,
+        base: parseFloat(updates.featuredListingFee),
+        daily: settings.fees?.featuredListingFee?.daily || 5
+      };
+    }
+    
+    // Tax Rate
+    if (updates.taxRate !== undefined) {
+      transformedUpdates.fees.taxRate = parseFloat(updates.taxRate);
+    }
+    
+    // Tax Inclusive
+    if (updates.taxInclusive !== undefined) {
+      transformedUpdates.fees.taxInclusive = updates.taxInclusive;
+    }
+
+    // Security settings - Ensure proper merging of all security-related updates
+    // Initialize security object if any security-related updates exist
+    const securityFields = [
+      'twoFactorRequired', 'emailVerification', 'maxLoginAttempts', 
+      'lockoutDuration', 'passwordMinLength', 'passwordRequireUppercase', 
+      'passwordRequireLowercase', 'passwordRequireNumbers', 'passwordRequireSymbols',
+      'passwordExpiryDays', 'passwordHistoryCount', 'jwtExpiry', 'refreshTokenExpiry',
+      'otpExpiryMinutes', 'emailVerificationExpiryHours', 'passwordResetExpiryHours', 
+      'twoFactorCodeExpiryMinutes'
+    ];
+    const hasSecurityUpdates = securityFields.some(field => updates[field] !== undefined);
+    
+    if (hasSecurityUpdates) {
+      // Initialize security object properly
+      transformedUpdates.security = {
+        ...settings.security
+      };
+    }
+
+    // Two Factor Authentication
+    if (updates.twoFactorRequired !== undefined) {
+      transformedUpdates.security.twoFactorRequired = Boolean(updates.twoFactorRequired);
+    }
+    
+    // Email Verification
+    if (updates.emailVerification !== undefined) {
+      transformedUpdates.security.emailVerification = Boolean(updates.emailVerification);
+    }
+    
+    // Login Management
+    if (updates.maxLoginAttempts !== undefined) {
+      transformedUpdates.security.maxLoginAttempts = parseInt(updates.maxLoginAttempts);
+    }
+    
+    if (updates.lockoutDuration !== undefined) {
+      transformedUpdates.security.lockoutDuration = parseInt(updates.lockoutDuration);
+    }
+    
+    // Password Requirements
+    if (updates.passwordMinLength !== undefined) {
+      transformedUpdates.security.passwordMinLength = parseInt(updates.passwordMinLength);
+    }
+    
+    if (updates.passwordRequireUppercase !== undefined) {
+      transformedUpdates.security.passwordRequireUppercase = Boolean(updates.passwordRequireUppercase);
+    }
+    
+    if (updates.passwordRequireLowercase !== undefined) {
+      transformedUpdates.security.passwordRequireLowercase = Boolean(updates.passwordRequireLowercase);
+    }
+    
+    if (updates.passwordRequireNumbers !== undefined) {
+      transformedUpdates.security.passwordRequireNumbers = Boolean(updates.passwordRequireNumbers);
+    }
+    
+    if (updates.passwordRequireSymbols !== undefined) {
+      transformedUpdates.security.passwordRequireSymbols = Boolean(updates.passwordRequireSymbols);
+    }
+    
+    // Password Expiry and History
+    if (updates.passwordExpiryDays !== undefined) {
+      transformedUpdates.security.passwordExpiryDays = parseInt(updates.passwordExpiryDays);
+    }
+    
+    if (updates.passwordHistoryCount !== undefined) {
+      transformedUpdates.security.passwordHistoryCount = parseInt(updates.passwordHistoryCount);
+    }
+    
+    // JWT Settings
+    if (updates.jwtExpiry !== undefined) {
+      transformedUpdates.security.jwtExpiry = String(updates.jwtExpiry);
+    }
+    
+    if (updates.refreshTokenExpiry !== undefined) {
+      transformedUpdates.security.refreshTokenExpiry = String(updates.refreshTokenExpiry);
+    }
+    
+    // OTP and Verification Expiry Times
+    if (updates.otpExpiryMinutes !== undefined) {
+      transformedUpdates.security.otpExpiryMinutes = parseInt(updates.otpExpiryMinutes);
+    }
+    
+    if (updates.emailVerificationExpiryHours !== undefined) {
+      transformedUpdates.security.emailVerificationExpiryHours = parseInt(updates.emailVerificationExpiryHours);
+    }
+    
+    if (updates.passwordResetExpiryHours !== undefined) {
+      transformedUpdates.security.passwordResetExpiryHours = parseInt(updates.passwordResetExpiryHours);
+    }
+    
+    if (updates.twoFactorCodeExpiryMinutes !== undefined) {
+      transformedUpdates.security.twoFactorCodeExpiryMinutes = parseInt(updates.twoFactorCodeExpiryMinutes);
+    }
+
+    // Email settings
+    if (updates.senderEmail) {
+      transformedUpdates.notifications = {
+        ...settings.notifications,
+        email: {
+          ...settings.notifications?.email,
+          fromEmail: updates.senderEmail
+        }
+      };
+    }
+    if (updates.senderName) {
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        email: {
+          ...transformedUpdates.notifications?.email || settings.notifications?.email,
+          fromName: updates.senderName
+        }
+      };
+    }
+    if (updates.emailFooter !== undefined) {
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        email: {
+          ...transformedUpdates.notifications?.email || settings.notifications?.email,
+          footer: updates.emailFooter
+        }
+      };
+    }
+
+    // Handle nested notifications structure from frontend - partial update logic
+    if (updates.notifications?.email?.smtp) {
+      const smtpConfig = updates.notifications.email.smtp;
+      const existingSmtp = settings.notifications?.email?.smtp || {};
+      
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        email: {
+          ...transformedUpdates.notifications?.email || settings.notifications?.email,
+          smtp: {
+            // Only update fields that are provided and non-empty
+            host: smtpConfig.host !== undefined && smtpConfig.host !== '' ? smtpConfig.host : existingSmtp.host,
+            port: smtpConfig.port !== undefined && smtpConfig.port !== '' ? parseInt(smtpConfig.port) : existingSmtp.port,
+            secure: smtpConfig.secure !== undefined ? smtpConfig.secure : (existingSmtp.secure !== undefined ? existingSmtp.secure : false),
+            auth: {
+              user: smtpConfig.auth?.user !== undefined && smtpConfig.auth?.user !== '' ? smtpConfig.auth.user : existingSmtp.auth?.user || '',
+              pass: smtpConfig.auth?.pass !== undefined && smtpConfig.auth?.pass !== '' ? smtpConfig.auth.pass : existingSmtp.auth?.pass || ''
+            }
+          }
+        }
+      };
+    }
+
+    if (updates.notifications?.sms?.twilio) {
+      const twilioConfig = updates.notifications.sms.twilio;
+      const existingTwilio = settings.notifications?.sms?.twilio || {};
+      
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        sms: {
+          ...transformedUpdates.notifications?.sms || settings.notifications?.sms,
+          twilio: {
+            // Only update fields that are provided and non-empty
+            accountSid: twilioConfig.accountSid !== undefined && twilioConfig.accountSid !== '' ? twilioConfig.accountSid : existingTwilio.accountSid || '',
+            authToken: twilioConfig.authToken !== undefined && twilioConfig.authToken !== '' ? twilioConfig.authToken : existingTwilio.authToken || '',
+            phoneNumber: twilioConfig.phoneNumber !== undefined && twilioConfig.phoneNumber !== '' ? twilioConfig.phoneNumber : existingTwilio.phoneNumber || ''
+          }
+        }
+      };
+    }
+    
+    // OTP and verification expiry times
+    if (updates.otpExpiryMinutes !== undefined) {
+      transformedUpdates.security = {
+        ...transformedUpdates.security || settings.security,
+        otpExpiryMinutes: updates.otpExpiryMinutes
+      };
+    }
+    if (updates.emailVerificationExpiryHours !== undefined) {
+      transformedUpdates.security = {
+        ...transformedUpdates.security || settings.security,
+        emailVerificationExpiryHours: updates.emailVerificationExpiryHours
+      };
+    }
+    if (updates.passwordResetExpiryHours !== undefined) {
+      transformedUpdates.security = {
+        ...transformedUpdates.security || settings.security,
+        passwordResetExpiryHours: updates.passwordResetExpiryHours
+      };
+    }
+    if (updates.twoFactorCodeExpiryMinutes !== undefined) {
+      transformedUpdates.security = {
+        ...transformedUpdates.security || settings.security,
+        twoFactorCodeExpiryMinutes: updates.twoFactorCodeExpiryMinutes
+      };
+    }
+    
+    // Message templates
+    if (updates.messageTemplates) {
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        email: {
+          ...transformedUpdates.notifications?.email || settings.notifications?.email,
+          messageTemplates: updates.messageTemplates
+        }
+      };
+    }
+
+    // Notification settings (emailNotifications) - Save to correct database structure
+    if (updates.emailNotifications) {
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        admin: {
+          ...transformedUpdates.notifications?.admin || settings.notifications?.admin,
+          email: updates.emailNotifications
+        }
+      };
+    }
+    
+    // SMS Notifications - Transform from flat to nested structure for database
+    if (updates.smsNotifications) {
+      const smsConfig = updates.smsNotifications;
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        sms: {
+          ...settings.notifications?.sms,
+          enabled: smsConfig.enabled,
+          provider: smsConfig.provider,
+          twilio: {
+            accountSid: smsConfig.accountSid,
+            authToken: smsConfig.authToken,
+            phoneNumber: smsConfig.phoneNumber
+          }
+        }
+      };
+    }
+    if (updates.pushNotifications) {
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        push: {
+          ...settings.notifications?.push,
+          enabled: updates.pushNotifications?.enabled,
+          vapidPublicKey: updates.pushNotifications?.vapidPublicKey,
+          vapidPrivateKey: updates.pushNotifications?.vapidPrivateKey,
+          vapidEmail: updates.pushNotifications?.vapidEmail
+        }
+      };
+    }
+    if (updates.inAppNotifications) {
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        inApp: {
+          ...settings.notifications?.inApp,
+          enabled: updates.inAppNotifications?.enabled,
+          retentionDays: updates.inAppNotifications?.retentionDays
+        }
+      };
+    }
+    if (updates.notificationTriggers) {
+      transformedUpdates.notifications = {
+        ...transformedUpdates.notifications || settings.notifications,
+        triggers: updates.notificationTriggers
+      };
+    }
+
+    // User Approval Settings
+    if (updates.autoApproveBrands !== undefined) {
+      transformedUpdates.userApproval = {
+        ...settings.userApproval,
+        autoApproveBrands: updates.autoApproveBrands
+      };
+    }
+    if (updates.autoApproveCreators !== undefined) {
+      transformedUpdates.userApproval = {
+        ...transformedUpdates.userApproval || settings.userApproval,
+        autoApproveCreators: updates.autoApproveCreators
+      };
+    }
+    if (updates.requireVerification !== undefined) {
+      transformedUpdates.userApproval = {
+        ...transformedUpdates.userApproval || settings.userApproval,
+        requireVerification: updates.requireVerification
+      };
+    }
+    if (updates.verificationMethod !== undefined) {
+      transformedUpdates.userApproval = {
+        ...transformedUpdates.userApproval || settings.userApproval,
+        verificationMethod: updates.verificationMethod
+      };
+    }
+
+    // Content Moderation Settings
+    if (updates.contentModeration !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...settings.contentModeration,
+        moderationType: updates.contentModeration
+      };
+    }
+    if (updates.autoApproveContent !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        autoApproveContent: updates.autoApproveContent
+      };
+    }
+    if (updates.autoFlagContent !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        autoFlagContent: updates.autoFlagContent
+      };
+    }
+    if (updates.flagThreshold !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        flagThreshold: parseFloat(updates.flagThreshold)
+      };
+    }
+    if (updates.manualReviewRequired !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        manualReviewRequired: updates.manualReviewRequired
+      };
+    }
+    if (updates.bannedWords !== undefined) {
+      const bannedWords = updates.bannedWords.split('\n')
+        .filter(word => word.trim())
+        .map(word => ({ 
+          word: word.trim(), 
+          severity: 'medium' 
+        }));
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        bannedWords
+      };
+    }
+    if (updates.bannedPhrases !== undefined) {
+      const bannedPhrases = updates.bannedPhrases.split('\n')
+        .filter(phrase => phrase.trim())
+        .map(phrase => ({ 
+          phrase: phrase.trim(), 
+          severity: 'medium' 
+        }));
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        bannedPhrases
+      };
+    }
+    if (updates.allowedDomains !== undefined) {
+      const allowedDomains = updates.allowedDomains.split('\n')
+        .filter(domain => domain.trim())
+        .map(domain => domain.trim());
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        allowedDomains
+      };
+    }
+    if (updates.blockedDomains !== undefined) {
+      const blockedDomains = updates.blockedDomains.split('\n')
+        .filter(domain => domain.trim())
+        .map(domain => domain.trim());
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        blockedDomains
+      };
+    }
+    if (updates.profanityFilter !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        profanityFilter: updates.profanityFilter
+      };
+    }
+    if (updates.spamFilter !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        spamFilter: updates.spamFilter
+      };
+    }
+    if (updates.duplicateContentFilter !== undefined) {
+      transformedUpdates.contentModeration = {
+        ...transformedUpdates.contentModeration || settings.contentModeration,
+        duplicateContentFilter: updates.duplicateContentFilter
+      };
+    }
+
+    // Limits settings - Ensure proper merging of all limits-related updates
+    const limitsFields = ['maxCampaignsPerBrand', 'maxActiveDealsPerCreator'];
+    const hasLimitsUpdates = limitsFields.some(field => updates[field] !== undefined);
+    
+    if (hasLimitsUpdates) {
+      // Initialize customLimits object properly
+      transformedUpdates.customLimits = {
+        ...settings.customLimits
+      };
+    }
+
+    // Usage Limits
+    if (updates.maxCampaignsPerBrand !== undefined) {
+      transformedUpdates.customLimits.maxCampaignsPerBrand = parseInt(updates.maxCampaignsPerBrand);
+    }
+    if (updates.maxActiveDealsPerCreator !== undefined) {
+      transformedUpdates.customLimits.maxActiveDealsPerCreator = parseInt(updates.maxActiveDealsPerCreator);
+    }
+    if (updates.maxFileSize !== undefined) {
+      transformedUpdates.upload = {
+        ...settings.upload,
+        maxFileSize: updates.maxFileSize
+      };
+    }
+    if (updates.allowedFileTypes) {
+      transformedUpdates.upload = {
+        ...transformedUpdates.upload || settings.upload,
+        allowedFileTypes: updates.allowedFileTypes
+      };
+    }
+
+    // Payment gateway settings - Ensure proper merging of all payment-related updates
+    // Initialize integrations object if any payment-related updates exist
+    const paymentFields = [
+      'paymentProvider', 'stripePublishableKey', 'stripeSecretKeyMasked', 
+      'stripeWebhookSecretMasked', 'paymentTestMode', 'autoCapturePayments', 
+      'allowApplePay', 'allowGooglePay'
+    ];
+    const hasPaymentUpdates = paymentFields.some(field => updates[field] !== undefined);
+    
+    if (hasPaymentUpdates) {
+      // Initialize integrations and payments objects properly
+      transformedUpdates.integrations = {
+        ...settings.integrations,
+        stripe: {
+          ...settings.integrations?.stripe
+        }
+      };
+      transformedUpdates.payments = {
+        ...settings.payments
+      };
+    }
+
+    // Payment Provider
+    if (updates.paymentProvider !== undefined) {
+      transformedUpdates.integrations.stripe.enabled = updates.paymentProvider === 'stripe';
+    }
+    
+    // Stripe Configuration
+    if (updates.stripePublishableKey !== undefined) {
+      transformedUpdates.integrations.stripe.publishableKey = updates.stripePublishableKey;
+    }
+    
+    if (updates.stripeSecretKeyMasked !== undefined) {
+      // Check if this is a new key (not masked) or an update
+      if (updates.stripeSecretKeyMasked && !updates.stripeSecretKeyMasked.includes('************************')) {
+        // This is a new secret key, save it
+        transformedUpdates.integrations.stripe.secretKey = updates.stripeSecretKeyMasked;
+      }
+      // If it's masked, don't update the database (keep existing value)
+    }
+    
+    if (updates.stripeWebhookSecretMasked !== undefined) {
+      // Check if this is a new key (not masked) or an update
+      if (updates.stripeWebhookSecretMasked && !updates.stripeWebhookSecretMasked.includes('************************')) {
+        // This is a new webhook secret, save it
+        transformedUpdates.integrations.stripe.webhookSecret = updates.stripeWebhookSecretMasked;
+      }
+      // If it's masked, don't update the database (keep existing value)
+    }
+    
+    // Payment Settings
+    if (updates.paymentTestMode !== undefined) {
+      transformedUpdates.integrations.stripe.testMode = Boolean(updates.paymentTestMode);
+    }
+    
+    if (updates.autoCapturePayments !== undefined) {
+      transformedUpdates.payments.autoCapture = Boolean(updates.autoCapturePayments);
+    }
+    
+    if (updates.allowApplePay !== undefined) {
+      transformedUpdates.payments.applePayEnabled = Boolean(updates.allowApplePay);
+    }
+    
+    if (updates.allowGooglePay !== undefined) {
+      transformedUpdates.payments.googlePayEnabled = Boolean(updates.allowGooglePay);
+    }
+    
+    if (updates.invoicePrefix !== undefined) {
+      transformedUpdates.payments.invoicePrefix = updates.invoicePrefix;
+    }
+
+    } catch (transformationError) {
+      console.error('❌ Settings transformation failed:', transformationError);
+      transformationErrors.push(`General transformation error: ${transformationError.message}`);
+    }
+
+    // Check if there were any transformation errors
+    if (transformationErrors.length > 0) {
+      console.error('❌ Transformation errors detected:', transformationErrors);
+      return res.status(400).json({
+        success: false,
+        error: 'Settings transformation failed',
+        details: transformationErrors,
+        message: 'Some settings could not be processed. Please check your input values.'
+      });
+    }
+
+    console.log('✅ Settings transformation completed successfully');
+    console.log('📊 Transformed fields:', Object.keys(transformedUpdates));
+
+    // Update settings using settings service with validation
+    console.log('\n📡 Calling settingsService.updateSettings...');
+    let updatedSettings;
+    try {
+      updatedSettings = await settingsService.updateSettings(transformedUpdates, req.admin._id);
+      
+      if (!updatedSettings) {
+        throw new Error('Settings update failed - no data returned');
+      }
+      
+      console.log('✅ Database update successful');
+    } catch (dbError) {
+      console.error('❌ Database update failed:', dbError);
+      
+      // Handle specific database errors
+      if (dbError.name === 'ValidationError') {
+        return res.status(400).json({
+          success: false,
+          error: 'Database validation failed',
+          details: dbError.message,
+          message: 'The settings values are invalid. Please check your input.'
+        });
+      }
+      
+      if (dbError.name === 'MongoError' || dbError.name === 'MongoServerError') {
+        return res.status(503).json({
+          success: false,
+          error: 'Database temporarily unavailable',
+          message: 'Please try again later. If the problem persists, contact support.'
+        });
+      }
+      
+      return res.status(500).json({
+        success: false,
+        error: 'Database update failed',
+        details: dbError.message,
+        message: 'Failed to save settings to database. Please try again.'
+      });
+    }
+
+    // Verify the update was successful
+    if (!updatedSettings) {
+      throw new Error('Settings update failed - no data returned');
+    }
+
+    console.log('\n✅ Settings update successful!');
+    console.log('📄 Updated settings document ID:', updatedSettings._id);
+    console.log('⏰ Update completed at:', new Date().toISOString());
+    console.log('🔍 Processing time:', Date.now() - startTime, 'ms');
+
+    // Clear cache to ensure new values are used immediately
+    settingsService.clearCache();
+    
+    // Emit real-time update event if socket is available
+    if (global.socketService) {
+      global.socketService.emitToAdmins('settings_updated', {
+        type: 'PLATFORM_CONFIG_UPDATED',
+        settings: {
+          platformName: updatedSettings.platform?.name,
+          supportEmail: updatedSettings.platform?.supportEmail,
+          supportPhone: updatedSettings.platform?.supportPhone
+        }
+      });
+      console.log('📡 Real-time update event emitted to admins');
+    }
+
+    // Transform response back to flat structure for frontend compatibility
+    console.log('\n📋 Preparing response for frontend...');
+    console.log('🔒 Security settings in response:', {
+      maxLoginAttempts: updatedSettings.security?.maxLoginAttempts,
+      lockoutDuration: updatedSettings.security?.lockoutDuration,
+      passwordMinLength: updatedSettings.security?.passwordMinLength,
+      otpExpiryMinutes: updatedSettings.security?.otpExpiryMinutes
+    });
+    
+    let responseSettings;
+    try {
+      // CRITICAL FIX: Use request values first, then database values to preserve user inputs
+      responseSettings = {
+      // Platform settings - Use request values if provided, otherwise database values
+      platformName: updates.platformName !== undefined ? String(updates.platformName).trim() : String(updatedSettings.platform?.name || 'InfluenceX').trim(),
+      platformDescription: updates.platformDescription !== undefined ? String(updates.platformDescription).trim() : String(updatedSettings.platform?.description || 'Influencer Deal Marketplace').trim(),
+      supportEmail: updates.supportEmail !== undefined ? String(updates.supportEmail).trim().toLowerCase() : String(updatedSettings.platform?.supportEmail || 'snimramukhtar321@gmail.com').trim().toLowerCase(),
+      supportPhone: updates.supportPhone !== undefined ? String(updates.supportPhone).trim() : String(updatedSettings.platform?.supportPhone || '+1 (555) 123-4567').trim(),
+      supportHours: updates.supportHours !== undefined ? updates.supportHours : (updatedSettings.platform?.supportHours || 'Mon-Fri, 9am-5pm EST'),
+      timezone: updates.timezone !== undefined ? updates.timezone : (updatedSettings.platform?.timezone || 'America/New_York'),
+      dateFormat: updates.dateFormat !== undefined ? updates.dateFormat : (updatedSettings.platform?.dateFormat || 'MM/DD/YYYY'),
+      timeFormat: updates.timeFormat !== undefined ? updates.timeFormat : (updatedSettings.platform?.timeFormat || '12h'),
+      currency: updates.currency !== undefined ? updates.currency : (updatedSettings.platform?.currency || 'USD'),
+      language: updates.language !== undefined ? updates.language : (updatedSettings.platform?.language || 'en'),
+      
+      // Fee settings - Use request values first to ensure preservation
+      commissionRate: updates.commissionRate !== undefined ? parseFloat(updates.commissionRate) : parseFloat(updatedSettings.fees?.commissionRate ?? 10),
+      creatorPayoutMin: updates.creatorPayoutMin !== undefined ? parseFloat(updates.creatorPayoutMin) : parseFloat(updatedSettings.payments?.minPayoutAmount ?? 50),
+      brandEscrowMin: updates.brandEscrowMin !== undefined ? parseFloat(updates.brandEscrowMin) : parseFloat(updatedSettings.fees?.escrowFee ?? 100),
+      escrowFee: updates.escrowFee !== undefined ? parseFloat(updates.escrowFee) : parseFloat(updatedSettings.fees?.escrowFee ?? 0),
+      featuredListingFee: updates.featuredListingFee !== undefined ? parseFloat(updates.featuredListingFee) : parseFloat(updatedSettings.fees?.featuredListingFee?.base ?? 50),
+      taxRate: updates.taxRate !== undefined ? parseFloat(updates.taxRate) : parseFloat(updatedSettings.fees?.taxRate ?? 0),
+      taxInclusive: updates.taxInclusive !== undefined ? Boolean(updates.taxInclusive) : Boolean(updatedSettings.fees?.taxInclusive ?? false),
+      withdrawalFeeType: updates.withdrawalFeeType !== undefined ? String(updates.withdrawalFeeType) : String(updatedSettings.fees?.withdrawalFee?.type ?? 'fixed'),
+      withdrawalFee: updates.withdrawalFee !== undefined ? parseFloat(updates.withdrawalFee) : parseFloat(updatedSettings.fees?.withdrawalFee?.amount ?? 0),
+      
+      // Security settings - Use request values if provided
+      twoFactorRequired: updates.twoFactorRequired !== undefined ? Boolean(updates.twoFactorRequired) : (updatedSettings.security?.twoFactorRequired ?? false),
+      emailVerification: updates.emailVerification !== undefined ? Boolean(updates.emailVerification) : (updatedSettings.security?.emailVerification ?? true),
+      maxLoginAttempts: updates.maxLoginAttempts !== undefined ? parseInt(updates.maxLoginAttempts) : (updatedSettings.security?.maxLoginAttempts ?? 5),
+            lockoutDuration: updates.lockoutDuration !== undefined ? parseInt(updates.lockoutDuration) : (updatedSettings.security?.lockoutDuration ?? 30),
+      passwordMinLength: updates.passwordMinLength !== undefined ? parseInt(updates.passwordMinLength) : (updatedSettings.security?.passwordMinLength ?? 8),
+      passwordRequireUppercase: updates.passwordRequireUppercase !== undefined ? Boolean(updates.passwordRequireUppercase) : (updatedSettings.security?.passwordRequireUppercase ?? true),
+      passwordRequireLowercase: updates.passwordRequireLowercase !== undefined ? Boolean(updates.passwordRequireLowercase) : (updatedSettings.security?.passwordRequireLowercase ?? true),
+      passwordRequireNumbers: updates.passwordRequireNumbers !== undefined ? Boolean(updates.passwordRequireNumbers) : (updatedSettings.security?.passwordRequireNumbers ?? true),
+      passwordRequireSymbols: updates.passwordRequireSymbols !== undefined ? Boolean(updates.passwordRequireSymbols) : (updatedSettings.security?.passwordRequireSymbols ?? false),
+      passwordExpiryDays: updatedSettings.security?.passwordExpiryDays ?? 90,
+      passwordHistoryCount: updatedSettings.security?.passwordHistoryCount ?? 5,
+      jwtExpiry: updatedSettings.security?.jwtExpiry ?? '7d',
+      refreshTokenExpiry: updatedSettings.security?.refreshTokenExpiry ?? '30d',
+      ipWhitelistEnabled: updatedSettings.security?.ipWhitelistEnabled ?? false,
+      allowedIPs: updatedSettings.security?.allowedIPs?.join('\n') ?? '',
+      blockedIPs: updatedSettings.security?.blockedIPs?.join('\n') ?? '',
+      
+      // Email settings - Use request values if provided
+      senderEmail: updates.senderEmail !== undefined ? String(updates.senderEmail).trim() : (updatedSettings.notifications?.email?.fromEmail || 'noreply@influencex.com'),
+      senderName: updates.senderName !== undefined ? String(updates.senderName).trim() : (updatedSettings.notifications?.email?.fromName || 'InfluenceX'),
+      emailFooter: updates.emailFooter !== undefined ? String(updates.emailFooter).trim() : (updatedSettings.notifications?.email?.footer || '© 2024 InfluenceX. All rights reserved.'),
+      
+      // Notification settings - Use request values for toggles, read from correct database structure
+      emailNotifications: {
+        newUser: updates.emailNotifications?.newUser !== undefined ? Boolean(updates.emailNotifications.newUser) : Boolean(updatedSettings.notifications?.admin?.email?.newUser ?? false),
+        newCampaign: updates.emailNotifications?.newCampaign !== undefined ? Boolean(updates.emailNotifications.newCampaign) : Boolean(updatedSettings.notifications?.admin?.email?.newCampaign ?? false),
+        paymentReceived: updates.emailNotifications?.paymentReceived !== undefined ? Boolean(updates.emailNotifications.paymentReceived) : Boolean(updatedSettings.notifications?.admin?.email?.paymentReceived ?? false),
+        disputeRaised: updates.emailNotifications?.disputeRaised !== undefined ? Boolean(updates.emailNotifications.disputeRaised) : Boolean(updatedSettings.notifications?.admin?.email?.disputeRaised ?? false),
+        reportGenerated: updates.emailNotifications?.reportGenerated !== undefined ? Boolean(updates.emailNotifications.reportGenerated) : Boolean(updatedSettings.notifications?.admin?.email?.reportGenerated ?? false)
+      },
+      
+      // SMS Notifications - Transform from nested to flat structure for frontend compatibility
+      smsNotifications: {
+        enabled: updates.smsNotifications?.enabled !== undefined ? Boolean(updates.smsNotifications.enabled) : (updatedSettings.notifications?.sms?.enabled ?? false),
+        provider: updates.smsNotifications?.provider !== undefined ? String(updates.smsNotifications.provider) : (updatedSettings.notifications?.sms?.provider || 'twilio'),
+        accountSid: updates.smsNotifications?.accountSid !== undefined ? String(updates.smsNotifications.accountSid) : (updatedSettings.notifications?.sms?.twilio?.accountSid || ''),
+        authToken: updates.smsNotifications?.authToken !== undefined ? String(updates.smsNotifications.authToken) : (updatedSettings.notifications?.sms?.twilio?.authToken || ''),
+        phoneNumber: updates.smsNotifications?.phoneNumber !== undefined ? String(updates.smsNotifications.phoneNumber) : (updatedSettings.notifications?.sms?.twilio?.phoneNumber || '')
+      },
+      
+      // User Approval and Content Moderation Settings - Use request values
+      autoApproveBrands: updates.autoApproveBrands !== undefined ? Boolean(updates.autoApproveBrands) : Boolean(updatedSettings.userApproval?.autoApproveBrands ?? false),
+      autoApproveCreators: updates.autoApproveCreators !== undefined ? Boolean(updates.autoApproveCreators) : Boolean(updatedSettings.userApproval?.autoApproveCreators ?? false),
+      requireVerification: updates.requireVerification !== undefined ? Boolean(updates.requireVerification) : Boolean(updatedSettings.userApproval?.requireVerification ?? true),
+      verificationMethod: updates.verificationMethod !== undefined ? String(updates.verificationMethod) : String(updatedSettings.userApproval?.verificationMethod ?? 'manual'),
+      contentModeration: updates.contentModeration !== undefined ? String(updates.contentModeration) : String(updatedSettings.contentModeration?.moderationType ?? 'ai'),
+      autoApproveContent: updates.autoApproveContent !== undefined ? Boolean(updates.autoApproveContent) : Boolean(updatedSettings.contentModeration?.autoApproveContent ?? false),
+      autoFlagContent: updates.autoFlagContent !== undefined ? Boolean(updates.autoFlagContent) : Boolean(updatedSettings.contentModeration?.autoFlagContent ?? true),
+      flagThreshold: updates.flagThreshold !== undefined ? parseFloat(updates.flagThreshold) : parseFloat(updatedSettings.contentModeration?.flagThreshold ?? 0.7),
+      manualReviewRequired: updates.manualReviewRequired !== undefined ? Boolean(updates.manualReviewRequired) : Boolean(updatedSettings.contentModeration?.manualReviewRequired ?? true),
+      bannedWords: updates.bannedWords !== undefined ? String(updates.bannedWords) : (updatedSettings.contentModeration?.bannedWords?.map(w => w.word).join('\n') ?? ''),
+      bannedPhrases: updates.bannedPhrases !== undefined ? String(updates.bannedPhrases) : (updatedSettings.contentModeration?.bannedPhrases?.map(p => p.phrase).join('\n') ?? ''),
+      allowedDomains: updates.allowedDomains !== undefined ? String(updates.allowedDomains) : (updatedSettings.contentModeration?.allowedDomains?.join('\n') ?? ''),
+      blockedDomains: updates.blockedDomains !== undefined ? String(updates.blockedDomains) : (updatedSettings.contentModeration?.blockedDomains?.join('\n') ?? ''),
+      profanityFilter: updates.profanityFilter !== undefined ? Boolean(updates.profanityFilter) : (updatedSettings.contentModeration?.profanityFilter ?? true),
+      spamFilter: updates.spamFilter !== undefined ? Boolean(updates.spamFilter) : (updatedSettings.contentModeration?.spamFilter ?? true),
+      duplicateContentFilter: updates.duplicateContentFilter !== undefined ? Boolean(updates.duplicateContentFilter) : (updatedSettings.contentModeration?.duplicateContentFilter ?? true),
+      
+      // Apply only non-fee updates from request to preserve proper transformation
+      ...Object.keys(updates).reduce((acc, key) => {
+        // Skip fee-related fields as they're properly handled above
+        const feeFields = ['withdrawalFee', 'withdrawalFeeType', 'commissionRate', 'escrowFee', 'featuredListingFee', 'taxRate', 'taxInclusive', 'creatorPayoutMin', 'brandEscrowMin'];
+        if (!feeFields.includes(key)) {
+          acc[key] = updates[key];
+        }
+        return acc;
+      }, {})
+    };
+
+    } catch (responseError) {
+      console.error('❌ Response transformation failed:', responseError);
+      return res.status(500).json({
+        success: false,
+        error: 'Response preparation failed',
+        details: responseError.message,
+        message: 'Settings were updated but failed to prepare response. Please refresh the page.'
+      });
+    }
+
+    console.log('✅ Response transformation completed successfully');
+    console.log('Final Response Settings withdrawalFee:', responseSettings.withdrawalFee);
+    console.log('=== END BACKEND RESPONSE DEBUG ===');
+
+    // Log the action (non-blocking)
+    setImmediate(async () => {
+      try {
+        await AuditLog.create({
+          adminId: req.admin._id,
+          action: 'settings_updated',
+          changes: updates,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        });
+        console.log('📝 Audit log created for settings update');
+      } catch (logError) {
+        console.error('Failed to create audit log:', logError);
+        // Don't fail the request if audit logging fails
+      }
     });
 
     // If maintenance mode changed, notify all admins
@@ -1662,19 +3316,51 @@ exports.updateSettings = async (req, res) => {
           { maintenance: updates.maintenance }
         );
       }
+      console.log('📢 Maintenance mode notifications sent to admins');
     }
 
+    // Return success response with updated settings in expected format
+    console.log('\n📤 Sending response to frontend...');
+    console.log('✅ Response success: true');
+    console.log('📝 Response message: Settings updated successfully');
+    console.log('📋 Response settings keys:', Object.keys(responseSettings));
+    console.log('🔒 Security settings in response:', {
+      maxLoginAttempts: responseSettings.maxLoginAttempts,
+      lockoutDuration: responseSettings.lockoutDuration,
+      passwordMinLength: responseSettings.passwordMinLength,
+      otpExpiryMinutes: responseSettings.otpExpiryMinutes
+    });
+    console.log('🔥 === ADMIN SETTINGS UPDATE COMPLETED ===\n');
+    
     res.json({
       success: true,
       message: 'Settings updated successfully',
-      settings
+      settings: responseSettings
     });
 
   } catch (error) {
     console.error('Update settings error:', error);
+    
+    // Handle specific error types with proper response format
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: ' + error.message
+      });
+    }
+    
+    if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+      return res.status(503).json({
+        success: false,
+        error: 'Database temporarily unavailable. Please try again later.'
+      });
+    }
+    
+    // Ensure consistent error response format
+    const errorMessage = error.message || 'Failed to update settings';
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to update settings'
+      error: errorMessage
     });
   }
 };
@@ -1864,7 +3550,7 @@ exports.clearCache = async (req, res) => {
 
     // Log the action
     await AuditLog.create({
-      adminId: req.user._id,
+      adminId: req.admin._id,
       action: 'cache_cleared',
       metadata: { type },
       ipAddress: req.ip,
@@ -1926,7 +3612,7 @@ exports.createBackup = async (req, res) => {
 
     // Log the action
     await AuditLog.create({
-      adminId: req.user._id,
+      adminId: req.admin._id,
       action: 'backup_created',
       metadata: { type, filename: result.filename },
       ipAddress: req.ip,
@@ -1964,7 +3650,7 @@ exports.restoreBackup = async (req, res) => {
 
     // Log the action
     await AuditLog.create({
-      adminId: req.user._id,
+      adminId: req.admin._id,
       action: 'backup_restored',
       metadata: { filename },
       ipAddress: req.ip,
@@ -1982,6 +3668,397 @@ exports.restoreBackup = async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to restore backup'
+    });
+  }
+};
+
+// ==================== USAGE LIMITS MANAGEMENT ====================
+
+/**
+ * Get usage limits settings
+ */
+exports.getUsageLimits = async (req, res) => {
+  try {
+    // settingsService already required above
+    const settings = await settingsService.getSettings();
+    
+    const usageLimits = {
+      maxCampaignsPerBrand: settings.customLimits?.maxCampaignsPerBrand || 50,
+      maxActiveDealsPerCreator: settings.customLimits?.maxActiveDealsPerCreator || 20,
+      maxFileSize: settings.upload?.maxFileSize || 100,
+      maxFilesPerUpload: settings.upload?.maxFilesPerUpload || 10,
+      dailyUploadLimit: settings.upload?.dailyUploadLimit || 100,
+      storageQuotaPerUser: settings.usageLimits?.storageQuotaPerUser || 1000
+    };
+
+    res.json({
+      success: true,
+      data: usageLimits
+    });
+
+  } catch (error) {
+    console.error('Get usage limits error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get usage limits'
+    });
+  }
+};
+
+/**
+ * Update usage limits settings
+ */
+exports.updateUsageLimits = async (req, res) => {
+  try {
+    const {
+      maxCampaignsPerBrand,
+      maxActiveDealsPerCreator,
+      maxFileSize,
+      maxFilesPerUpload,
+      dailyUploadLimit,
+      storageQuotaPerUser
+    } = req.body;
+
+    // settingsService already required above
+    const settings = await settingsService.getSettings();
+    
+    // Validate inputs
+    const updates = {
+      customLimits: {
+        maxCampaignsPerBrand: Math.max(1, Math.min(1000, parseInt(maxCampaignsPerBrand) || 50)),
+        maxActiveDealsPerCreator: Math.max(1, Math.min(500, parseInt(maxActiveDealsPerCreator) || 20))
+      },
+      upload: {
+        maxFileSize: Math.max(1, Math.min(500, parseInt(maxFileSize) || 100)),
+        maxFilesPerUpload: Math.max(1, Math.min(50, parseInt(maxFilesPerUpload) || 10)),
+        dailyUploadLimit: Math.max(1, Math.min(1000, parseInt(dailyUploadLimit) || 100)),
+        storageQuotaPerUser: Math.max(100, Math.min(10000, parseInt(storageQuotaPerUser) || 1000))
+      }
+    };
+
+    // settingsService already required above
+    await settingsService.updateSettings(updates, req.admin._id);
+
+    // Log the action (non-blocking)
+    setImmediate(async () => {
+      try {
+        await AuditLog.create({
+          adminId: req.admin._id,
+          action: 'usage_limits_updated',
+          metadata: updates,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('Failed to create audit log:', logError);
+        // Don't fail the request if audit logging fails
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Usage limits updated successfully',
+      data: {
+        customLimits: updates.customLimits,
+        upload: updates.upload
+      }
+    });
+
+  } catch (error) {
+    console.error('Update usage limits error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update usage limits'
+    });
+  }
+};
+
+// ==================== FILE UPLOAD SETTINGS MANAGEMENT ====================
+
+/**
+ * Get file upload settings
+ */
+exports.getFileUploadSettings = async (req, res) => {
+  try {
+    // settingsService already required above
+    const settings = await settingsService.getSettings();
+    
+    const fileUploadSettings = {
+      allowedFileTypes: settings.upload?.allowedFileTypes || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx', 'xls', 'zip'],
+      maxFileSize: settings.upload?.maxFileSize || 100,
+      maxFilesPerUpload: settings.upload?.maxFilesPerUpload || 10,
+      dailyUploadLimit: settings.upload?.dailyUploadLimit || 100,
+      storageQuotaPerUser: settings.upload?.storageQuotaPerUser || 1000,
+      imageOptimization: {
+        enabled: settings.upload?.imageOptimization?.enabled ?? true,
+        maxWidth: settings.upload?.imageOptimization?.maxWidth || 1920,
+        maxHeight: settings.upload?.imageOptimization?.maxHeight || 1080,
+        quality: settings.upload?.imageOptimization?.quality || 80
+      },
+      videoOptimization: {
+        enabled: settings.upload?.videoOptimization?.enabled ?? true,
+        maxDuration: settings.upload?.videoOptimization?.maxDuration || 300,
+        maxBitrate: settings.upload?.videoOptimization?.maxBitrate || 5000
+      },
+      storage: {
+        provider: settings.upload?.storage?.provider || 'local',
+        s3: settings.upload?.storage?.s3 || {},
+        cloudinary: settings.upload?.storage?.cloudinary || {}
+      }
+    };
+
+    res.json({
+      success: true,
+      data: fileUploadSettings
+    });
+
+  } catch (error) {
+    console.error('Get file upload settings error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get file upload settings'
+    });
+  }
+};
+
+/**
+ * Update file upload settings
+ */
+exports.updateFileUploadSettings = async (req, res) => {
+  try {
+    const {
+      allowedFileTypes,
+      maxFileSize,
+      maxFilesPerUpload,
+      dailyUploadLimit,
+      storageQuotaPerUser,
+      imageOptimization,
+      videoOptimization,
+      storage
+    } = req.body;
+
+    // settingsService already required above
+    const settings = await settingsService.getSettings();
+    
+    // Validate file types
+    const validFileTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx', 'xls', 'zip'];
+    const validatedFileTypes = (allowedFileTypes || []).filter(type => validFileTypes.includes(type));
+
+    const updates = {
+      upload: {
+        allowedFileTypes: validatedFileTypes,
+        maxFileSize: Math.max(1, Math.min(500, parseInt(maxFileSize) || 100)),
+        maxFilesPerUpload: Math.max(1, Math.min(50, parseInt(maxFilesPerUpload) || 10)),
+        dailyUploadLimit: Math.max(1, Math.min(1000, parseInt(dailyUploadLimit) || 100)),
+        storageQuotaPerUser: Math.max(100, Math.min(10000, parseInt(storageQuotaPerUser) || 1000)),
+        imageOptimization: {
+          enabled: imageOptimization?.enabled ?? true,
+          maxWidth: Math.max(100, Math.min(4000, parseInt(imageOptimization?.maxWidth) || 1920)),
+          maxHeight: Math.max(100, Math.min(4000, parseInt(imageOptimization?.maxHeight) || 1080)),
+          quality: Math.max(10, Math.min(100, parseInt(imageOptimization?.quality) || 80))
+        },
+        videoOptimization: {
+          enabled: videoOptimization?.enabled ?? true,
+          maxDuration: Math.max(10, Math.min(3600, parseInt(videoOptimization?.maxDuration) || 300)),
+          maxBitrate: Math.max(100, Math.min(20000, parseInt(videoOptimization?.maxBitrate) || 5000))
+        },
+        storage: {
+          provider: storage?.provider || 'local',
+          s3: storage?.s3 || {},
+          cloudinary: storage?.cloudinary || {}
+        }
+      }
+    };
+
+    // settingsService already required above
+    await settingsService.updateSettings(updates, req.admin._id);
+
+    // Log the action (non-blocking)
+    setImmediate(async () => {
+      try {
+        await AuditLog.create({
+          adminId: req.admin._id,
+          action: 'file_upload_settings_updated',
+          metadata: updates,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('Failed to create audit log:', logError);
+        // Don't fail the request if audit logging fails
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'File upload settings updated successfully',
+      data: updates.upload
+    });
+
+  } catch (error) {
+    console.error('Update file upload settings error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update file upload settings'
+    });
+  }
+};
+
+/**
+ * Add file type to allowed list
+ */
+exports.addFileType = async (req, res) => {
+  try {
+    const { fileType } = req.body;
+
+    if (!fileType) {
+      return res.status(400).json({
+        success: false,
+        error: 'File type is required'
+      });
+    }
+
+    const validFileTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx', 'xls', 'zip'];
+    
+    if (!validFileTypes.includes(fileType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid file type'
+      });
+    }
+
+    // settingsService already required above
+    // settingsService already required above
+    const currentSettings = await settingsService.getSettings();
+    
+    if (!currentSettings.upload) {
+      currentSettings.upload = { allowedFileTypes: [] };
+    }
+    
+    if (!currentSettings.upload.allowedFileTypes) {
+      currentSettings.upload.allowedFileTypes = [];
+    }
+
+    if (currentSettings.upload.allowedFileTypes.includes(fileType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'File type already exists'
+      });
+    }
+
+    // Update settings using settingsService
+    const updatedSettings = await settingsService.updateSettings({
+      upload: {
+        ...currentSettings.upload,
+        allowedFileTypes: [...currentSettings.upload.allowedFileTypes, fileType]
+      }
+    }, req.admin._id);
+
+    // Log the action (non-blocking)
+    setImmediate(async () => {
+      try {
+        await AuditLog.create({
+          adminId: req.admin._id,
+          action: 'file_type_added',
+          metadata: { fileType },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('Failed to create audit log:', logError);
+        // Don't fail the request if audit logging fails
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'File type added successfully',
+      data: {
+        fileType,
+        allowedFileTypes: updatedSettings.upload.allowedFileTypes
+      }
+    });
+
+  } catch (error) {
+    console.error('Add file type error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to add file type'
+    });
+  }
+};
+
+/**
+ * Remove file type from allowed list
+ */
+exports.removeFileType = async (req, res) => {
+  try {
+    const { fileType } = req.params;
+
+    if (!fileType) {
+      return res.status(400).json({
+        success: false,
+        error: 'File type is required'
+      });
+    }
+
+    // settingsService already required above
+    // settingsService already required above
+    const currentSettings = await settingsService.getSettings();
+    
+    if (!currentSettings.upload?.allowedFileTypes) {
+      return res.status(404).json({
+        success: false,
+        error: 'File upload settings not found'
+      });
+    }
+
+    const index = currentSettings.upload.allowedFileTypes.indexOf(fileType);
+    if (index === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'File type not found'
+      });
+    }
+
+    // Update settings using settingsService
+    const updatedSettings = await settingsService.updateSettings({
+      upload: {
+        ...currentSettings.upload,
+        allowedFileTypes: currentSettings.upload.allowedFileTypes.filter(type => type !== fileType)
+      }
+    }, req.admin._id);
+
+    // Log the action (non-blocking)
+    setImmediate(async () => {
+      try {
+        await AuditLog.create({
+          adminId: req.admin._id,
+          action: 'file_type_removed',
+          metadata: { fileType },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('Failed to create audit log:', logError);
+        // Don't fail the request if audit logging fails
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'File type removed successfully',
+      data: {
+        fileType,
+        allowedFileTypes: updatedSettings.upload.allowedFileTypes
+      }
+    });
+
+  } catch (error) {
+    console.error('Remove file type error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to remove file type'
     });
   }
 };

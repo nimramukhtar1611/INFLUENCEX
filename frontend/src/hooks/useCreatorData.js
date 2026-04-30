@@ -129,13 +129,18 @@ export const useCreatorData = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     if (user) {
-      fetchAllData();
+      // Delay API calls to prevent race condition with auth state
+      const timer = setTimeout(() => {
+        fetchAllData();
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
-  }, [user, fetchAllData]);
+  }, [user]);
 
   const refreshData = useCallback(() => fetchAllData(true), [fetchAllData]);
 

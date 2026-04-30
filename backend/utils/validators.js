@@ -106,13 +106,6 @@ const isValidTikTokHandle = (handle) => {
   return re.test(cleanHandle);
 };
 
-const isValidTwitterHandle = (handle) => {
-  if (!handle) return false;
-  const cleanHandle = handle.replace('@', '');
-  const re = /^[a-zA-Z0-9_]{1,15}$/;
-  return re.test(cleanHandle);
-};
-
 // ==================== NUMBER VALIDATION ====================
 const isValidFollowerCount = (count) => {
   const num = parseInt(count);
@@ -401,7 +394,6 @@ module.exports = {
   isValidInstagramHandle,
   isValidYouTubeHandle,
   isValidTikTokHandle,
-  isValidTwitterHandle,
   
   // Number validators
   isValidFollowerCount,

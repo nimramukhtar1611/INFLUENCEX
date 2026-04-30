@@ -39,6 +39,7 @@ const adminSchema = new mongoose.Schema({
     ]
   }],
   profileImage: String,
+  profilePicture: String, // Added for consistency with User model
   lastLogin: Date,
   loginAttempts: {
     type: Number,

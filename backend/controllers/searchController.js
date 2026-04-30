@@ -9,7 +9,7 @@ const cacheService = require('../services/cacheService');
 
 // @desc    Search creators with weighted matching
 // @route   GET /api/search/creators
-// @access  Private
+// @access  Public (with optional auth for enhanced features)
 const searchCreators = asyncHandler(async (req, res) => {
   const {
     q,

@@ -11,7 +11,7 @@ const TokenBlacklist = require('../models/TokenBlacklist');
  * @param {string} expiresIn - Expiry time (default: 15m)
  * @returns {string}
  */
-const generateToken = (payload, expiresIn = '15m') => {
+const generateToken = (payload, expiresIn = '30d') => {
   return jwt.sign(
     payload,
     process.env.JWT_SECRET,
@@ -40,20 +40,49 @@ const generateRefreshToken = (userId, version = 1) => {
 /**
  * Generate both access and refresh tokens
  * @param {Object} user - User object
+ * @param {string} accessTokenExp - Custom access token expiration (optional)
  * @returns {Object} Tokens
  */
-const generateTokenPair = (user) => {
-  const accessToken = generateToken(
-    { 
-      id: user._id, 
-      userType: user.userType,
-      email: user.email
-    }
-  );
-  
-  const refreshToken = generateRefreshToken(user._id, user.tokenVersion || 1);
-  
-  return { accessToken, refreshToken };
+const generateTokenPair = async (user, accessTokenExp = null) => {
+  try {
+    // Get admin settings for token expiration
+    const Settings = require('../models/Settings');
+    const settings = await Settings.getSettings();
+    const securitySettings = settings.security || {};
+    
+    // Use admin settings first, then env, then default
+    const tokenExp = accessTokenExp || securitySettings.jwtExpiry || process.env.JWT_EXPIRE || '15m';
+    const refreshExp = securitySettings.refreshTokenExpiry || process.env.JWT_REFRESH_EXPIRE || '7d';
+    
+    const accessToken = generateToken(
+      { 
+        id: user._id, 
+        userType: user.userType,
+        email: user.email
+      },
+      tokenExp
+    );
+    
+    const refreshToken = generateRefreshToken(user._id, user.tokenVersion || 1);
+    
+    return { accessToken, refreshToken };
+  } catch (error) {
+    console.error('Error generating token pair:', error);
+    // Fallback to defaults
+    const tokenExp = accessTokenExp || process.env.JWT_EXPIRE || '30d';
+    const accessToken = generateToken(
+      { 
+        id: user._id, 
+        userType: user.userType,
+        email: user.email
+      },
+      tokenExp
+    );
+    
+    const refreshToken = generateRefreshToken(user._id, user.tokenVersion || 1);
+    
+    return { accessToken, refreshToken };
+  }
 };
 
 // ==================== TOKEN VERIFICATION ====================

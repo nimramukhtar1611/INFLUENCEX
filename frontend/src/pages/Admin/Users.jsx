@@ -33,7 +33,6 @@ import { formatCurrency, formatDate, formatNumber, timeAgo } from '../../utils/h
 import { getStatusColor, getStatusIconColor } from '../../utils/colorScheme';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
-import StatsCard from '../../components/Common/StatsCard';
 import Loader from '../../components/Common/Loader';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
@@ -170,108 +169,275 @@ const AdminUsers = () => {
   if (loading && users.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader size="large" color="purple" />
+        <div className="text-center">
+          <div className="w-8 h-8 animate-spin border-2 border-zinc-300 border-t-zinc-500 rounded-full mx-auto mb-4"></div>
+          <p className="text-zinc-500 text-xs font-medium">Loading users...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
+    <div className={`max-w-6xl mx-auto space-y-6 p-4 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
         <div>
-          <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>User Management</h1>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Manage all users on the platform</p>
+          <h1 className="text-3xl tracking-tight"><span className="font-semibold ">Admin</span> <span className="font-bold">Users</span></h1>
+          <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Manage and monitor all platform users.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={RefreshCw}
-            onClick={refreshData}
-            loading={refreshing}
-          >
-            Refresh
-          </Button>
-          <Button variant="outline" size="sm" icon={Download} onClick={handleExport}>
-            Export
-          </Button>
-        </div>
+
+       
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatsCard
-          title="Total Users"
-          value={stats.totalUsers?.toLocaleString() || '0'}
-          change={`+${stats.totalUsers ? Math.floor(stats.totalUsers * 0.12) : 0}`}
-          icon={UsersIcon}
-          color="bg-blue-500"
-        />
-        <StatsCard
-          title="Brands"
-          value={stats.totalBrands?.toLocaleString() || '0'}
-          change={`+${stats.totalBrands ? Math.floor(stats.totalBrands * 0.08) : 0}`}
-          icon={Building2}
-          color="bg-purple-500"
-        />
-        <StatsCard
-          title="Creators"
-          value={stats.totalCreators?.toLocaleString() || '0'}
-          change={`+${stats.totalCreators ? Math.floor(stats.totalCreators * 0.15) : 0}`}
-          icon={Award}
-          color="bg-green-500"
-        />
-        <StatsCard
-          title="Pending Verification"
-          value={stats.pendingVerifications?.toLocaleString() || '0'}
-          change="-5%"
-          icon={Clock}
-          color="bg-yellow-500"
-        />
-      </div>
+      {/* Stats - Brand Dashboard Style */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-zinc-400 group-hover:bg-white group-hover:text-black' 
+                : 'bg-zinc-50 text-zinc-600 group-hover:bg-black group-hover:text-white shadow-sm'}
+            `}>
+              <UsersIcon size={18} strokeWidth={2.5} />
+            </div>
 
-      {/* Filters */}
-      <div className={`p-4 rounded-xl shadow-sm ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-            <input
-              type="text"
-              placeholder="Search users by name or email..."
-              className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-              }`}
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-            />
+            {/* Dynamic Change Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-emerald-500 bg-emerald-500/5
+            `}>
+              +12%
+            </span>
           </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <select
-              value={filters.user_type}
-              onChange={(e) => handleFilterChange('user_type', e.target.value)}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100'
-                  : 'bg-white border-gray-300 text-gray-900'
-              }`}
+
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Total Users
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {stats.totalUsers?.toLocaleString() || '0'}
+            </p>
+          </div>
+
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-zinc-400 group-hover:bg-white group-hover:text-black' 
+                : 'bg-zinc-50 text-zinc-600 group-hover:bg-black group-hover:text-white shadow-sm'}
+            `}>
+              <Building2 size={18} strokeWidth={2.5} />
+            </div>
+
+            {/* Dynamic Change Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-emerald-500 bg-emerald-500/5
+            `}>
+              +8%
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Brands
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {stats.totalBrands?.toLocaleString() || '0'}
+            </p>
+          </div>
+
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-zinc-400 group-hover:bg-white group-hover:text-black' 
+                : 'bg-zinc-50 text-zinc-600 group-hover:bg-black group-hover:text-white shadow-sm'}
+            `}>
+              <Award size={18} strokeWidth={2.5} />
+            </div>
+
+            {/* Dynamic Change Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-emerald-500 bg-emerald-500/5
+            `}>
+              +15%
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Creators
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {stats.totalCreators?.toLocaleString() || '0'}
+            </p>
+          </div>
+
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+
+        <div 
+          className={`
+            group p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+            cursor-default hover:scale-[1.02]
+            ${isDark 
+              ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+              : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)]'}
+          `}
+        >
+          <div className="flex justify-between items-start mb-4">
+            {/* Icon Squircle with Spring Animation */}
+            <div className={`
+              p-2.5 rounded-2xl transition-all duration-500 transform group-hover:rotate-[-10deg] group-hover:scale-110
+              ${isDark 
+                ? 'bg-zinc-800 text-zinc-400 group-hover:bg-white group-hover:text-black' 
+                : 'bg-zinc-50 text-zinc-600 group-hover:bg-black group-hover:text-white shadow-sm'}
+            `}>
+              <Clock size={18} strokeWidth={2.5} />
+            </div>
+
+            {/* Dynamic Change Badge */}
+            <span className={`
+              text-[9px] font-black uppercase tracking-[0.1em] px-2 py-1 rounded-md transition-colors
+              text-red-500 bg-red-500/5
+            `}>
+              -5%
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={`
+              text-[10px] font-black uppercase tracking-[0.15em] transition-colors
+              ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}
+            `}>
+              Pending Verification
+            </h3>
+            
+            <p className={`
+              text-2xl font-mono font-bold tracking-tighter transition-all
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {stats.pendingVerifications?.toLocaleString() || '0'}
+            </p>
+          </div>
+
+          {/* Subtle Bottom Glow Line */}
+          <div className={`
+            h-[2px] w-0 group-hover:w-full transition-all duration-700 mt-4 rounded-full
+            ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}
+          `} />
+        </div>
+      </div>
+
+      {/* Modern Search Bar */}
+      <div className="relative group">
+        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
+        <input 
+          type="text" 
+          placeholder="Search users by name or email..."
+          className={`w-full pl-11 pr-4 py-3 rounded-xl border transition-all outline-none text-sm ${
+            isDark 
+              ? 'bg-zinc-900/50 border-zinc-800 focus:border-zinc-600 text-white' 
+              : 'bg-zinc-50 border-zinc-100 focus:border-zinc-300 shadow-sm'
+          }`}
+          value={filters.search}
+          onChange={e => handleFilterChange('search', e.target.value)}
+        />
+      </div>
+
+      {/* Filters Panel */}
+      <div className={`p-5 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div>
+            <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">User Type</label>
+            <select 
+              value={filters.user_type} 
+              onChange={e => handleFilterChange('user_type', e.target.value)}
+              className={`w-full bg-transparent border-b py-1.5 focus:outline-none text-xs ${isDark ? 'border-zinc-800 !bg-black' : 'border-zinc-200'}`}
             >
               <option value="">All Types</option>
               <option value="brand">Brands</option>
               <option value="creator">Creators</option>
             </select>
-            
-            <select
-              value={filters.status}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100'
-                  : 'bg-white border-gray-300 text-gray-900'
-              }`}
+          </div>
+          <div>
+            <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">Status</label>
+            <select 
+              value={filters.status} 
+              onChange={e => handleFilterChange('status', e.target.value)}
+              className={`w-full bg-transparent border-b py-1.5 focus:outline-none text-xs ${isDark ? 'border-zinc-800 !bg-black' : 'border-zinc-200'}`}
             >
               <option value="">All Status</option>
               <option value="active">Active</option>
@@ -279,455 +445,415 @@ const AdminUsers = () => {
               <option value="suspended">Suspended</option>
               <option value="inactive">Inactive</option>
             </select>
-            
-            <select
-              value={filters.verified}
-              onChange={(e) => handleFilterChange('verified', e.target.value)}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100'
-                  : 'bg-white border-gray-300 text-gray-900'
-              }`}
+          </div>
+          <div>
+            <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5 block">Verification</label>
+            <select 
+              value={filters.verified} 
+              onChange={e => handleFilterChange('verified', e.target.value)}
+              className={`w-full bg-transparent border-b py-1.5 focus:outline-none text-xs ${isDark ? 'border-zinc-800 !bg-black' : 'border-zinc-200'}`}
             >
               <option value="">All Verification</option>
               <option value="true">Verified</option>
               <option value="false">Unverified</option>
             </select>
           </div>
-        </form>
-      </div>
-
-      {/* Users Table */}
-      <div className={`rounded-xl shadow-sm overflow-hidden ${isDark ? 'bg-gray-900/90 border border-gray-700/50' : 'bg-white border-gray-200/50'}`}>
-        <div className="overflow-x-auto">
-          <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-            <thead className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
-              <tr>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-nowrap`}>
-                  User
-                </th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-nowrap`}>
-                  Type
-                </th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-nowrap`}>
-                  Status
-                </th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-nowrap`}>
-                  Verification
-                </th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-nowrap`}>
-                  Joined
-                </th>
-                <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-nowrap`}>
-                  Last Active
-                </th>
-                <th className={`px-4 py-3 text-right text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-nowrap`}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className={`${isDark ? 'bg-gray-900' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-              {users.length > 0 ? users.map((user) => {
-                const TypeIcon = getUserTypeIcon(user.userType);
-                return (
-                  <tr key={user._id} className={isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {user.profilePicture ? (
-                          <img src={user.profilePicture} alt={user.fullName} className="w-10 h-10 rounded-full" />
-                        ) : (
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-gradient-to-r from-[#667eea]/20 to-[#764ba2]/20' : 'bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10'}`}>
-                            <User className="w-5 h-5 text-[#667eea]" />
-                          </div>
-                        )}
-                        <div className="ml-3">
-                          <div className={`text-sm font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'} truncate max-w-[150px]`}>{user.fullName}</div>
-                          <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'} truncate max-w-[150px]`}>{user.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full flex items-center w-fit gap-1 ${
-                        user.userType === 'brand' 
-                          ? getStatusColor('brand', 'userType', isDark)
-                          : getStatusColor('creator', 'userType', isDark)
-                      }`}>
-                        <TypeIcon className="w-3 h-3" />
-                        {user.userType}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getStatusColorClass(user.status)}`}>
-                        {React.createElement(getStatusIcon(user.status), { className: `w-3 h-3 ${getStatusIconColor(user.status)}` })}
-                        {user.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      {user.isVerified ? (
-                        <span className={`flex items-center ${getStatusColor('verified', 'status', isDark).split(' ')[1]}`}>
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          Verified
-                        </span>
-                      ) : (
-                        <span className={`flex items-center ${getStatusColor('unverified', 'status', isDark).split(' ')[1]}`}>
-                          <Clock className="w-4 h-4 mr-1" />
-                          Pending
-                        </span>
-                      )}
-                    </td>
-                    <td className={`px-4 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {formatDate(user.createdAt)}
-                    </td>
-                    <td className={`px-4 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {user.lastLogin ? timeAgo(user.lastLogin) : 'Never'}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setShowUserModal(true);
-                          }}
-                          className={`hover:${isDark ? 'text-[#667eea]' : 'text-[#667eea]'}`}
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        
-                        {!user.isVerified && (
-                          <button
-                            onClick={() => handleVerify(user._id)}
-                            className={`hover:${isDark ? 'text-green-400' : 'text-green-900'}`}
-                            title="Verify User"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        {user.status === 'active' ? (
-                          <button
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setShowSuspendModal(true);
-                            }}
-                            className={`hover:${isDark ? 'text-yellow-400' : 'text-yellow-900'}`}
-                            title="Suspend User"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        ) : user.status === 'suspended' ? (
-                          <button
-                            onClick={() => handleActivate(user._id)}
-                            className={`hover:${isDark ? 'text-green-400' : 'text-green-900'}`}
-                            title="Activate User"
-                          >
-                            <ThumbsUp className="w-4 h-4" />
-                          </button>
-                        ) : null}
-                        
-                        <button
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setShowDeleteModal(true);
-                          }}
-                          className={`hover:${isDark ? 'text-red-400' : 'text-red-900'}`}
-                          title="Delete User"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              }) : (
-                <tr>
-                  <td colSpan="7" className={`px-4 py-12 text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    No users found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {pagination.users.pages > 1 && (
-          <div className={`px-4 py-4 border-t flex items-center justify-between ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-            <div className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Showing {((pagination.users.page - 1) * pagination.users.limit) + 1} to{' '}
-              {Math.min(pagination.users.page * pagination.users.limit, pagination.users.total)} of{' '}
-              {pagination.users.total} results
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className={`px-3 py-1 border rounded-lg hover:disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isDark
-                    ? 'border-gray-600 hover:bg-gray-700/50'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Previous
-              </button>
-              <span className={`px-4 py-1 text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Page {currentPage} of {pagination.users.pages}
-              </span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(pagination.users.pages, prev + 1))}
-                disabled={currentPage === pagination.users.pages}
-                className={`px-3 py-1 border rounded-lg hover:disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isDark
-                    ? 'border-gray-600 hover:bg-gray-700/50'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Next
-              </button>
-            </div>
+          <div className="flex items-end">
+            <button onClick={() => setFilters({ search: '', user_type: '', status: '', verified: '', sortBy: 'createdAt', sortOrder: 'desc' })} className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 hover:text-red-500 transition-colors mb-1.5">Reset All</button>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* User Details Modal */}
-      <Modal
-        isOpen={showUserModal}
-        onClose={() => {
-          setShowUserModal(false);
-          setSelectedUser(null);
-        }}
-        title="User Details"
-        size="lg"
+    {/* Users List */}
+<div className="space-y-4">
+  {/* Row Header - Minimalist & High Tracking */}
+  <div className={`hidden md:grid grid-cols-12 px-8 py-3 text-[10px] font-black uppercase tracking-[0.25em] ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+    <div className="col-span-4">Member Identity</div>
+    <div className="col-span-2">Account Class</div>
+    <div className="col-span-2 text-center">System Status</div>
+    <div className="col-span-2 text-center">Vetting</div>
+    <div className="col-span-2 text-right">Administrative</div>
+  </div>
+
+  {users.length > 0 ? users.map((user) => {
+    const TypeIcon = getUserTypeIcon(user.userType);
+    return (
+      <div 
+        key={user._id}
+        className={`
+          group relative grid grid-cols-1 md:grid-cols-12 items-center px-8 py-5 rounded-[2.5rem] border 
+          transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+          ${isDark 
+            ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)]' 
+            : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]'}
+        `}
       >
-        {selectedUser && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              {selectedUser.profilePicture ? (
-                <img src={selectedUser.profilePicture} alt={selectedUser.fullName} className="w-16 h-16 rounded-full" />
+        {/* Profile Identity - The "Identity Card" Look */}
+        <div className="col-span-4 flex items-center gap-5">
+          <div className="relative shrink-0">
+            <div className={`
+                p-1 rounded-[1.4rem] border transition-all duration-700 
+                ${isDark ? 'bg-zinc-800 border-zinc-700 group-hover:border-zinc-500' : 'bg-white border-zinc-100 shadow-sm group-hover:border-zinc-300'}
+            `}>
+              {user.profilePicture ? (
+                <img 
+                  src={user.profilePicture} 
+                  className="w-12 h-12 rounded-[1rem] object-cover grayscale group-hover:grayscale-0 transition-all duration-700 ease-in-out group-hover:scale-110" 
+                  alt="" 
+                />
               ) : (
-                <div className="w-16 h-16 bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 rounded-full flex items-center justify-center">
-                  <User className="w-8 h-8 text-[#667eea]" />
+                <div className={`w-12 h-12 rounded-[1rem] flex items-center justify-center ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}>
+                  <User className="w-6 h-6 text-zinc-500 opacity-40" />
                 </div>
               )}
-              <div>
-                <h3 className={`text-xl font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{selectedUser.fullName}</h3>
-                <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>{selectedUser.email}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    selectedUser.userType === 'brand' ? getStatusColor('brand', 'userType', isDark) : getStatusColor('creator', 'userType', isDark)
-                  }`}>
-                    {selectedUser.userType}
-                  </span>
-                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColorClass(selectedUser.status)}`}>
-                    {selectedUser.status}
-                  </span>
-                  {selectedUser.isVerified ? (
-                    <span className={`flex items-center text-xs ${getStatusColor('verified', 'status', isDark).split(' ')[1]}`}>
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                      Verified
-                    </span>
-                  ) : (
-                    <span className={`flex items-center text-xs ${getStatusColor('unverified', 'status', isDark).split(' ')[1]}`}>
-                      <Clock className="w-3 h-3 mr-1" />
-                      Pending
-                    </span>
-                  )}
-                </div>
-              </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                <p className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Phone</p>
-                <p className={`text-sm font-medium flex items-center ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                  {selectedUser.phone || 'Not provided'}
-                </p>
-              </div>
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                <p className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Joined</p>
-                <p className={`text-sm font-medium flex items-center ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                  <Calendar className={`w-3 h-3 mr-2 ${isDark ? 'text-gray-400' : 'text-gray-400'}`} />
-                  {formatDate(selectedUser.createdAt)}
-                </p>
-              </div>
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                <p className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Last Active</p>
-                <p className={`text-sm font-medium flex items-center ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                  <Clock className={`w-3 h-3 mr-2 ${isDark ? 'text-gray-400' : 'text-gray-400'}`} />
-                  {selectedUser.lastLogin ? timeAgo(selectedUser.lastLogin) : 'Never'}
-                </p>
-              </div>
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                <p className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Login Count</p>
-                <p className={`text-sm font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{selectedUser.loginCount || 0}</p>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div>
-              <h4 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Activity</h4>
-              <div className="grid grid-cols-3 gap-3">
-                {selectedUser.userType === 'brand' ? (
-                  <>
-                    <div className={`text-center p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <p className="text-xl font-bold text-[#667eea]">{selectedUser.stats?.campaigns || 0}</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Campaigns</p>
-                    </div>
-                    <div className={`text-center p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <p className="text-xl font-bold text-green-600">{formatCurrency(selectedUser.stats?.spent || 0)}</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Spent</p>
-                    </div>
-                    <div className={`text-center p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <p className="text-xl font-bold text-purple-600">{selectedUser.stats?.creators || 0}</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Creators</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className={`text-center p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <p className="text-xl font-bold text-[#667eea]">{formatNumber(selectedUser.stats?.followers || 0)}</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Followers</p>
-                    </div>
-                    <div className={`text-center p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <p className="text-xl font-bold text-green-600">{selectedUser.stats?.engagement || 0}%</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Engagement</p>
-                    </div>
-                    <div className={`text-center p-3 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <p className="text-xl font-bold text-purple-600">{formatCurrency(selectedUser.stats?.earnings || 0)}</p>
-                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Earnings</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className={`border-t pt-3 flex gap-2 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-              <button
-                type="button"
-                className={`flex-1 py-2 rounded-lg text-sm font-medium hover:from-[#5a67d8] hover:to-[#6b4c9a] ${
-                  isDark ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white' : 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white'
-                }`}
-                onClick={() => setShowUserModal(false)}
-              >
-                Close
-              </button>
-              {!selectedUser.isVerified && (
-                <button
-                  onClick={() => handleVerify(selectedUser._id)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium hover:bg-green-700 ${
-                    isDark ? 'bg-green-600 text-white' : 'bg-green-600 text-white'
-                  }`}
-                >
-                  Verify User
-                </button>
-              )}
-            </div>
+            {/* Minimalist Online/Status Dot */}
+            <div className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full border-[3px] shadow-sm ${isDark ? 'border-zinc-900' : 'border-white'} ${user.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
           </div>
-        )}
-      </Modal>
-
-      {/* Suspend User Modal */}
-      <Modal
-        isOpen={showSuspendModal}
-        onClose={() => {
-          setShowSuspendModal(false);
-          setSelectedUser(null);
-          setSuspendReason('');
-        }}
-        title="Suspend User"
-      >
-        <div className="space-y-4">
-          <div className={`p-4 rounded-lg ${isDark ? 'bg-yellow-900/30 border border-yellow-700/30' : 'bg-yellow-50'}`}>
-            <p className={`text-sm ${isDark ? 'text-yellow-300' : 'text-yellow-800'}`}>
-              <strong>Warning:</strong> Suspending this user will prevent them from accessing their account and all active deals will be paused.
-            </p>
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Reason for Suspension *
-            </label>
-            <textarea
-              value={suspendReason}
-              onChange={(e) => setSuspendReason(e.target.value)}
-              rows="3"
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400'
-              }`}
-              placeholder="Enter reason for suspension..."
-              required
-            />
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Suspension Duration
-            </label>
-            <select
-              value={suspendDuration}
-              onChange={(e) => setSuspendDuration(e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
-                isDark
-                  ? 'bg-gray-800/50 border-gray-700/50 text-gray-100'
-                  : 'bg-white border-gray-300 text-gray-900'
-              }`}
-            >
-              <option value="1">1 day</option>
-              <option value="3">3 days</option>
-              <option value="7">7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
-              <option value="permanent">Permanent</option>
-            </select>
+          
+          <div className="flex flex-col min-w-0">
+            <span className={`font-bold text-[15px] tracking-tight leading-tight ${isDark ? 'text-zinc-100 group-hover:text-white' : 'text-zinc-900'}`}>
+              {user.fullName}
+            </span>
+            <span className={`text-[11px] font-medium text-zinc-500 opacity-60 truncate tracking-tight mt-0.5`}>
+              {user.email}
+            </span>
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowSuspendModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="danger" onClick={handleSuspend}>
-            Suspend User
-          </Button>
+        {/* Type Col - Modern Ghost Tag */}
+        <div className="col-span-2 mt-3 md:mt-0">
+          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all duration-500 ${
+            user.userType === 'brand' 
+              ? 'bg-blue-500/5 border-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]'
+              : 'bg-purple-500/5 border-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white group-hover:shadow-[0_0_20_rgba(168,85,247,0.3)]'
+          }`}>
+            <TypeIcon size={12} strokeWidth={3} />
+            {user.userType}
+          </span>
         </div>
-      </Modal>
 
-      {/* Delete User Modal */}
-      <Modal
-        isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setSelectedUser(null);
-        }}
-        title="Delete User"
-      >
-        <div className="space-y-4">
-          <div className={`flex items-center gap-3 text-red-600 p-4 rounded-lg ${isDark ? 'bg-red-900/30' : 'bg-red-50'}`}>
-            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-            <p className="text-sm">
-              This action is permanent and cannot be undone. All user data including campaigns, deals, and messages will be permanently deleted.
-            </p>
+        {/* Status Col - Centered Glass Pill */}
+        <div className="col-span-2 mt-3 md:mt-0 flex justify-center">
+          <div className={`
+            flex items-center gap-2.5 px-4 py-1.5 rounded-full border transition-all duration-300
+            ${isDark ? 'bg-zinc-800/40 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}
+          `}>
+             <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'active' ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-zinc-400 opacity-50'}`} />
+             <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{user.status}</span>
           </div>
-
-          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Are you sure you want to delete <strong>{selectedUser?.fullName}</strong>?
-          </p>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="danger" onClick={handleDelete}>
-            Delete Permanently
-          </Button>
+        {/* Verification Col - The "Vetting" Label */}
+        <div className="col-span-2 mt-3 md:mt-0 flex flex-col items-center">
+          <div className={`flex items-center gap-1.5 text-[10px] font-black tracking-[0.15em] transition-all duration-500 ${user.isVerified ? 'text-emerald-500' : 'text-zinc-500 opacity-40'}`}>
+            {user.isVerified ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+            {user.isVerified ? 'VERIFIED' : 'PENDING'}
+          </div>
+          <span className="text-[8px] font-bold text-zinc-500 opacity-30 uppercase mt-1">Vetting Status</span>
         </div>
-      </Modal>
+
+        {/* Actions Col - "Floating Utility" Layout */}
+       {/* Actions Col - "Floating Utility" Layout */}
+<div className="col-span-2 mt-4 md:mt-0 flex justify-end gap-2">
+  {[
+    { 
+      icon: Eye, 
+      label: "View", 
+      onClick: () => { setSelectedUser(user); setShowUserModal(true); } 
+    },
+    ...(!user.isVerified ? [{ 
+      icon: CheckCircle, 
+      label: "Verify", 
+      onClick: () => handleVerify(user._id) 
+    }] : []),
+    ...(user.status === 'active' 
+      ? [{ 
+          icon: Ban, 
+          label: "Suspend", 
+          onClick: () => { setSelectedUser(user); setShowSuspendModal(true); } 
+        }]
+      : [{ 
+          icon: ThumbsUp, 
+          label: "Activate", 
+          onClick: () => handleActivate(user._id) 
+        }]
+    ),
+    { 
+      icon: Trash2, 
+      label: "Delete", 
+      onClick: () => { setSelectedUser(user); setShowDeleteModal(true); }, 
+      isDelete: true 
+    }
+  ].map((action, i) => (
+    <button
+      key={i}
+      onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+      className={`
+        p-3 rounded-xl border transition-all duration-300 group/btn
+        hover:scale-110 active:scale-90 hover:shadow-xl
+        ${action.isDelete 
+          ? 'text-red-500 border-transparent hover:bg-red-500 hover:text-white shadow-red-500/20' 
+          : isDark 
+            ? 'bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:bg-white hover:text-black hover:border-white' 
+            : 'bg-zinc-100/50 border-zinc-200/50 text-zinc-500 hover:bg-black hover:text-white hover:border-black shadow-sm'
+        }
+      `}
+      title={action.label}
+    >
+      <action.icon className="w-4 h-4 transition-transform duration-300 group-hover/btn:rotate-[-5deg]" strokeWidth={2.5} />
+    </button>
+  ))}
+</div>
+      </div>
+    );
+  }) : (
+    /* Empty State - Modern Search Vibe */
+    <div className={`
+      flex flex-col items-center justify-center py-32 rounded-[3rem] border-2 border-dashed transition-all
+      ${isDark ? 'border-zinc-800 bg-zinc-900/10' : 'border-zinc-100 bg-zinc-50/50'}
+    `}>
+      <div className={`p-8 rounded-[2.5rem] mb-6 shadow-inner ${isDark ? 'bg-zinc-800/50' : 'bg-white'}`}>
+        <Search className="w-12 h-12 text-zinc-500 opacity-20 stroke-[1px]" />
+      </div>
+      <h3 className="text-lg font-bold tracking-tight">Zero Identities Found</h3>
+      <p className="text-[12px] text-zinc-500 mt-2 max-w-[240px] text-center leading-relaxed">
+        No accounts match your current directory filters. Try adjusting your search query.
+      </p>
     </div>
-  );
-};
+  )}
+</div>
+ {/* User Details Modal */}
+      <Modal
+        isOpen={showUserModal}
+        onClose={() => {
+          setShowUserModal(false);
+          setSelectedUser(null);
+        }}
+        title="User Details"
+        size="lg"
+      >
+        {selectedUser && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              {selectedUser.profilePicture ? (
+                <img src={selectedUser.profilePicture} alt={selectedUser.fullName} className="w-16 h-16 rounded-full object-cover grayscale" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
+                  <User className="w-8 h-8 text-zinc-600" />
+                </div>
+              )}
+              <div>
+                <h3 className={`text-xl font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedUser.fullName}</h3>
+                <p className={isDark ? 'text-zinc-400' : 'text-zinc-600'}>{selectedUser.email}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    selectedUser.userType === 'brand' ? getStatusColor('brand', 'userType', isDark) : getStatusColor('creator', 'userType', isDark)
+                  }`}>
+                    {selectedUser.userType}
+                  </span>
+                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColorClass(selectedUser.status)}`}>
+                    {selectedUser.status}
+                  </span>
+                  <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(selectedUser.isVerified ? 'verified' : 'unverified', 'status', isDark)}`}>
+                    {React.createElement(selectedUser.isVerified ? CheckCircle : Clock, { className: `w-3 h-3 mr-1 ${getStatusIconColor(selectedUser.isVerified ? 'verified' : 'unverified')}` })}
+                    {selectedUser.isVerified ? 'Verified' : 'Pending'}
+                  </span>
+                </div>
+              </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Phone</p>
+                <p className={`text-sm font-medium flex items-center ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                  {selectedUser.phone || 'Not provided'}
+                </p>
+              </div>
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Joined</p>
+                <p className={`text-sm font-medium flex items-center ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                  <Calendar className={`w-3 h-3 mr-2 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
+                  {formatDate(selectedUser.createdAt)}
+                </p>
+              </div>
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Last Active</p>
+                <p className={`text-sm font-medium flex items-center ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                  <Clock className={`w-3 h-3 mr-2 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
+                  {selectedUser.lastLogin ? timeAgo(selectedUser.lastLogin) : 'Never'}
+                </p>
+              </div>
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Login Count</p>
+                <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedUser.loginCount || 0}</p>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div>
+              <h4 className={`text-sm font-medium mb-3 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>Activity</h4>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                {selectedUser.userType === 'brand' ? (
+                  <>
+                    <div className={`text-center p-2 sm:p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                      <p className="text-lg sm:text-xl font-light tracking-tighter">{selectedUser.stats?.campaigns || 0}</p>
+                      <p className={`text-xs uppercase font-bold ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Campaigns</p>
+                    </div>
+                    <div className={`text-center p-2 sm:p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                      <p className="text-lg sm:text-xl font-light tracking-tighter">{formatCurrency(selectedUser.stats?.spent || 0)}</p>
+                      <p className={`text-xs uppercase font-bold ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Spent</p>
+                    </div>
+                    <div className={`text-center p-2 sm:p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                      <p className="text-lg sm:text-xl font-light tracking-tighter">{selectedUser.stats?.creators || 0}</p>
+                      <p className={`text-xs uppercase font-bold ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Creators</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={`text-center p-2 sm:p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                      <p className="text-lg sm:text-xl font-light tracking-tighter">{formatNumber(selectedUser.stats?.followers || 0)}</p>
+                      <p className={`text-xs uppercase font-bold ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Followers</p>
+                    </div>
+                    <div className={`text-center p-2 sm:p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                      <p className="text-lg sm:text-xl font-light tracking-tighter">{selectedUser.stats?.engagement || 0}%</p>
+                      <p className={`text-xs uppercase font-bold ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Engagement</p>
+                    </div>
+                    <div className={`text-center p-2 sm:p-3 rounded-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-zinc-50 border border-zinc-200'}`}>
+                      <p className="text-lg sm:text-xl font-light tracking-tighter">{formatCurrency(selectedUser.stats?.earnings || 0)}</p>
+                      <p className={`text-xs uppercase font-bold ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>Earnings</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className={`border-t pt-3 flex gap-2 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+              <button
+                type="button"
+                className={`flex-1 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors ${
+                  isDark ? 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white' : 'bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+                }`}
+                onClick={() => setShowUserModal(false)}
+              >
+                Close
+              </button>
+              {!selectedUser.isVerified && (
+                <button
+                  onClick={() => handleVerify(selectedUser._id)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors ${
+                    isDark ? 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white' : 'bg-zinc-100 border border-zinc-200 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-900'
+                  }`}
+                >
+                  Verify User
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Suspend User Modal */}
+      <Modal
+        isOpen={showSuspendModal}
+        onClose={() => {
+          setShowSuspendModal(false);
+          setSelectedUser(null);
+          setSuspendReason('');
+        }}
+        title="Suspend User"
+      >
+        <div className="space-y-4">
+          <div className={`p-4 rounded-lg ${isDark ? 'bg-yellow-900/30 border border-yellow-700/30' : 'bg-yellow-50 border border-yellow-200'}`}>
+            <p className={`text-sm ${isDark ? 'text-yellow-300' : 'text-yellow-800'}`}>
+              <strong>Warning:</strong> Suspending this user will prevent them from accessing their account and all active deals will be paused.
+            </p>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+              Reason for Suspension *
+            </label>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              rows="3"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
+                isDark
+                  ? 'bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-500'
+                  : 'bg-white border-zinc-300 text-zinc-900 placeholder:text-zinc-400'
+              }`}
+              placeholder="Enter reason for suspension..."
+              required
+            />
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+              Suspension Duration
+            </label>
+            <select
+              value={suspendDuration}
+              onChange={(e) => setSuspendDuration(e.target.value)}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] ${
+                isDark
+                  ? 'bg-zinc-900 border-zinc-800 text-zinc-100'
+                  : 'bg-white border-zinc-300 text-zinc-900'
+              }`}
+            >
+              <option value="1">1 day</option>
+              <option value="3">3 days</option>
+              <option value="7">7 days</option>
+              <option value="14">14 days</option>
+              <option value="30">30 days</option>
+              <option value="permanent">Permanent</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="secondary" onClick={() => setShowSuspendModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleSuspend}>
+            Suspend User
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Delete User Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedUser(null);
+        }}
+        title="Delete User"
+      >
+        <div className="space-y-4">
+          <div className={`flex items-center gap-3 text-red-600 p-4 rounded-lg ${isDark ? 'bg-red-900/30 border border-red-700/30' : 'bg-red-50 border border-red-200'}`}>
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm">
+              This action is permanent and cannot be undone. All user data including campaigns, deals, and messages will be permanently deleted.
+            </p>
+          </div>
+
+          <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            Are you sure you want to delete <strong>{selectedUser?.fullName}</strong>?
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDelete}>
+            Delete Permanently
+          </Button>
+        </div>
+      </Modal> 
+</div>
+  )
+}
 export default AdminUsers;

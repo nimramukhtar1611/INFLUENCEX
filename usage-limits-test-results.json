@@ -1,0 +1,121 @@
+{
+  "summary": {
+    "total": 10,
+    "passed": 1,
+    "failed": 9,
+    "successRate": "10.0",
+    "duration": 414,
+    "timestamp": "2026-04-24T16:12:13.601Z",
+    "baseUrl": "http://localhost:5000"
+  },
+  "details": [
+    {
+      "test": "Admin Login",
+      "passed": false,
+      "message": "Failed to login as admin",
+      "details": {
+        "success": false,
+        "error": "Invalid email or password"
+      },
+      "timestamp": "2026-04-24T16:12:13.528Z"
+    },
+    {
+      "test": "Get Usage Limits",
+      "passed": false,
+      "message": "Failed to fetch usage limits",
+      "details": {
+        "success": false,
+        "error": "Not authorized, no token"
+      },
+      "timestamp": "2026-04-24T16:12:13.538Z"
+    },
+    {
+      "test": "Update Usage Limits",
+      "passed": false,
+      "message": "Failed to update usage limits",
+      "details": {
+        "success": false,
+        "error": "Not authorized, no token"
+      },
+      "timestamp": "2026-04-24T16:12:13.549Z"
+    },
+    {
+      "test": "Get File Upload Settings",
+      "passed": false,
+      "message": "Failed to fetch file upload settings",
+      "details": {
+        "success": false,
+        "error": "Not authorized, no token"
+      },
+      "timestamp": "2026-04-24T16:12:13.554Z"
+    },
+    {
+      "test": "Update File Upload Settings",
+      "passed": false,
+      "message": "Failed to update file upload settings",
+      "details": {
+        "success": false,
+        "error": "Not authorized, no token"
+      },
+      "timestamp": "2026-04-24T16:12:13.559Z"
+    },
+    {
+      "test": "Add File Type",
+      "passed": false,
+      "message": "Failed to add file type: docx",
+      "details": {
+        "success": false,
+        "error": "Not authorized, no token"
+      },
+      "timestamp": "2026-04-24T16:12:13.565Z"
+    },
+    {
+      "test": "Remove File Type",
+      "passed": false,
+      "message": "Failed to remove file type: docx",
+      "details": {
+        "success": false,
+        "error": "Not authorized, no token"
+      },
+      "timestamp": "2026-04-24T16:12:13.574Z"
+    },
+    {
+      "test": "Invalid File Type Rejection",
+      "passed": true,
+      "message": "Correctly rejected invalid file type: exe",
+      "details": {
+        "success": false,
+        "error": "Not authorized, no token"
+      },
+      "timestamp": "2026-04-24T16:12:13.579Z"
+    },
+    {
+      "test": "Usage Limits Validation",
+      "passed": false,
+      "message": "Should have validated usage limits input",
+      "details": {
+        "success": false,
+        "error": {
+          "success": false,
+          "error": "Not authorized, no token"
+        },
+        "status": 401
+      },
+      "timestamp": "2026-04-24T16:12:13.591Z"
+    },
+    {
+      "test": "File Upload Settings Validation",
+      "passed": false,
+      "message": "Should have validated file upload settings input",
+      "details": {
+        "success": false,
+        "error": {
+          "success": false,
+          "error": "Not authorized, no token"
+        },
+        "status": 401
+      },
+      "timestamp": "2026-04-24T16:12:13.597Z"
+    }
+  ]
+}

@@ -741,6 +741,7 @@ exports.updateProfile = async (req, res) => {
       'bio',
       'location',
       'website',
+      'age',
       'birthday',
       'gender',
       'phone',

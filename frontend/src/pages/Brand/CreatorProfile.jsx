@@ -1,507 +1,231 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTheme } from '../../hooks/useTheme';
 import { 
-  User, 
-  Instagram, 
-  Youtube, 
-  Twitter, 
-  Star, 
-  Users, 
-  Heart, 
-  ArrowLeft,
-  Mail,
-  Calendar,
-  MapPin,
-  CheckCircle,
-  TrendingUp,
-  Award,
-  MessageCircle,
-  DollarSign,
-  Target,
-  Zap,
-  Shield,
-  Globe
+  ArrowLeft, User, Instagram, Youtube, 
+  MapPin, Star, TrendingUp, Users, DollarSign, 
+  CheckCircle, ArrowUpRight, Heart, MessageCircle,
+  Share2, Loader
 } from 'lucide-react';
 import brandService from '../../services/brandService';
-import { formatNumber } from '../../utils/helpers';
-import Button from '../../components/UI/Button';
-import Loader from '../../components/Common/Loader';
+import { formatNumber, formatCurrency } from '../../utils/helpers';
 import toast from 'react-hot-toast';
-import { useTheme } from '../../hooks/useTheme';
 
 const CreatorProfile = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { id: creatorId } = useParams();
+  const navigate = useNavigate();
+  
   const [loading, setLoading] = useState(true);
   const [creator, setCreator] = useState(null);
 
   useEffect(() => {
-    fetchCreator();
-  }, [id]);
+    if (!creatorId) {
+      toast.error('Invalid creator ID');
+      navigate('/brand/search');
+      return;
+    }
+    fetchCreatorDetails();
+  }, [creatorId]);
 
-  const fetchCreator = async () => {
+  const fetchCreatorDetails = async () => {
     try {
       setLoading(true);
-      const res = await brandService.getCreatorDetails(id);
-      if (res?.success) {
-        setCreator(res.creator || res);
+      const response = await brandService.getCreatorDetails(creatorId);
+      if (response?.success) {
+        setCreator(response.creator);
       } else {
-        toast.error('Creator not found');
+        toast.error('Failed to load creator profile');
         navigate('/brand/search');
       }
     } catch (error) {
-      toast.error('Failed to load creator');
+      toast.error('Failed to load creator profile');
       navigate('/brand/search');
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) return <Loader fullScreen />;
+  const handleCreateDeal = () => {
+    navigate(`/brand/createdeal?creator=${creatorId}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!creator) return null;
 
-  const completedDealsCount =
-    creator.stats?.completedDeals ||
-    creator.stats?.completedCampaigns ||
-    0;
-
-  const averageRating = creator.stats?.averageRating?.toFixed(1) || '0.0';
-  const engagementRate = creator.averageEngagement?.toFixed(1) || '0';
-
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${
-      isDark ? 'bg-gray-900' : 'bg-slate-100'
-    }`}>
-      {/* Back Button */}
-      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <div className={`max-w-5xl mx-auto p-4 space-y-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <button 
           onClick={() => navigate(-1)} 
-          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-sm font-medium backdrop-blur-sm ${
-            isDark 
-              ? 'bg-gray-800/80 border border-gray-700 text-gray-200 hover:bg-gray-700/80 hover:text-white' 
-              : 'bg-white/80 border border-purple-200 text-purple-600 hover:bg-purple-50 hover:text-purple-700'
-          }`}
+          className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-current transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Search</span>
+          <ArrowLeft className="w-3 h-3" /> Back
         </button>
+        <div className="text-right">
+          <h1 className="text-3xl font-semibold tracking-tight">Creator <span className="font-bold">Profile</span></h1>
+          <p className="text-xs text-zinc-500 italic">Influence Insight Engine</p>
+        </div>
       </div>
 
       {/* Main Profile Card */}
-      <div className="container mx-auto px-4 sm:px-6 pb-10 sm:pb-12">
-        <div className="overflow-hidden backdrop-blur-sm">
-          {/* Cover Section - Modern gradient with profile content */}
-          <div className={`relative overflow-hidden ${
-            isDark ? 'bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900' : 'bg-gradient-to-br from-purple-600 via-purple-500 to-indigo-600'
-          }`}>
-            <div className={`absolute inset-0 ${
-              isDark 
-                ? 'bg-gradient-to-r from-purple-900/50 to-transparent' 
-                : 'bg-gradient-to-r from-purple-700/30 to-transparent'
-            }`}></div>
-            {/* Decorative elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24 blur-2xl"></div>
+      <div className={`rounded-xl border overflow-hidden transition-all duration-500 ${
+        isDark ? 'bg-zinc-900 border-zinc-800 shadow-lg' : 'bg-white border-zinc-100 shadow-md'
+      }`}>
+        {/* Banner Area */}
+        <div className="h-20 bg-gradient-to-br from-zinc-800 via-zinc-900 to-black relative mb-3">
+            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-200 via-transparent to-transparent"></div>
+        </div>
+        
+        <div className="px-6 pb-6">
+          <div className="flex flex-col md:flex-row items-end -mt-10 mb-6 gap-4">
+            <div className="relative group">
+              {creator.profilePicture ? (
+                <img
+                  src={creator.profilePicture}
+                  alt={creator.displayName}
+                  className="w-20 h-20 rounded-xl border-4 border-zinc-900 shadow-lg object-cover transform transition-transform group-hover:scale-105"
+                />
+              ) : (
+                <div className="w-20 h-20 bg-zinc-800 rounded-xl border-4 border-zinc-900 shadow-lg flex items-center justify-center">
+                  <User className="w-8 h-8 text-zinc-600" />
+                </div>
+              )}
+              {creator.isVerified && (
+                <div className="absolute -bottom-1 -right-1 bg-white p-1 rounded-full shadow-md">
+                  <CheckCircle className="w-3 h-3 text-black" fill="currentColor" />
+                </div>
+              )}
+            </div>
             
-            {/* Profile Content Inside Gradient */}
-            <div className="relative z-10 px-5 sm:px-8 py-6 sm:py-8">
-              <div className="flex flex-col lg:flex-row items-center gap-5 lg:gap-6">
-                {/* Avatar Section */}
-                <div className="relative flex-shrink-0">
-                  <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 shadow-2xl overflow-hidden backdrop-blur-sm ${
-                    isDark ? 'border-purple-700 bg-purple-800/50' : 'border-white bg-white/90'
-                  }`}>
-                    {creator.profilePicture ? (
-                      <img 
-                        src={creator.profilePicture} 
-                        alt={creator.displayName} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className={`w-full h-full flex items-center justify-center ${
-                        isDark ? 'bg-purple-800/50' : 'bg-purple-100'
-                      }`}>
-                        <User className={`w-12 h-12 ${isDark ? 'text-purple-300' : 'text-purple-600'}`} />
-                      </div>
-                    )}
+            <div className="flex-1 mb-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-xl font-bold tracking-tight">{creator.displayName}</h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-tighter">
+                  {creator.niches?.join(' • ') || 'Key Partner'}
+                </p>
+                {creator.location && (
+                  <div className="flex items-center gap-1 py-0.5 px-2 rounded-full bg-zinc-500/10 border border-zinc-500/20">
+                    <MapPin className="w-2 h-2 text-zinc-400" />
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-400">{creator.location}</span>
                   </div>
-                  {creator.verified && (
-                    <div className="absolute bottom-2 right-2 w-7 h-7 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
-                      <CheckCircle className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Name, Handle and Rating */}
-                <div className="flex-1 text-center lg:text-left">
-                  <h1 className={`text-2xl sm:text-3xl font-bold mb-1 ${
-                    isDark ? 'text-white' : 'text-white'
-                  }`}>
-                    {creator.displayName}
-                  </h1>
-                  <p className={`text-base mb-3 ${
-                    isDark ? 'text-purple-200' : 'text-purple-100'
-                  }`}>
-                    @{creator.handle}
-                  </p>
-                  
-                  <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-4">
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-sm border ${
-                      isDark 
-                        ? 'bg-yellow-500/20 border-yellow-400/30' 
-                        : 'bg-yellow-400/20 border-yellow-300/30'
-                    }`}>
-                      <Star className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-                      <span className={`font-semibold text-base ${
-                        isDark ? 'text-yellow-200' : 'text-yellow-100'
-                      }`}>
-                        {averageRating}
-                      </span>
-                      <span className={`text-xs ${
-                        isDark ? 'text-purple-200' : 'text-purple-100'
-                      }`}>
-                        ({creator.stats?.totalReviews || 0} reviews)
-                      </span>
-                    </div>
-                    
-                    {creator.status === 'available' && (
-                      <div className={`flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-sm border ${
-                        isDark 
-                          ? 'bg-green-500/20 border-green-400/30' 
-                          : 'bg-green-400/20 border-green-300/30'
-                      }`}>
-                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span className={`text-xs font-medium ${
-                          isDark ? 'text-green-200' : 'text-green-100'
-                        }`}>
-                          Available
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Button 
-                      variant="primary" 
-                      size="lg"
-                      onClick={() => navigate(`/brand/createdeal?creator=${creator._id}`)}
-                      className={`!shadow-lg hover:!shadow-xl transition-all duration-300 !px-5 !py-2.5 !rounded-lg !text-sm !font-semibold !border-0 transform hover:scale-105 ${
-                        isDark 
-                          ? '!bg-gradient-to-r !from-pink-500 !to-orange-500 hover:!from-pink-600 hover:!to-orange-600 !text-white' 
-                          : '!bg-gradient-to-r !from-pink-500 !to-orange-500 hover:!from-pink-600 hover:!to-orange-600 !text-white'
-                      }`}
-                    >
-                      <DollarSign className="w-4 h-4 mr-1.5" />
-                      Send Offer
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="lg"
-                      onClick={() => navigate('/brand/search')}
-                      className={`!shadow-lg hover:!shadow-xl transition-all duration-300 !px-5 !py-2.5 !rounded-lg !text-sm !font-medium transform hover:scale-105 ${
-                        isDark 
-                          ? '!border-purple-400 !text-purple-200 hover:!bg-purple-800/50 hover:!text-white' 
-                          : '!border-white/50 !text-white hover:!bg-white/20 hover:!text-white'
-                      }`}
-                    >
-                      <Users className="w-4 h-4 mr-1.5" />
-                      Find More
-                    </Button>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
+
+            <button 
+              onClick={handleCreateDeal}
+              className={`px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-[0.25em] transition-all duration-300 shadow-md hover:scale-105 active:scale-95 ${
+                isDark ? 'bg-white text-white hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'
+              }`}
+            >
+              <span className="flex items-center gap-1">
+                Launch <ArrowUpRight className="w-3 h-3" />
+              </span>
+            </button>
           </div>
 
-          {/* Profile Content */}
-          <div className="px-5 sm:px-8 pb-6 sm:pb-8">
-            {/* Bio Section */}
-            {creator.bio && (
-              <div className={`mb-8 p-5 sm:p-6 rounded-2xl backdrop-blur-sm border shadow-lg ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700' 
-                  : 'bg-gradient-to-r from-purple-50/50 to-pink-50/50 border-purple-100'
+          {/* Core Analytics Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-6">
+            {[
+              { label: 'Followers', val: formatNumber(creator.totalFollowers || 0), icon: Users },
+              { label: 'Engagement', val: `${creator.averageEngagement?.toFixed(1) || '0'}%`, icon: TrendingUp },
+              { label: 'Trust Rating', val: creator.rating?.toFixed(1) || '0.0', icon: Star },
+              { label: 'Est. Market Rate', val: formatCurrency(creator.averageRate || 0), icon: DollarSign }
+            ].map((stat, i) => (
+              <div key={i} className={`p-3 rounded-lg border transition-all hover:border-zinc-500 ${
+                isDark ? 'bg-zinc-800/40 border-zinc-800' : 'bg-zinc-50 border-zinc-100'
               }`}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className={`p-2 rounded-lg ${
-                    isDark ? 'bg-purple-500/20' : 'bg-purple-100'
-                  }`}>
-                    <MessageCircle className={`w-5 h-5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-                  </div>
-                  <h2 className={`text-base font-semibold ${
-                    isDark ? 'text-gray-100' : 'text-gray-800'
-                  }`}>About</h2>
+                <div className="flex items-center gap-1 mb-2 opacity-60">
+                  <stat.icon className="w-3 h-3" />
+                  <span className="text-[8px] font-bold uppercase tracking-widest">{stat.label}</span>
                 </div>
-                <p className={`leading-relaxed text-sm sm:text-base ${
-                  isDark ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  {creator.bio}
-                </p>
+                <p className="text-lg font-bold tracking-tighter">{stat.val}</p>
               </div>
-            )}
+            ))}
+          </div>
 
-            {/* Stats Grid - Modern Cards */}
-            <div className="grid mt-5 grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-8">
-              {/* Followers */}
-              <div className={`group p-5 rounded-2xl backdrop-blur-sm border shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700 hover:bg-gray-800/70' 
-                  : 'bg-white/70 border-purple-100 hover:bg-white/90'
-              }`}>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-all duration-300 group-hover:scale-110 ${
-                  isDark ? 'bg-purple-500/20' : 'bg-purple-100'
-                }`}>
-                  <Users className={`w-6 h-6 ${isDark ? 'text-purple-400' : 'text-purple-600'}`} />
-                </div>
-                <p className={`text-2xl font-bold mb-1 ${
-                  isDark ? 'text-gray-100' : 'text-gray-800'
-                }`}>
-                  {formatNumber(creator.totalFollowers || 0)}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Bio & Socials */}
+            <div className="lg:col-span-2 space-y-6">
+              <section>
+                <h3 className="text-[8px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-2 px-1">Biography</h3>
+                <p className={`text-sm leading-relaxed font-light ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                  {creator.bio || "No biography provided for this creator."}
                 </p>
-                <p className={`text-xs font-medium uppercase tracking-wide ${
-                  isDark ? 'text-gray-400' : 'text-gray-500'
-                }`}>Total Followers</p>
-              </div>
+              </section>
 
-              {/* Engagement */}
-              <div className={`group p-5 rounded-2xl backdrop-blur-sm border shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700 hover:bg-gray-800/70' 
-                  : 'bg-white/70 border-purple-100 hover:bg-white/90'
-              }`}>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-all duration-300 group-hover:scale-110 ${
-                  isDark ? 'bg-pink-500/20' : 'bg-pink-100'
-                }`}>
-                  <Heart className={`w-6 h-6 ${isDark ? 'text-pink-400' : 'text-pink-600'}`} />
-                </div>
-                <p className={`text-2xl font-bold mb-1 ${
-                  isDark ? 'text-gray-100' : 'text-gray-800'
-                }`}>
-                  {engagementRate}%
-                </p>
-                <p className={`text-xs font-medium uppercase tracking-wide ${
-                  isDark ? 'text-gray-400' : 'text-gray-500'
-                }`}>Engagement Rate</p>
-              </div>
-
-              {/* Completed Deals */}
-              <div className={`group p-5 rounded-2xl backdrop-blur-sm border shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700 hover:bg-gray-800/70' 
-                  : 'bg-white/70 border-purple-100 hover:bg-white/90'
-              }`}>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-all duration-300 group-hover:scale-110 ${
-                  isDark ? 'bg-green-500/20' : 'bg-green-100'
-                }`}>
-                  <CheckCircle className={`w-6 h-6 ${isDark ? 'text-green-400' : 'text-green-600'}`} />
-                </div>
-                <p className={`text-2xl font-bold mb-1 ${
-                  isDark ? 'text-gray-100' : 'text-gray-800'
-                }`}>
-                  {completedDealsCount}
-                </p>
-                <p className={`text-xs font-medium uppercase tracking-wide ${
-                  isDark ? 'text-gray-400' : 'text-gray-500'
-                }`}>Completed Deals</p>
-              </div>
-
-              {/* Response Rate */}
-              <div className={`group p-5 rounded-2xl backdrop-blur-sm border shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${
-                isDark 
-                  ? 'bg-gray-800/50 border-gray-700 hover:bg-gray-800/70' 
-                  : 'bg-white/70 border-purple-100 hover:bg-white/90'
-              }`}>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 transition-all duration-300 group-hover:scale-110 ${
-                  isDark ? 'bg-yellow-500/20' : 'bg-yellow-100'
-                }`}>
-                  <Zap className={`w-6 h-6 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
-                </div>
-                <p className={`text-2xl font-bold mb-1 ${
-                  isDark ? 'text-gray-100' : 'text-gray-800'
-                }`}>
-                  {creator.stats?.responseRate || '85'}%
-                </p>
-                <p className={`text-xs font-medium uppercase tracking-wide ${
-                  isDark ? 'text-gray-400' : 'text-gray-500'
-                }`}>Response Rate</p>
-              </div>
-            </div>
-
-            {/* Niches & Socials Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
-              {/* Niches */}
-              {creator.niches && creator.niches.length > 0 && (
-                <div className={`p-5 rounded-2xl backdrop-blur-sm border shadow-lg ${
-                  isDark 
-                    ? 'bg-gray-800/50 border-gray-700' 
-                    : 'bg-white/70 border-purple-100'
-                }`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className={`p-2 rounded-lg ${
-                      isDark ? 'bg-purple-500/20' : 'bg-purple-100'
-                    }`}>
-                      <Target className={`w-5 h-5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-                    </div>
-                    <h3 className={`text-base font-semibold ${
-                      isDark ? 'text-gray-100' : 'text-gray-800'
-                    }`}>Niches & Categories</h3>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {creator.niches.map((niche, index) => (
-                      <span 
-                        key={index}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium border backdrop-blur-sm transition-all duration-300 hover:scale-105 ${
-                          isDark 
-                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30' 
-                            : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+              <section>
+                <h3 className="text-[8px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-3 px-1">Network Channels</h3>
+                <div className="flex flex-wrap gap-2">
+                  {['instagram', 'youtube'].map((platform) => {
+                    if (!creator.socialMedia?.[platform]?.handle) return null;
+                    const Icon = platform === 'instagram' ? Instagram : Youtube;
+                    const handle = creator.socialMedia[platform].handle;
+                    return (
+                      <a 
+                        key={platform}
+                        href={creator.socialMedia[platform].url || `https://${platform}.com/${handle}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all group ${
+                          isDark ? 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-500' : 'border-zinc-200 hover:border-black'
                         }`}
                       >
-                        {niche}
+                        <Icon className="w-4 h-4 transition-transform group-hover:scale-110" />
+                        <span className="text-xs font-medium">@{handle.replace('@', '')}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+
+            {/* Right Column: Mini Stats */}
+            <div className={`p-4 rounded-xl border ${
+              isDark ? 'bg-black/20 border-zinc-800' : 'bg-zinc-50 border-zinc-100'
+            }`}>
+              <h3 className="text-[8px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-4 text-center">Efficiency Metrics</h3>
+              <div className="space-y-4">
+                {[
+                  { label: 'Avg Likes', val: formatNumber(creator.avgLikes || 0), icon: Heart, color: 'text-red-500' },
+                  { label: 'Avg Comments', val: formatNumber(creator.avgComments || 0), icon: MessageCircle, color: 'text-blue-500' },
+                  { label: 'Avg Shares', val: formatNumber(creator.avgShares || 0), icon: Share2, color: 'text-emerald-500' }
+                ].map((metric, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <metric.icon className={`w-4 h-4 ${metric.color}`} />
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">{metric.label}</span>
+                    </div>
+                    <span className="text-sm font-bold">{metric.val}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t border-zinc-800/50">
+                 <h3 className="text-[8px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-2">Focus Areas</h3>
+                 <div className="flex flex-wrap gap-1">
+                    {creator.contentCategories?.map((cat, i) => (
+                      <span key={i} className="px-2 py-1 rounded bg-zinc-500/10 text-[8px] font-bold uppercase tracking-widest text-zinc-400 border border-zinc-500/20">
+                        {cat}
                       </span>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Platform Links */}
-              {(creator.instagram || creator.youtube || creator.twitter) && (
-                <div className={`p-5 rounded-2xl backdrop-blur-sm border shadow-lg ${
-                  isDark 
-                    ? 'bg-gray-800/50 border-gray-700' 
-                    : 'bg-white/70 border-purple-100'
-                }`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className={`p-2 rounded-lg ${
-                      isDark ? 'bg-purple-500/20' : 'bg-purple-100'
-                    }`}>
-                      <Globe className={`w-5 h-5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-                    </div>
-                    <h3 className={`text-base font-semibold ${
-                      isDark ? 'text-gray-100' : 'text-gray-800'
-                    }`}>Social Platforms</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {creator.instagram && (
-                      <a 
-                        href={`https://instagram.com/${creator.instagram}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
-                          isDark 
-                            ? 'bg-gray-700/50 hover:bg-gray-700/70 text-gray-300' 
-                            : 'bg-purple-50/50 hover:bg-purple-100/50 text-gray-700'
-                        }`}
-                      >
-                        <div className="p-1.5 rounded-lg bg-pink-500/20">
-                          <Instagram className="w-5 h-5 text-pink-500" />
-                        </div>
-                        <span className="text-sm font-medium">@{creator.instagram}</span>
-                        <div className="ml-auto">
-                          <svg className={`w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </div>
-                      </a>
-                    )}
-                    {creator.youtube && (
-                      <a 
-                        href={`https://youtube.com/${creator.youtube}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
-                          isDark 
-                            ? 'bg-gray-700/50 hover:bg-gray-700/70 text-gray-300' 
-                            : 'bg-purple-50/50 hover:bg-purple-100/50 text-gray-700'
-                        }`}
-                      >
-                        <div className="p-1.5 rounded-lg bg-red-500/20">
-                          <Youtube className="w-5 h-5 text-red-500" />
-                        </div>
-                        <span className="text-sm font-medium">{creator.youtube}</span>
-                        <div className="ml-auto">
-                          <svg className={`w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </div>
-                      </a>
-                    )}
-                    {creator.twitter && (
-                      <a 
-                        href={`https://twitter.com/${creator.twitter}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
-                          isDark 
-                            ? 'bg-gray-700/50 hover:bg-gray-700/70 text-gray-300' 
-                            : 'bg-purple-50/50 hover:bg-purple-100/50 text-gray-700'
-                        }`}
-                      >
-                        <div className="p-1.5 rounded-lg bg-blue-500/20">
-                          <Twitter className="w-5 h-5 text-blue-500" />
-                        </div>
-                        <span className="text-sm font-medium">@{creator.twitter}</span>
-                        <div className="ml-auto">
-                          <svg className={`w-4 h-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </div>
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Trust Badges */}
-            <div className={`p-5 rounded-2xl backdrop-blur-sm border shadow-lg ${
-              isDark 
-                ? 'bg-gradient-to-r from-gray-800/50 to-gray-800/30 border-gray-700' 
-                : 'bg-gradient-to-r from-purple-50/50 to-pink-50/50 border-purple-100'
-            }`}>
-              <div className="flex items-center gap-2 mb-4">
-                <div className={`p-2 rounded-lg ${
-                  isDark ? 'bg-purple-500/20' : 'bg-purple-100'
-                }`}>
-                  <Shield className={`w-5 h-5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-                </div>
-                <h3 className={`text-base font-semibold ${
-                  isDark ? 'text-gray-100' : 'text-gray-800'
-                }`}>Trust & Verification</h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className={`flex items-center gap-2.5 p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
-                  isDark 
-                    ? 'bg-gray-700/30 hover:bg-gray-700/50' 
-                    : 'bg-white/50 hover:bg-white/70'
-                }`}>
-                  <CheckCircle className={`w-5 h-5 ${isDark ? 'text-green-400' : 'text-green-500'}`} />
-                  <span className={`text-sm font-medium ${
-                    isDark ? 'text-gray-300' : 'text-gray-700'
-                  }`}>Identity Verified</span>
-                </div>
-                <div className={`flex items-center gap-2.5 p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
-                  isDark 
-                    ? 'bg-gray-700/30 hover:bg-gray-700/50' 
-                    : 'bg-white/50 hover:bg-white/70'
-                }`}>
-                  <Award className={`w-5 h-5 ${isDark ? 'text-yellow-400' : 'text-yellow-500'}`} />
-                  <span className={`text-sm font-medium ${
-                    isDark ? 'text-gray-300' : 'text-gray-700'
-                  }`}>Top Rated Creator</span>
-                </div>
-                <div className={`flex items-center gap-2.5 p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
-                  isDark 
-                    ? 'bg-gray-700/30 hover:bg-gray-700/50' 
-                    : 'bg-white/50 hover:bg-white/70'
-                }`}>
-                  <TrendingUp className={`w-5 h-5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-                  <span className={`text-sm font-medium ${
-                    isDark ? 'text-gray-300' : 'text-gray-700'
-                  }`}>Fast Response Time</span>
-                </div>
+                 </div>
               </div>
             </div>
           </div>

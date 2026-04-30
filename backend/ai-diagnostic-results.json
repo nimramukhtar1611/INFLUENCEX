@@ -1,0 +1,27 @@
+{
+  "gemini": {
+    "status": "error",
+    "issues": [
+      "Unknown error: GEMINI_API_KEY not configured"
+    ]
+  },
+  "huggingFace": {
+    "status": "error",
+    "issues": [
+      "Unknown error: HF_API_KEY not configured"
+    ]
+  },
+  "environment": {
+    "status": "error",
+    "issues": [
+      "GEMINI_API_KEY not found",
+      "HF_API_KEY not found",
+      "GEMINI_MODEL not configured",
+      "HF_MODEL not configured"
+    ]
+  },
+  "growthOS": {
+    "status": "error",
+    "error": "No ideas generated or null result"
+  }
+}

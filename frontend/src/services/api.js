@@ -1,5 +1,6 @@
 // services/api.js - COMPLETE PRODUCTION-READY VERSION
 import axios from 'axios';
+import tokenRefreshService from './tokenRefreshService';
 
 // ==================== CONFIGURATION ====================
 const normalizeUrl = (value) => String(value || '').trim().replace(/\/+$/, '');
@@ -36,8 +37,23 @@ const api = axios.create({
 });
 
 // ==================== TOKEN MANAGEMENT ====================
-const getToken = () => localStorage.getItem('token');
-const getRefreshToken = () => localStorage.getItem('refreshToken');
+const getToken = () => {
+  // Try to get from localStorage first (backward compatibility)
+  const localToken = localStorage.getItem('token');
+  if (localToken) return localToken;
+  
+  // For HttpOnly cookies, tokens will be sent automatically
+  return null;
+};
+
+const getRefreshToken = () => {
+  // Try to get from localStorage first (backward compatibility)
+  const localRefreshToken = localStorage.getItem('refreshToken');
+  if (localRefreshToken) return localRefreshToken;
+  
+  // For HttpOnly cookies, refresh token will be sent automatically
+  return null;
+};
 const getActiveBrandContextId = () => localStorage.getItem('activeBrandContextId');
 const getStoredUser = () => {
   try {
@@ -67,44 +83,25 @@ const clearTokens = () => {
 
 // ==================== REQUEST INTERCEPTOR ====================
 api.interceptors.request.use(
-  (config) => {
-    // Add auth token if available
-    const token = getToken();
-    if (token) {
+  async (config) => {
+    const token = localStorage.getItem('token');
+    
+    if (token && token !== 'undefined' && token !== 'null') {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Add refresh token header if it's a refresh request
-    if (config.url?.includes('/auth/refresh') && getRefreshToken()) {
-      config.headers['x-refresh-token'] = getRefreshToken();
+    if (config.url?.includes('/auth/refresh') && localStorage.getItem('refreshToken')) {
+      config.headers['x-refresh-token'] = localStorage.getItem('refreshToken');
     }
 
-    // Send selected brand workspace context for team-member operations.
-    const storedUser = getStoredUser();
+    const storedUser = (() => {
+      try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
+    })();
     const isBrandUser = (storedUser?.userType || storedUser?.role) === 'brand';
-    const isBrandWorkspace = typeof window !== 'undefined' && window.location.pathname.startsWith('/brand');
-    const activeBrandContextId = getActiveBrandContextId();
+    const isBrandWorkspace = window.location.pathname.startsWith('/brand');
+    const activeBrandContextId = localStorage.getItem('activeBrandContextId');
     if (isBrandUser && isBrandWorkspace && activeBrandContextId) {
       config.headers['x-brand-context'] = activeBrandContextId;
-    }
-
-    // Add timestamp to GET requests to avoid cache
-    if (config.method?.toLowerCase() === 'get') {
-      config.params = {
-        ...config.params,
-        _t: Date.now(),
-      };
-    }
-
-    // Add request ID for tracing
-    config.headers['x-request-id'] = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    if (import.meta.env.DEV) {
-      console.log(`🚀 ${config.method?.toUpperCase()} ${config.url}`, {
-        hasToken: !!token,
-        data: config.data,
-        params: config.params,
-      });
     }
 
     return config;
@@ -127,12 +124,69 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+// Retry logic for temporary server issues
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+const shouldRetry = (error) => {
+  const status = error.response?.status;
+  const code = error.code;
+  
+  // Retry on network errors and server errors that might be temporary
+  return (
+    code === 'ECONNRESET' || 
+    code === 'ENOTFOUND' || 
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    status === 503 || // Service Unavailable
+    status === 502 || // Bad Gateway
+    status === 504 || // Gateway Timeout
+    status === 500    // Internal Server Error (might be temporary)
+  );
+};
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (import.meta.env.DEV) {
+      console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+        status: response.status,
+        data: response.data
+      });
+    }
+    
+        
+    return response;
+  },
   async (error) => {
+        
+    if (import.meta.env.DEV) {
+      console.error(`❌ ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
+        status: error.response?.status,
+        message: error.message,
+        data: error.response?.data
+      });
+    }
     const originalRequest = error.config;
 
-    // Prevent infinite loops
+    // Initialize retry count
+    originalRequest._retryCount = originalRequest._retryCount || 0;
+    
+    // Check if we should retry this error (before auth handling)
+    if (shouldRetry(error) && originalRequest._retryCount < MAX_RETRIES) {
+      originalRequest._retryCount++;
+      console.log(`🔄 API request retry ${originalRequest._retryCount}/${MAX_RETRIES} for ${originalRequest.method?.toUpperCase()} ${originalRequest.url}`);
+      
+      // Exponential backoff
+      const delayMs = RETRY_DELAY * Math.pow(2, originalRequest._retryCount - 1);
+      await delay(delayMs);
+      
+      // Retry the request
+      return api(originalRequest);
+    }
+
+    // Prevent infinite loops for auth retries
     if (originalRequest._retry) {
       return Promise.reject(error);
     }
@@ -156,35 +210,44 @@ api.interceptors.response.use(
 
     const { status, data } = error.response;
 
-    // Handle 401 Unauthorized
+    // Handle 401 Unauthorized - IMPROVED RACE CONDITION HANDLING
     if (status === 401 && !originalRequest._retry) {
-      // Don't retry on login or register endpoints
+      // Don't retry on auth endpoints including refresh
       const isAuthEndpoint =
         originalRequest.url?.includes('/admin/login') ||
         originalRequest.url?.includes('/auth/login') ||
         originalRequest.url?.includes('/auth/register') ||
-        originalRequest.url?.includes('/auth/admin/login');
+        originalRequest.url?.includes('/auth/admin/login') ||
+        originalRequest.url?.includes('/auth/refresh') ||
+        originalRequest.url?.includes('/auth/refresh-token');
 
       if (isAuthEndpoint) {
+        // Clear tokens and redirect to login for refresh failures
+        if (originalRequest.url?.includes('/auth/refresh') || originalRequest.url?.includes('/auth/refresh-token')) {
+          console.warn('Refresh endpoint failed, clearing tokens and redirecting');
+          clearTokens();
+          redirectToLogin();
+        }
         return Promise.reject(error);
       }
 
-      // Admin sessions are refreshed through a separate path; avoid user refresh flow.
-      if (isAdminSession()) {
-        clearTokens();
-        redirectToLogin();
+      // Check if token exists - if not, this might be race condition, don't logout yet
+      const currentToken = localStorage.getItem('token');
+      if (!currentToken) {
+        console.warn('No token in localStorage, possible race condition - not logging out');
         return Promise.reject({
           success: false,
-          error: 'Admin session expired. Please login again.',
-          code: 'ADMIN_SESSION_EXPIRED',
+          error: 'Authentication token not available',
+          code: 'NO_TOKEN_RACE_CONDITION',
+          shouldNotLogout: true // Flag to prevent logout
         });
       }
 
       // Check if refresh token exists
       const refreshToken = getRefreshToken();
       if (!refreshToken) {
+        console.warn('No refresh token available, redirecting to login');
         clearTokens();
-        // Redirect to login after clearing
         redirectToLogin();
         return Promise.reject({
           success: false,
@@ -193,6 +256,7 @@ api.interceptors.response.use(
         });
       }
 
+      // Mark request for retry to prevent infinite loops
       originalRequest._retry = true;
 
       // If already refreshing, queue request
@@ -210,33 +274,23 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await axios.post(
-          `${API_BASE_URL}/auth/refresh-token`,
-          { refreshToken },
-          {
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
+        // Use tokenRefreshService to handle refresh (centralized logic)
+        const newToken = await tokenRefreshService.refreshToken();
+        
+        // Update default auth header
+        api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
 
-        if (response.data?.success && response.data?.token) {
-          const { token, refreshToken: newRefreshToken } = response.data;
+        // Process queued requests
+        processQueue(null, newToken);
 
-          setTokens(token, newRefreshToken);
-
-          // Update default auth header
-          api.defaults.headers.common.Authorization = `Bearer ${token}`;
-
-          // Process queued requests
-          processQueue(null, token);
-
-          // Retry original request
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        } else {
-          throw new Error('Refresh failed');
-        }
+        // Retry original request
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
       } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError.message);
         processQueue(refreshError, null);
+        
+        // Clear tokens and redirect on refresh failure
         clearTokens();
         redirectToLogin();
         return Promise.reject({
@@ -270,12 +324,20 @@ api.interceptors.response.use(
     // Handle 429 Rate Limit
     if (status === 429) {
       const retryAfter = error.response.headers['retry-after'] || 60;
-      return Promise.reject({
-        success: false,
-        error: `Too many requests. Please try again after ${retryAfter} seconds.`,
-        code: 'RATE_LIMIT',
-        retryAfter,
-      });
+      console.warn(`⚠️ Rate limit hit, retry after ${retryAfter}s`);
+      
+      // Return a promise that rejects after delay to prevent immediate retry
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            success: false,
+            error: `Rate limit exceeded. Please try again in ${retryAfter} seconds.`,
+            code: 'RATE_LIMIT',
+            retryAfter,
+            shouldNotLogout: true // Flag to prevent logout
+          });
+        }, Math.min(retryAfter * 1000, 5000)); // Cap at 5 seconds max
+      }).then(rejection => Promise.reject(rejection));
     }
 
     // Handle 500+ Server Errors

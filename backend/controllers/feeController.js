@@ -2,58 +2,55 @@
 const Fee = require('../models/Fee');
 const Deal = require('../models/Deal');
 const Payment = require('../models/Payment');
-const subscriptionPlans = require('../config/subscriptionPlans');
+const Subscription = require('../models/Subscription');
+const feeService = require('../services/feeService');
 const asyncHandler = require('express-async-handler');
 
 // @desc    Calculate platform fees for a deal
 // @route   POST /api/fees/calculate
 // @access  Private
 const calculateFees = asyncHandler(async (req, res) => {
-  const { amount, userType, planId = 'free' } = req.body;
+  const { amount, userType, planId = 'free', options = {} } = req.body;
 
-  // Get base commission rate
-  let commissionRate = subscriptionPlans.commissions.default;
-  
-  // Adjust based on plan
-  if (planId === 'professional') {
-    commissionRate = subscriptionPlans.commissions.premium;
-  } else if (planId === 'enterprise') {
-    commissionRate = subscriptionPlans.commissions.enterprise;
+  try {
+    // Calculate fees using dynamic fee service
+    const feeBreakdown = await feeService.calculateTotalFees(amount, {
+      includeCommission: true,
+      includeEscrow: options.includeEscrow || false,
+      includeWithdrawal: options.includeWithdrawal || false,
+      includeTax: options.includeTax || false
+    });
+
+    // Add subscription plan adjustments if needed
+    let adjustedBreakdown = { ...feeBreakdown };
+    
+    if (planId && planId !== 'free') {
+      // Apply plan-based discounts (could be extended based on subscription plans)
+      const planDiscounts = {
+        professional: 0.9, // 10% discount
+        enterprise: 0.8   // 20% discount
+      };
+      
+      const discount = planDiscounts[planId] || 1;
+      if (discount < 1) {
+        adjustedBreakdown.fees.commission.commissionAmount *= discount;
+        adjustedBreakdown.totalFees *= discount;
+        adjustedBreakdown.netAmount = feeBreakdown.originalAmount - adjustedBreakdown.totalFees;
+        adjustedBreakdown.planDiscount = (1 - discount) * 100;
+      }
+    }
+
+    res.json({
+      success: true,
+      fees: adjustedBreakdown
+    });
+  } catch (error) {
+    console.error('Fee calculation error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to calculate fees'
+    });
   }
-
-  // Calculate platform fee
-  const platformFee = (amount * commissionRate) / 100;
-
-  // Calculate transaction fees (Stripe)
-  const stripeFee = (amount * subscriptionPlans.transactionFees.stripe) / 100 + 
-                    subscriptionPlans.transactionFees.stripeFixed;
-
-  // Total fees
-  const totalFees = platformFee + stripeFee;
-
-  // Net amount for creator
-  const netAmount = amount - totalFees;
-
-  // Breakdown
-  const breakdown = {
-    originalAmount: amount,
-    platformFee: {
-      rate: commissionRate,
-      amount: platformFee
-    },
-    transactionFee: {
-      rate: subscriptionPlans.transactionFees.stripe,
-      fixed: subscriptionPlans.transactionFees.stripeFixed,
-      amount: stripeFee
-    },
-    totalFees,
-    netAmount
-  };
-
-  res.json({
-    success: true,
-    fees: breakdown
-  });
 });
 
 // @desc    Apply platform fees to a deal
@@ -62,74 +59,131 @@ const calculateFees = asyncHandler(async (req, res) => {
 const applyFees = asyncHandler(async (req, res) => {
   const { dealId } = req.body;
 
-  const deal = await Deal.findById(dealId)
-    .populate('brandId')
-    .populate('creatorId');
+  try {
+    const deal = await Deal.findById(dealId)
+      .populate('brandId')
+      .populate('creatorId');
 
-  if (!deal) {
-    res.status(404);
-    throw new Error('Deal not found');
-  }
-
-  // Get user plans
-  const brandPlan = await Subscription.findOne({ userId: deal.brandId._id }) || { planId: 'free' };
-  const creatorPlan = await Subscription.findOne({ userId: deal.creatorId._id }) || { planId: 'free' };
-
-  // Calculate fees
-  const commissionRate = subscriptionPlans.commissions[brandPlan.planId] || 
-                        subscriptionPlans.commissions.default;
-
-  const platformFee = (deal.budget * commissionRate) / 100;
-  const stripeFee = (deal.budget * subscriptionPlans.transactionFees.stripe) / 100 + 
-                    subscriptionPlans.transactionFees.stripeFixed;
-  const totalFees = platformFee + stripeFee;
-  const netAmount = deal.budget - totalFees;
-
-  // Update deal with fee information
-  deal.platformFee = platformFee;
-  deal.stripeFee = stripeFee;
-  deal.totalFees = totalFees;
-  deal.netAmount = netAmount;
-  await deal.save();
-
-  // Create fee records
-  await Fee.create({
-    type: 'platform_commission',
-    calculationType: 'percentage',
-    percentage: commissionRate,
-    fixedAmount: platformFee,
-    payerType: 'brand',
-    applicableTo: ['all_deals'],
-    isActive: true
-  });
-
-  res.json({
-    success: true,
-    fees: {
-      platformFee,
-      stripeFee,
-      totalFees,
-      netAmount,
-      commissionRate
+    if (!deal) {
+      res.status(404);
+      throw new Error('Deal not found');
     }
-  });
+
+    // Get user plans for potential discounts
+    const brandPlan = await Subscription.findOne({ userId: deal.brandId._id }) || { planId: 'free' };
+    
+    // Calculate fees using dynamic fee service
+    const feeBreakdown = await feeService.calculateTotalFees(deal.budget, {
+      includeCommission: true,
+      includeEscrow: deal.paymentType === 'escrow',
+      includeTax: false // Tax handled separately
+    });
+
+    // Apply plan-based discounts if applicable
+    let finalFees = { ...feeBreakdown };
+    let commissionRate = feeBreakdown.fees.commission.commissionRate;
+    
+    if (brandPlan.planId !== 'free') {
+      const planDiscounts = {
+        professional: 0.9,
+        enterprise: 0.8
+      };
+      
+      const discount = planDiscounts[brandPlan.planId] || 1;
+      if (discount < 1) {
+        finalFees.fees.commission.commissionAmount *= discount;
+        finalFees.totalFees *= discount;
+        finalFees.netAmount = deal.budget - finalFees.totalFees;
+        commissionRate *= discount;
+      }
+    }
+
+    // Update deal with fee information
+    deal.platformFee = finalFees.fees.commission.commissionAmount;
+    deal.totalFees = finalFees.totalFees;
+    deal.netAmount = finalFees.netAmount;
+    deal.commissionRate = commissionRate;
+    
+    if (deal.paymentType === 'escrow') {
+      deal.escrowFee = finalFees.fees.escrow?.escrowFeeAmount || 0;
+    }
+    
+    await deal.save();
+
+    // Create fee records
+    await Fee.create({
+      type: 'platform_commission',
+      calculationType: 'percentage',
+      percentage: commissionRate,
+      fixedAmount: finalFees.fees.commission.commissionAmount,
+      payerType: 'brand',
+      applicableTo: ['all_deals'],
+      dealId: deal._id,
+      isActive: true
+    });
+
+    // Create escrow fee record if applicable
+    if (deal.paymentType === 'escrow' && finalFees.fees.escrow) {
+      await Fee.create({
+        type: 'escrow_fee',
+        calculationType: 'percentage',
+        percentage: finalFees.fees.escrow.escrowFeeRate,
+        fixedAmount: finalFees.fees.escrow.escrowFeeAmount,
+        payerType: 'brand',
+        applicableTo: ['escrow_deals'],
+        dealId: deal._id,
+        isActive: true
+      });
+    }
+
+    res.json({
+      success: true,
+      fees: {
+        platformFee: finalFees.fees.commission.commissionAmount,
+        escrowFee: finalFees.fees.escrow?.escrowFeeAmount || 0,
+        totalFees: finalFees.totalFees,
+        netAmount: finalFees.netAmount,
+        commissionRate
+      }
+    });
+  } catch (error) {
+    console.error('Apply fees error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to apply fees'
+    });
+  }
 });
 
 // @desc    Get fee configuration
 // @route   GET /api/fees/config
 // @access  Private/Admin
 const getFeeConfig = asyncHandler(async (req, res) => {
-  const fees = await Fee.find({ isActive: true });
+  try {
+    const fees = await Fee.find({ isActive: true });
+    const currentFees = await feeService.getFees();
 
-  res.json({
-    success: true,
-    fees,
-    defaults: {
-      commissions: subscriptionPlans.commissions,
-      transactionFees: subscriptionPlans.transactionFees,
-      withdrawalFees: subscriptionPlans.withdrawalFees
-    }
-  });
+    res.json({
+      success: true,
+      fees,
+      currentFees,
+      defaults: {
+        commissionRate: currentFees.commissionRate,
+        escrowFee: currentFees.escrowFee,
+        withdrawalFee: currentFees.withdrawalFee,
+        featuredListingFee: currentFees.featuredListingFee,
+        taxRate: currentFees.taxRate,
+        minPayoutAmount: currentFees.minPayoutAmount,
+        minEscrowAmount: currentFees.minEscrowAmount
+      }
+    });
+  } catch (error) {
+    console.error('Get fee config error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get fee configuration'
+    });
+  }
 });
 
 // @desc    Update fee configuration

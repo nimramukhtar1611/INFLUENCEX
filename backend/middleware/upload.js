@@ -284,11 +284,17 @@ const uploadFields = (fields, options = {}) => {
 
 // ==================== SPECIALIZED PRESETS ====================
 
-const uploadProfilePicture = uploadSingle('profilePicture', {
-  required: true,
-  allowedCategories: ['image'],
-  maxSizePerFile: 5 * 1024 * 1024, // 5MB
-});
+const uploadProfilePicture = [
+  upload.single('profilePicture'),
+  validateFileUpload({
+    required: true,
+    allowedCategories: ['image'],
+    maxSizePerFile: 5 * 1024 * 1024, // 5MB
+    maxFiles: 1,
+    fieldName: 'profilePicture'
+  }),
+  validateFileContent
+];
 
 const uploadCoverPhoto = uploadSingle('coverPhoto', {
   required: true,

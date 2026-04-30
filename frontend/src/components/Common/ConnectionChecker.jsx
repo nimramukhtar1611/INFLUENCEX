@@ -59,7 +59,7 @@ const ConnectionChecker = () => {
     // Check every 30 seconds
     const interval = setInterval(checkConnection, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [checkConnection]);
 
   if (isConnected) return null;
 

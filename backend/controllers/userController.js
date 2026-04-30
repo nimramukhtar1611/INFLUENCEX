@@ -121,7 +121,7 @@ const deleteUser = asyncHandler(async (req, res) => {
     await Creator.findByIdAndDelete(user._id);
   }
 
-  await user.remove();
+  await User.findByIdAndDelete(user._id);
 
   res.json({
     success: true,

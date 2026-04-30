@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-04-28T08:19:32.930Z",
+  "tests": [
+    {
+      "name": "User Registration & Login",
+      "passed": false,
+      "details": "Registration/login failed",
+      "error": "Request failed with status code 404",
+      "timestamp": "2026-04-28T08:19:39.235Z"
+    },
+    {
+      "name": "Token Expiry Check",
+      "passed": false,
+      "details": "No access token available",
+      "error": null,
+      "timestamp": "2026-04-28T08:19:39.237Z"
+    },
+    {
+      "name": "Server Crash Simulation",
+      "passed": false,
+      "details": "Test failed",
+      "error": "Request failed with status code 404",
+      "timestamp": "2026-04-28T08:19:42.320Z"
+    },
+    {
+      "name": "Token Refresh Mechanism",
+      "passed": false,
+      "details": "No refresh token available",
+      "error": null,
+      "timestamp": "2026-04-28T08:19:42.334Z"
+    },
+    {
+      "name": "Long-Term Session Persistence",
+      "passed": false,
+      "details": "Token lasts 0.0 days (should be >20)",
+      "error": null,
+      "timestamp": "2026-04-28T08:19:42.336Z"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 0,
+    "failed": 5
+  }
+}

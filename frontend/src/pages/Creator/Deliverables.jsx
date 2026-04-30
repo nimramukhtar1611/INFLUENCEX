@@ -205,7 +205,10 @@ const CreatorDeliverables = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-12 h-12 animate-spin text-indigo-600" />
+        <div className="text-center">
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading deliverables...</p>
+        </div>
       </div>
     );
   }
@@ -233,13 +236,13 @@ const CreatorDeliverables = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 mb-6">
         <Link to={`/creator/deals/${dealId}`} className="p-2 hover:bg-gray-100 rounded-lg">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Submit Deliverables</h1>
-          <p className="text-gray-600">{deal.brandId?.brandName} — {deal.campaignId?.title}</p>
+          <h1 className="text-2xl font-bold text-gray-900">Campaign Deliverables</h1>
+          <p className="text-sm text-gray-600 mt-1">Submit your content and track approval status for {deal.campaignId?.title || 'this campaign'}.</p>
         </div>
       </div>
 
@@ -417,7 +420,7 @@ const CreatorDeliverables = () => {
                   />
                   <label htmlFor={`file-${d._id}`} className="cursor-pointer">
                     {submissions[d._id].uploading ? (
-                      <Loader className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-2" />
+                      <Loader className="w-8 h-8 text-zinc-500 animate-spin mx-auto mb-2" />
                     ) : (
                       <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     )}

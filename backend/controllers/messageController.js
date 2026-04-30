@@ -541,6 +541,33 @@ const getUnreadCount = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { totalUnread } });
 });
 
+// ==================== CONVERSATION UNREAD COUNT ====================
+// @route GET /api/messages/conversations/:conversationId/unread-count
+const getConversationUnreadCount = asyncHandler(async (req, res) => {
+  const { conversationId } = req.params;
+
+  // Verify user is participant in conversation
+  const conversation = await Conversation.findOne({
+    _id: conversationId,
+    participants: { $elemMatch: { user_id: req.user._id, is_active: true } }
+  });
+
+  if (!conversation) {
+    res.status(403);
+    throw new Error('Access denied');
+  }
+
+  // Calculate unread count from Message model (actual read state)
+  const unreadCount = await Message.countDocuments({
+    conversationId,
+    senderId: { $ne: req.user._id },
+    'readBy.userId': { $ne: req.user._id },
+    isDeleted: false
+  });
+
+  res.json({ success: true, data: { unreadCount } });
+});
+
 // ==================== BLOCK / UNBLOCK ====================
 // @route POST /api/messages/block/:userId
 const blockUser = asyncHandler(async (req, res) => {
@@ -599,6 +626,7 @@ module.exports = {
   unpinConversation,
   searchMessages,
   getUnreadCount,
+  getConversationUnreadCount,
   blockUser,
   unblockUser,
   getBlockedUsers

@@ -1,47 +1,139 @@
-// pages/Creator/Dashboard.jsx - COMPLETE FIXED VERSION
-import React, { useState, useEffect } from 'react';
+// CreatorDashboard.jsx - Complete professional dashboard with dark/light mode
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  TrendingUp,
-  Users,
-  DollarSign,
-  Clock,
-  Star,
-  Award,
-  ChevronRight,
-  RefreshCw,
-  Calendar,
-  Activity,
-  Briefcase,
-  CheckCircle,
-  User,
-  Wallet,
-  BarChart3,
-  Loader,
-  AlertCircle
+  TrendingUp, Users, DollarSign, Clock, Star, Award,
+  ChevronRight, Calendar, Activity, Briefcase, CheckCircle,
+  User, Wallet, BarChart3, Loader, AlertCircle, Eye,
+  Heart, MessageSquare, Share2, PieChart, Zap, RefreshCw
 } from 'lucide-react';
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart as RePieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
 import { useCreatorData } from '../../hooks/useCreatorData';
 import { useEarnings } from '../../hooks/useEarnings';
 import { formatCurrency, formatNumber, timeAgo } from '../../utils/helpers';
-import StatsCard from '../../components/Common/StatsCard';
-import ChartCard from '../../components/Common/ChartCard';
-import Button from '../../components/UI/Button';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../hooks/useTheme';
 
-const CreatorDashboard = () => {
+// Stats Card Component
+const StatsCard = ({ title, value, change, icon: Icon, link, color = 'indigo' }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  // ==================== HOOKS ====================
+  
+  const CardWrapper = link ? Link : 'div';
+  const isPositive = change?.startsWith('+');
+
+  // Map the color prop to Tailwind shades for the hover effects
+  const colorMap = {
+    indigo: 'group-hover:text-indigo-500',
+    emerald: 'group-hover:text-emerald-500',
+    rose: 'group-hover:text-rose-500',
+    amber: 'group-hover:text-amber-500',
+    gray: 'group-hover:text-zinc-400'
+  };
+
+  return (
+    <CardWrapper to={link || '#'} className="block h-full group outline-none">
+      <div className={`
+        relative overflow-hidden p-6 rounded-[2rem] border transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
+        h-full flex flex-col justify-between
+        ${isDark 
+          ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-600 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+          : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.04)]'}
+        hover:-translate-y-1.5
+      `}>
+        
+        {/* Subtle Background Glow - Pulsates on hover */}
+        <div className={`
+          absolute -right-8 -top-8 w-32 h-32 blur-3xl rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-700
+          ${isDark ? 'bg-white' : 'bg-black'}
+        `} />
+
+        <div className="flex justify-between items-start relative z-10">
+          <div className={`
+            p-3 rounded-2xl transition-all duration-500 transform group-hover:scale-110 group-hover:rotate-3
+            ${isDark 
+              ? 'bg-zinc-800 text-zinc-400 group-hover:bg-white group-hover:text-black' 
+              : 'bg-zinc-50 text-zinc-500 group-hover:bg-black group-hover:text-white'}
+          `}>
+            {Icon && <Icon size={18} strokeWidth={2.5} />}
+          </div>
+
+          {change && (
+            <div className={`
+              text-[10px] font-black px-2.5 py-1 rounded-lg tracking-tighter transition-all duration-500
+              ${isPositive 
+                ? 'text-emerald-500 bg-emerald-500/10' 
+                : 'text-zinc-400 bg-zinc-400/10'}
+              group-hover:scale-105
+            `}>
+              {change}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8 relative z-10">
+          <h3 className={`
+            text-[10px] font-black uppercase tracking-[0.2em] mb-1 transition-colors duration-500
+            ${isDark ? 'text-zinc-600 group-hover:text-zinc-400' : 'text-zinc-400 group-hover:text-zinc-600'}
+          `}>
+            {title}
+          </h3>
+          
+          <div className="flex items-baseline gap-2">
+            <p className={`
+              text-3xl font-mono font-bold tracking-tighter transition-all duration-500
+              ${isDark ? 'text-white' : 'text-black'}
+            `}>
+              {value}
+            </p>
+            
+            {/* The "Activity Bar" - Grows when the card is hovered/focused */}
+            <div className={`
+              h-[3px] w-0 group-hover:w-8 rounded-full transition-all duration-700 ease-out
+              ${isDark ? 'bg-zinc-700 group-hover:bg-white' : 'bg-zinc-200 group-hover:bg-black'}
+            `} />
+          </div>
+        </div>
+
+        {/* Bottom Corner Accent - Only visible on hover */}
+        <div className={`
+          absolute bottom-2 right-4 text-[10px] font-black tracking-widest opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-2 group-hover:translate-y-0
+          ${isDark ? 'text-zinc-800' : 'text-zinc-200'}
+        `}>
+          DATA.REF
+        </div>
+      </div>
+    </CardWrapper>
+  );
+};
+
+// Chart Card Component
+const ChartCard = ({ title, children, action }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  
+  return (
+    <div className={`p-5 rounded-xl border shadow-sm ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-black'}`}>
+          {title}
+        </h3>
+        {action && <div>{action}</div>}
+      </div>
+      <div>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// Main Dashboard Component
+const CreatorDashboard = () => {
+  const { theme, isDark, toggleTheme } = useTheme();
+  
   const {
     loading: dataLoading,
     refreshing,
@@ -53,556 +145,743 @@ const CreatorDashboard = () => {
     refreshData
   } = useCreatorData();
 
-  const {
-    balance,
-    pendingBalance,
-    getGrowthPercentage,
-    loading: earningsLoading
-  } = useEarnings();
-
-  // ==================== LOCAL STATE ====================
+  const { balance, pendingBalance, getGrowthPercentage, loading: earningsLoading } = useEarnings();
+  
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('30d');
-  const [upcomingDeadlines, setUpcomingDeadlines] = useState([]);
-  const [recentActivity, setRecentActivity] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview');
   const [error, setError] = useState(null);
 
-  // ==================== UPDATE LOADING STATE ====================
   useEffect(() => {
-    if (!dataLoading && !earningsLoading) {
-      setLoading(false);
-    }
+    if (!dataLoading && !earningsLoading) setLoading(false);
   }, [dataLoading, earningsLoading]);
 
-  // ==================== COMPUTE UPCOMING DEADLINES ====================
-  useEffect(() => {
-    if (deals && deals.length > 0) {
-      const deadlines = deals
-        .filter(d => ['accepted', 'in-progress'].includes(d.status) && d.deadline)
-        .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
-        .slice(0, 3);
-      setUpcomingDeadlines(deadlines);
-    } else {
-      setUpcomingDeadlines([]);
-    }
+  // Computed data
+  const activeDeals = useMemo(() => (deals || []).filter(d => ['accepted', 'in-progress'].includes(d.status)), [deals]);
+  const completedDeals = useMemo(() => (deals || []).filter(d => d.status === 'completed'), [deals]);
+  const pendingDeals = useMemo(() => (deals || []).filter(d => d.status === 'pending'), [deals]);
+  
+  const upcomingDeadlines = useMemo(() => {
+    return (deals || [])
+      .filter(d => ['accepted', 'in-progress'].includes(d.status) && d.deadline)
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+      .slice(0, 4);
   }, [deals]);
 
-  // ==================== COMPUTE RECENT ACTIVITY ====================
-  useEffect(() => {
-    if (deals && deals.length > 0) {
-      const activity = deals.slice(0, 5).map(deal => ({
-        id: deal._id,
-        title: deal.campaignId?.title || 'Deal',
-        brand: deal.brandId?.brandName || 'Brand',
-        amount: deal.budget,
-        status: deal.status,
-        date: deal.updatedAt || deal.createdAt,
-        url: `/creator/deals/${deal._id}`
-      }));
-      setRecentActivity(activity);
-    } else {
-      setRecentActivity([]);
-    }
+  const recentActivity = useMemo(() => {
+    return (deals || []).slice(0, 5).map(deal => ({
+      id: deal._id,
+      title: deal.campaignId?.title || 'Deal',
+      brand: deal.brandId?.brandName || 'Brand',
+      amount: deal.budget,
+      status: deal.status,
+      date: deal.updatedAt || deal.createdAt,
+    }));
   }, [deals]);
 
-  // ==================== PREPARE PERFORMANCE DATA ====================
-  const performanceData = (analytics?.monthly || []).map(item => ({
-    month: item.month || `${item._id?.month || ''}/${item._id?.year || ''}`,
-    earnings: item.earnings || 0,
-    deals: item.deals || 0
-  }));
+  const performanceData = useMemo(() => {
+    return (analytics?.monthly || []).map(item => ({
+      month: item.month || `${item._id?.month || ''}/${item._id?.year || ''}`,
+      earnings: item.earnings || 0,
+      deals: item.deals || 0
+    }));
+  }, [analytics]);
 
-  // ==================== PREPARE PLATFORM DATA ====================
-  const platformData = (() => {
-    if (analytics?.platforms && analytics.platforms.length > 0) {
-      return analytics.platforms.map(p => ({
-        name: p.name,
-        value: p.followers || 0,
-        color: p.name === 'instagram' ? '#E1306C' :
-               p.name === 'youtube'   ? '#FF0000' :
-               p.name === 'tiktok'    ? '#000000' : '#4F46E5'
-      }));
+  const platformData = useMemo(() => {
+    if (analytics?.platforms?.length) {
+      return analytics.platforms.map(p => ({ name: p.name, value: p.followers || 0 }));
     }
-    // Fallback to socialMedia from profile
     if (profile?.socialMedia) {
       const platforms = [];
-      if (profile.socialMedia.instagram?.followers)
-        platforms.push({ name: 'instagram', value: profile.socialMedia.instagram.followers, color: '#E1306C' });
-      if (profile.socialMedia.youtube?.subscribers)
-        platforms.push({ name: 'youtube', value: profile.socialMedia.youtube.subscribers, color: '#FF0000' });
-      if (profile.socialMedia.tiktok?.followers)
-        platforms.push({ name: 'tiktok', value: profile.socialMedia.tiktok.followers, color: '#000000' });
-      if (profile.socialMedia.twitter?.followers)
-        platforms.push({ name: 'twitter', value: profile.socialMedia.twitter.followers, color: '#1DA1F2' });
+      if (profile.socialMedia.instagram?.followers) platforms.push({ name: 'instagram', value: profile.socialMedia.instagram.followers });
+      if (profile.socialMedia.youtube?.subscribers) platforms.push({ name: 'youtube', value: profile.socialMedia.youtube.subscribers });
+      if (profile.socialMedia.tiktok?.followers) platforms.push({ name: 'tiktok', value: profile.socialMedia.tiktok.followers });
       return platforms;
     }
     return [];
-  })();
+  }, [analytics, profile]);
 
-  // ==================== COMPUTE STATS ====================
-  const activeDeals = (deals || []).filter(d => ['accepted', 'in-progress'].includes(d.status));
-  const completedDeals = (deals || []).filter(d => d.status === 'completed');
-  const pendingDeals = (deals || []).filter(d => d.status === 'pending');
-
-  // ==================== METRICS ====================
-  const metrics = [
-    {
-      title: 'Available Balance',
-      value: formatCurrency(balance || 0),
-      change: getGrowthPercentage ? getGrowthPercentage() : '0%',
-      icon: DollarSign,
-      color: 'green',
-      link: '/creator/earnings'
-    },
-    {
-      title: 'Active Deals',
-      value: activeDeals.length.toString(),
-      change: `${completedDeals.length} completed`,
-      icon: Briefcase,
-      color: 'blue',
-      link: '/creator/deals'
-    },
-    {
-      title: 'Total Followers',
-      value: formatNumber(profile?.totalFollowers || 0),
-      change: `${(profile?.averageEngagement || 0).toFixed(1)}% engagement`,
-      icon: Users,
-      color: 'purple',
-      link: '/creator/analytics'
-    },
-    {
-      title: 'Pending Earnings',
-      value: formatCurrency(pendingBalance || 0),
-      change: `${pendingDeals.length} deals pending`,
-      icon: Clock,
-      color: 'orange',
-      link: '/creator/earnings'
-    }
+  const engagementMetrics = [
+    { label: 'Impressions', value: formatNumber(analytics?.engagement?.impressions || 0), icon: Eye },
+    { label: 'Likes', value: formatNumber(analytics?.engagement?.likes || 0), icon: Heart },
+    { label: 'Comments', value: formatNumber(analytics?.engagement?.comments || 0), icon: MessageSquare },
+    { label: 'Shares', value: formatNumber(analytics?.engagement?.shares || 0), icon: Share2 },
   ];
 
-  // ==================== HANDLE REFRESH ====================
+  const summaryMetrics = [
+    { title: 'Total Earnings', value: formatCurrency(stats?.totalEarnings || 0), icon: DollarSign, color: 'green' },
+    { title: 'Total Followers', value: formatNumber(profile?.totalFollowers || 0), icon: Users, color: 'blue' },
+    { title: 'Avg Engagement', value: `${(profile?.averageEngagement || 0).toFixed(1)}%`, icon: Activity, color: 'purple' },
+    { title: 'Completed Deals', value: stats?.completedDeals || 0, icon: Award, color: 'orange' },
+    { title: 'Avg Rating', value: (stats?.averageRating || 0).toFixed(1), icon: Star, color: 'yellow' },
+    { title: 'Active Deals', value: stats?.activeDeals || 0, icon: Briefcase, color: 'blue' },
+  ];
+
+  const metrics = [
+    { title: 'Available Balance', value: formatCurrency(balance || 0), change: getGrowthPercentage ? getGrowthPercentage() : '0%', icon: DollarSign, color: 'green' },
+    { title: 'Active Deals', value: activeDeals.length.toString(), change: `${completedDeals.length} completed`, icon: Briefcase, color: 'blue' },
+    { title: 'Total Followers', value: formatNumber(profile?.totalFollowers || 0), change: `${(profile?.averageEngagement || 0).toFixed(1)}% engagement`, icon: Users, color: 'purple' },
+    { title: 'Pending Earnings', value: formatCurrency(pendingBalance || 0), change: `${pendingDeals.length} deals pending`, icon: Clock, color: 'orange' }
+  ];
+
   const handleRefresh = async () => {
     try {
       await refreshData();
       toast.success('Dashboard refreshed');
     } catch (err) {
-      console.error('Refresh error:', err);
-      toast.error('Failed to refresh dashboard');
+      toast.error('Failed to refresh');
     }
   };
 
-  // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
+      <div className={`min-h-screen flex items-center justify-center`}>
         <div className="text-center">
-          <Loader className="w-16 h-16 animate-spin text-[#667eea] mx-auto mb-4" />
-          <p className={`text-lg ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ==================== ERROR STATE ====================
-  if (error) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-        <div className={`text-center max-w-md mx-auto p-6 rounded-xl ${isDark ? 'bg-red-950/40 border border-red-900' : 'bg-red-50'}`}>
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className={`text-xl font-bold mb-2 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Unable to Load Dashboard</h2>
-          <p className={`mb-4 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{error}</p>
-          <Button variant="primary" onClick={handleRefresh}>
-            Try Again
-          </Button>
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 sm:p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
-        <div className="flex items-center gap-4">
-          {profile?.profilePicture ? (
-            <img
-              src={profile.profilePicture}
-              alt={profile.displayName}
-              className="w-12 h-12 rounded-full object-cover border-2 border-[#667eea]"
-            />
-          ) : (
-            <div className="w-12 h-12 bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-full flex items-center justify-center">
-              <User className="w-6 h-6 text-white" />
-            </div>
-          )}
+    <div className={`min-h-screen`}>
+      <div className="relative z-10 max-w-7xl mx-auto px-6 pt-8">
+        <div className="flex justify-between items-center mb-6">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
-                Welcome back, {profile?.displayName || 'Creator'}!
-              </h1>
-              {profile?.isVerified && (
-                <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium flex items-center">
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  Verified
-                </span>
-              )}
-            </div>
-            <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>
-              {profile?.handle && `${profile.handle} • `}
-              {profile?.niches?.slice(0, 2).join(', ')}
-              {profile?.niches?.length > 2 && ' ...'}
+            <h1 className={`text-3xl font-semibold tracking-tight ${isDark ? 'text-white' : 'text-black'}`}>
+              Creator <span className="font-bold">Dashboard</span>
+            </h1>
+            <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              Track your performance, earnings, and campaign activities in one place.
             </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            icon={RefreshCw}
+          <button
             onClick={handleRefresh}
-            loading={refreshing}
-          >
-            Refresh
-          </Button>
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className={`px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm ${
-              isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100' : 'bg-white/50 border-gray-300/50 text-gray-900'
+            disabled={refreshing}
+            className={`p-2 rounded-lg transition-all border ${
+              refreshing 
+                ? isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-500'
+                : isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white' : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'
             }`}
           >
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="90d">Last 90 Days</option>
-          </select>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-          {metrics.map((metric, index) => (
-            <Link key={index} to={metric.link} className="block h-full">
-              <StatsCard {...metric} className="h-full min-h-[180px]" />
-            </Link>
+        {/* Tab Navigation - Smaller height */}
+        <div className="flex gap-1 mb-8 p-1 bg-zinc-100 dark:bg-zinc-900 w-fit rounded-lg">
+          {['overview', 'analytics'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
+                activeTab === tab
+                  ? 'bg-white dark:bg-black text-black dark:text-white shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+              }`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* Left Column - Active Deals + Chart + Activity */}
-          <div className="xl:col-span-2 space-y-8">
-            {/* Active Deals */}
-            <div className="rounded-xl shadow-sm overflow-hidden border bg-white border-gray-200">
-              <div className="p-6 border-b flex justify-between items-center border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Active Deals</h2>
-                <Link
-                  to="/creator/deals"
-                  className="text-[#667eea] hover:text-[#5a67d8] text-sm font-medium flex items-center transition-colors"
-                >
-                  View All <ChevronRight className="w-4 h-4 ml-1" />
-                </Link>
-              </div>
-              <div className="divide-y divide-gray-200">
-                {activeDeals.length > 0 ? (
-                  activeDeals.slice(0, 3).map((deal) => (
-                    <Link key={deal._id} to={`/creator/deals/${deal._id}`}>
-                      <div className="p-6 transition-all duration-200 hover:bg-gray-50 border-b border-gray-200">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1 mr-4">
-                            <h3 className="font-medium text-gray-900 truncate">
-                              {deal.brandId?.brandName || 'Brand'}
-                            </h3>
-                            <p className="text-sm mt-0.5 text-gray-600">
-                              {deal.campaignId?.title || 'Campaign'}
-                            </p>
-                          </div>
-                          <span className="text-lg font-bold text-[#667eea] flex-shrink-0">
-                            {formatCurrency(deal.budget || 0)}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                          <div className="flex items-center text-sm text-gray-600">
-                            <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                            {deal.deadline ? new Date(deal.deadline).toLocaleDateString() : 'No deadline'}
-                          </div>
-                          <div className="flex items-center text-sm text-gray-600">
-                            <Activity className="w-4 h-4 mr-2 text-gray-400" />
-                            {deal.deliverables?.length || 0} deliverables
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              deal.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                              deal.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                              deal.status === 'revision' ? 'bg-orange-100 text-orange-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}
-                          >
-                            {deal.status}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 rounded-full h-2 bg-gray-200">
-                              <div
-                                className="bg-[#667eea] h-2 rounded-full"
-                                style={{ width: `${deal.progress || 0}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-gray-600">{deal.progress || 0}%</span>
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="p-12 text-center">
-                    <Briefcase className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <h3 className="text-base font-medium mb-1 text-gray-900">No active deals</h3>
-                    <p className="text-sm mb-4 text-gray-500">Browse available campaigns to get started</p>
-                    <Link to="/creator/available-deals">
-                      <Button variant="primary" size="sm">Find Deals</Button>
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Main Content */}
+        <div>
+          {/* OVERVIEW TAB */}
+          {activeTab === 'overview' && (
+         <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              {metrics.map((metric, idx) => (
+                <StatsCard key={idx} {...metric} />
+              ))}
+            </div>
 
-            {/* Performance Chart */}
-            <ChartCard title="Performance Overview">
-              {performanceData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={performanceData}>
-                    <defs>
-                      <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => formatCurrency(value)} />
-                    <Area
-                      type="monotone"
-                      dataKey="earnings"
-                      stroke="#4F46E5"
-                      fillOpacity={1}
-                      fill="url(#colorEarnings)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex flex-col items-center justify-center text-gray-400">
-                  <BarChart3 className="w-10 h-10 mb-2 opacity-30" />
-                  <p className="text-sm">Complete your first deal to see earnings data</p>
-                </div>
-              )}
-            </ChartCard>
-
-            {/* Recent Activity */}
-            {recentActivity.length > 0 && (
-              <div className="rounded-xl shadow-sm overflow-hidden border bg-white border-gray-200">
-                <div className="p-6 border-b border-gray-200">
-                  <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-                </div>
-                <div className="divide-y divide-gray-200">
-                  {recentActivity.map((activity) => (
-                    <Link key={activity.id} to={activity.url} className="block p-4 transition-all duration-200 hover:bg-gray-50 border-b border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1 mr-3">
-                          <div
-                            className={`p-2 rounded-lg flex-shrink-0 ${
-                              activity.status === 'completed' ? 'bg-green-100' :
-                              activity.status === 'pending' ? 'bg-yellow-100' :
-                              'bg-blue-100'
-                            }`}
-                          >
-                            {activity.status === 'completed' ? (
-                              <CheckCircle className="w-4 h-4 text-green-600" />
-                            ) : activity.status === 'pending' ? (
-                              <Clock className="w-4 h-4 text-yellow-600" />
-                            ) : (
-                              <Activity className="w-4 h-4 text-blue-600" />
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900 truncate">{activity.title}</p>
-                            <p className="text-xs text-gray-500">
-                              {activity.brand} • {formatCurrency(activity.amount)}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-xs text-gray-400 flex-shrink-0">{timeAgo(activity.date)}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column - Stats + Balance + Platforms + Deadlines + Quick Actions */}
-          <div className="space-y-8">
-            {/* Quick Stats */}
-            <div className="rounded-xl shadow-sm p-6 border bg-white border-gray-200">
-              <h2 className="text-lg font-semibold mb-4 text-gray-900">Quick Stats</h2>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Earnings</p>
-                    <p className="text-xl font-bold text-gray-900">
-                      {formatCurrency(stats.totalEarnings || 0)}
-                    </p>
+          {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+  {/* Left Column: Primary Feed */}
+  <div className="lg:col-span-2 space-y-8">
+    
+    {/* Active Deals - The "Interactive Slab" Style */}
+    <ChartCard title="Active Flux" action={
+      <Link to="/creator/deals" className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500 hover:text-white' : 'text-zinc-400 hover:text-black'}`}>
+        All Operations &rarr;
+      </Link>
+    }>
+      {activeDeals.length > 0 ? (
+        <div className="space-y-2">
+          {activeDeals.slice(0, 4).map(deal => (
+            <Link key={deal._id} to={`/creator/deals/${deal._id}`} className="group block">
+              <div className={`
+                flex items-center justify-between p-5 rounded-3xl transition-all duration-500
+                ${isDark ? 'hover:bg-zinc-800/40' : 'hover:bg-zinc-50 hover:shadow-sm'}
+              `}>
+                <div className="flex-1 min-w-0 mr-6">
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <span className={`text-[13px] font-bold tracking-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                      {deal.brandId?.brandName || 'Unidentified Brand'}
+                    </span>
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg ${
+                      deal.status === 'accepted' ? 'bg-emerald-500/10 text-emerald-500' :
+                      deal.status === 'in-progress' ? 'bg-blue-500/10 text-blue-500' :
+                      'bg-zinc-500/10 text-zinc-500'
+                    }`}>
+                      {deal.status}
+                    </span>
                   </div>
-                  <TrendingUp className="w-8 h-8 text-[#667eea]" />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 rounded-lg text-center border bg-gray-50 border-gray-200">
-                    <p className="text-xs mb-1 text-gray-500">Completed</p>
-                    <p className="text-lg font-bold text-gray-900">{stats.completedDeals || 0}</p>
-                  </div>
-                  <div className="p-3 rounded-lg text-center border bg-gray-50 border-gray-200">
-                    <p className="text-xs mb-1 text-gray-500">Active</p>
-                    <p className="text-lg font-bold text-blue-600">{stats.activeDeals || 0}</p>
-                  </div>
-                  <div className="p-3 rounded-lg text-center border bg-gray-50 border-gray-200">
-                    <p className="text-xs mb-1 text-gray-500">Rating</p>
-                    <div className="flex items-center justify-center">
-                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                      <span className="text-lg font-bold ml-1 text-gray-900">
-                        {stats.averageRating?.toFixed(1) || '—'}
-                      </span>
+                  <p className={`text-[11px] font-medium opacity-60 mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    {deal.campaignId?.title} {deal.deliverables?.length || 0} Assets
+                  </p>
+                  {deal.deadline && (
+                    <div className="flex items-center gap-1.5">
+                       <Clock size={10} className="text-zinc-500" />
+                       <span className={`text-[10px] font-mono font-bold uppercase tracking-tighter ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                         Est. {new Date(deal.deadline).toLocaleDateString()}
+                       </span>
                     </div>
-                  </div>
-                  <div className="p-3 rounded-lg text-center border bg-gray-50 border-gray-200">
-                    <p className="text-xs mb-1 text-gray-500">Engagement</p>
-                    <p className="text-lg font-bold text-green-600">
-                      {stats.averageEngagement?.toFixed(1) || '0'}%
-                    </p>
+                  )}
+                </div>
+                
+                <div className="text-right">
+                  <p className={`text-lg font-mono font-bold tracking-tighter mb-2 ${isDark ? 'text-white' : 'text-black'}`}>
+                    {formatCurrency(deal.budget || 0)}
+                  </p>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className={`w-24 h-1 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
+                      <div 
+                        className="h-full bg-indigo-500 transition-all duration-1000 ease-out" 
+                        style={{ width: `${deal.progress || 0}%` }} 
+                      />
+                    </div>
+                    <span className="text-[9px] font-black font-mono opacity-40">{deal.progress || 0}% COMPLETE</span>
                   </div>
                 </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-16">
+          <Briefcase className={`w-12 h-12 mx-auto mb-4 opacity-20 ${isDark ? 'text-white' : 'text-black'}`} />
+          <p className="text-[11px] font-black uppercase tracking-widest opacity-40">No Active Operations</p>
+        </div>
+      )}
+    </ChartCard>
+
+    {/* Performance Overview - Clean Area Chart */}
+    <ChartCard title="Capital Flow">
+      <div className="group-hover:scale-[1.01] transition-transform duration-700">
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={performanceData}>
+            <defs>
+              <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={0.15} />
+                <stop offset="95%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="8 8" vertical={false} stroke={isDark ? '#27272a' : '#f4f4f5'} />
+            <XAxis 
+                dataKey="month" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: '#71717a', fontSize: 10, fontWeight: 700}}
+            />
+            <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: '#71717a', fontSize: 10, fontWeight: 700}} 
+                tickFormatter={v => `$${v/1000}k`} 
+            />
+            <Tooltip
+              cursor={{ stroke: isDark ? '#3f3f46' : '#e4e4e7', strokeWidth: 2 }}
+              contentStyle={{ 
+                backgroundColor: isDark ? '#09090b' : '#fff', 
+                border: '1px solid #27272a', 
+                borderRadius: '16px',
+                fontSize: '11px',
+                fontWeight: '900'
+              }}
+            />
+            <Area 
+                type="monotone" 
+                dataKey="earnings" 
+                stroke={isDark ? "#ffffff" : "#000000"} 
+                fill="url(#earningsGradient)" 
+                strokeWidth={3} 
+                animationDuration={2000}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
+  </div>
+
+  {/* Right Column: Intelligence & Actions */}
+  <div className="space-y-8">
+    
+    {/* Balance Card - The "Gold Standard" Slab */}
+    <div className={`
+        relative p-8 rounded-[2.5rem] border overflow-hidden transition-all duration-500
+        ${isDark ? 'bg-zinc-900 border-zinc-800 shadow-2xl' : 'bg-white border-zinc-100 shadow-xl shadow-zinc-200/50'}
+    `}>
+      <div className="flex justify-between items-start mb-6">
+        <div className={`p-3 rounded-2xl ${isDark ? 'bg-zinc-800 text-zinc-100' : 'bg-zinc-100 text-zinc-900'}`}>
+          <Wallet size={20} strokeWidth={2.5} />
+        </div>
+        <div className="text-right">
+            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">In Escrow</span>
+            <span className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{formatCurrency(pendingBalance || 0)}</span>
+        </div>
+      </div>
+      <h3 className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Liquid Balance</h3>
+      <p className={`text-4xl font-mono font-bold tracking-tighter ${isDark ? 'text-white' : 'text-black'}`}>
+        {formatCurrency(balance || 0)}
+      </p>
+      
+      <div className="grid grid-cols-2 gap-3 mt-8">
+        <button className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isDark ? 'bg-white text-black hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'}`}>
+          Withdraw
+        </button>
+        <button className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${isDark ? 'border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}>
+          Ledger
+        </button>
+      </div>
+    </div>
+
+    {/* Platform Health - "The Glass Pillar" */}
+    <div className={`p-8 rounded-[2.5rem] border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'}`}>
+      <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] mb-8 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Reach Index</h3>
+      <div className="space-y-6">
+        {platformData.map((platform, idx) => {
+          const maxVal = Math.max(...platformData.map(p => p.value), 1);
+          return (
+            <div key={idx} className="group/item">
+              <div className="flex justify-between items-end mb-2">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{platform.name}</span>
+                <span className={`text-xs font-mono font-bold ${isDark ? 'text-white' : 'text-black'}`}>{formatNumber(platform.value)}</span>
+              </div>
+              <div className={`w-full h-1.5 rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                <div 
+                  className={`h-full rounded-full transition-all duration-1000 ease-out group-hover/item:bg-indigo-500 ${isDark ? 'bg-zinc-600' : 'bg-zinc-300'}`} 
+                  style={{ width: `${(platform.value / maxVal) * 100}%` }} 
+                />
               </div>
             </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</div>
+        </>
+        )}
 
-            {/* Balance Card */}
-            <div className="bg-gradient-to-br from-[#667eea] to-[#764ba2] rounded-xl shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <Wallet className="w-8 h-8 text-white opacity-90" />
-                <span className="text-sm opacity-90">Available Balance</span>
-              </div>
-              <p className="text-3xl font-bold mb-1">{formatCurrency(balance || 0)}</p>
-              <p className="text-sm opacity-90 mb-4">Pending: {formatCurrency(pendingBalance || 0)}</p>
-              <div className="flex gap-2">
-                <Link to="/creator/earnings" className="flex-1">
-                  <button className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isDark 
-                      ? 'bg-gray-800 text-[#667eea] hover:bg-gray-700' 
-                      : 'bg-white text-[#667eea] hover:bg-gray-100'
-                  }`}>
-                    Withdraw
-                  </button>
-                </Link>
-                <Link to="/creator/earnings" className="flex-1">
-                  <button className="w-full bg-[#667eea] text-white py-2 rounded-lg text-sm font-medium hover:bg-[#5a67d8] transition-colors">
-                    History
-                  </button>
-                </Link>
-              </div>
+        {/* ANALYTICS TAB */}
+        {activeTab === 'analytics' && (
+         <>
+         <div className="space-y-6">
+  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+    {summaryMetrics.map((metric, idx) => (
+      <div 
+        key={idx} 
+        className={`
+          group relative p-4 rounded-2xl border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+          hover:-translate-y-1
+          ${isDark 
+            ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_10px_20px_rgba(0,0,0,0.4)]' 
+            : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_10px_20px_rgba(0,0,0,0.03)]'}
+        `}
+      >
+        {/* Top Accent Line - Lights up on hover */}
+        <div className={`
+          absolute top-0 left-4 right-4 h-[1px] opacity-0 group-hover:opacity-100 transition-opacity duration-500
+          ${isDark ? 'bg-gradient-to-r from-transparent via-zinc-500 to-transparent' : 'bg-gradient-to-r from-transparent via-zinc-400 to-transparent'}
+        `} />
+
+        <p className={`
+          text-[9px] font-black uppercase tracking-[0.15em] mb-1.5 transition-colors duration-500
+          ${isDark ? 'text-zinc-600 group-hover:text-zinc-400' : 'text-zinc-400 group-hover:text-zinc-600'}
+        `}>
+          {metric.title}
+        </p>
+        
+        <div className="flex items-baseline gap-1">
+          <p className={`
+            text-base font-mono font-bold tracking-tighter transition-all duration-500
+            ${isDark ? 'text-white' : 'text-black'}
+          `}>
+            {metric.value}
+          </p>
+          
+          {/* Decorative suffix/unit if needed, or a subtle indicator dot */}
+          <div className={`
+            w-1 h-1 rounded-full mb-1 opacity-0 group-hover:opacity-100 transition-all duration-700
+            ${isDark ? 'bg-indigo-500 shadow-[0_0_8px_#6366f1]' : 'bg-indigo-500'}
+          `} />
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  {/* Engagement Breakdown Card - The "Signal Monitor" */}
+  <div className={`
+    group p-8 rounded-[2.5rem] border transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
+    ${isDark 
+      ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)]' 
+      : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)]'}
+  `}>
+    <div className="flex justify-between items-center mb-8">
+      <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-black'}`}>
+        Engagement Breakdown
+      </h3>
+      <div className={`w-2 h-2 rounded-full animate-pulse ${isDark ? 'bg-emerald-500/50' : 'bg-emerald-500'}`} />
+    </div>
+
+    <div className="h-[240px] w-full transition-transform duration-700 group-hover:scale-[1.02]">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={engagementMetrics} layout="vertical" margin={{ left: -20 }}>
+          <XAxis type="number" hide />
+          <YAxis 
+            dataKey="label" 
+            type="category" 
+            axisLine={false} 
+            tickLine={false} 
+            width={100} 
+            tick={{
+              fill: isDark ? '#52525b' : '#a1a1aa', 
+              fontSize: 9, 
+              fontWeight: 800, 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.1em'
+            }} 
+          />
+          <Tooltip 
+            cursor={{fill: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'}} 
+            contentStyle={{ 
+              backgroundColor: isDark ? 'rgba(9, 9, 11, 0.95)' : 'rgba(255, 255, 255, 0.95)', 
+              border: '1px solid #27272a',
+              borderRadius: '12px',
+              backdropFilter: 'blur(10px)',
+              fontSize: '10px',
+              fontWeight: '900',
+              padding: '8px 12px'
+            }} 
+          />
+          <Bar 
+            dataKey="value" 
+            fill={isDark ? "#ffffff" : "#000000"} 
+            radius={[0, 12, 12, 0]} 
+            barSize={12}
+            animationDuration={1500}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+  
+  {/* Small Metric Grid - The "Tactile Buttons" */}
+  <div className="grid grid-cols-2 gap-4">
+    {engagementMetrics.map((metric, idx) => (
+      <div 
+        key={idx} 
+        className={`
+          group relative p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+          cursor-pointer hover:scale-[1.05] overflow-hidden
+          ${isDark 
+            ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-500 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]' 
+            : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.04)]'}
+        `}
+      >
+        {/* Subtle Background Glow */}
+        <div className={`
+          absolute -right-4 -top-4 w-16 h-16 blur-2xl rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-500
+          ${isDark ? 'bg-white' : 'bg-black'}
+        `} />
+
+        <metric.icon className={`
+          w-5 h-5 mb-4 transition-all duration-500 transform group-hover:-translate-y-1 group-hover:scale-110
+          ${isDark ? 'text-zinc-600 group-hover:text-white' : 'text-zinc-400 group-hover:text-black'}
+        `} />
+        
+        <p className={`
+          text-2xl font-mono font-bold tracking-tighter transition-all duration-500
+          ${isDark ? 'text-white' : 'text-black'}
+        `}>
+          {metric.value}
+        </p>
+        
+        <p className={`
+          text-[9px] font-black uppercase tracking-[0.2em] mt-1.5 transition-colors
+          ${isDark ? 'text-zinc-600 group-hover:text-zinc-400' : 'text-zinc-400 group-hover:text-zinc-600'}
+        `}>
+          {metric.label}
+        </p>
+      </div>
+    ))}
+  </div>
+</div>
+
+          <div className={`
+  group relative p-8 rounded-[2.5rem] border transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
+  ${isDark 
+    ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)]' 
+    : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)]'}
+`}>
+  {/* Performance Header */}
+  <div className="flex justify-between items-end mb-8">
+    <div>
+      <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-black'}`}>
+        Performance Trend
+      </h3>
+      <div className="flex items-center gap-2 mt-1">
+        <span className={`text-2xl font-mono font-bold tracking-tighter ${isDark ? 'text-white' : 'text-black'}`}>
+          {/* Dynamic summary if available, otherwise static */}
+          Analytics
+        </span>
+        <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md uppercase tracking-widest">
+          Live
+        </span>
+      </div>
+    </div>
+    
+    {/* Optional: Legend or Timeframe Switcher */}
+    <div className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+      Monthly Revenue Alpha
+    </div>
+  </div>
+
+  <div className="h-[240px] w-full group-hover:scale-[1.01] transition-transform duration-700 ease-out">
+    <ResponsiveContainer width="100%" height="100%">
+      {performanceData.length > 0 ? (
+        <AreaChart data={performanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={0.12} />
+              <stop offset="95%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          
+          {/* Subtle horizontal grid lines only */}
+          <CartesianGrid 
+            strokeDasharray="8 8" 
+            vertical={false} 
+            stroke={isDark ? '#27272a' : '#f4f4f5'} 
+          />
+          
+          <XAxis 
+            dataKey="month" 
+            axisLine={false} 
+            tickLine={false} 
+            tick={{ fill: isDark ? '#52525b' : '#a1a1aa', fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }} 
+            dy={15} 
+          />
+          
+          <YAxis 
+            axisLine={false} 
+            tickLine={false} 
+            tick={{ fill: isDark ? '#52525b' : '#a1a1aa', fontSize: 9, fontWeight: 800 }} 
+            tickFormatter={v => `$${v}`} 
+          />
+          
+          <Tooltip 
+            cursor={{ stroke: isDark ? '#3f3f46' : '#e4e4e7', strokeWidth: 2 }}
+            contentStyle={{ 
+              backgroundColor: isDark ? 'rgba(9, 9, 11, 0.95)' : 'rgba(255, 255, 255, 0.95)', 
+              border: isDark ? '1px solid #27272a' : '1px solid #e4e4e7',
+              borderRadius: '16px', 
+              backdropFilter: 'blur(12px)',
+              fontSize: '11px',
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+            }}
+            itemStyle={{ color: isDark ? '#fff' : '#000' }}
+            formatter={(v) => [formatCurrency(v), 'Settlement']}
+          />
+          
+          <Area 
+            type="monotone" 
+            dataKey="earnings" 
+            stroke={isDark ? "#fff" : "#000"} 
+            strokeWidth={3} 
+            fillOpacity={1} 
+            fill="url(#colorValue)"
+            animationDuration={2000}
+            animationEasing="ease-in-out"
+          />
+        </AreaChart>
+      ) : (
+        <div className="h-full flex flex-col items-center justify-center space-y-2">
+          <div className={`w-8 h-[1px] ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Awaiting Data Cycles</p>
+        </div>
+      )}
+    </ResponsiveContainer>
+  </div>
+</div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Platform Distribution Chart */}
+             <div className={`
+  group relative p-8 rounded-[2.5rem] border transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
+  ${isDark 
+    ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)]' 
+    : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)]'}
+`}>
+  {/* Header Section */}
+  <div className="flex justify-between items-start mb-4">
+    <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-black'}`}>
+      Platform Distribution
+    </h3>
+    <div className={`p-2 rounded-xl ${isDark ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-black'}`}>
+      <Share2 size={14} strokeWidth={2.5} />
+    </div>
+  </div>
+
+  <div className="h-[240px] w-full relative">
+    {/* Center Readout Label */}
+    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+      <span className={`text-[9px] font-black uppercase tracking-widest opacity-40 ${isDark ? 'text-white' : 'text-black'}`}>
+        Total
+      </span>
+      <span className={`text-xl font-mono font-bold tracking-tighter ${isDark ? 'text-white' : 'text-black'}`}>
+        100%
+      </span>
+    </div>
+
+    <ResponsiveContainer width="100%" height="100%">
+      {platformData.length > 0 ? (
+        <RePieChart>
+          <Pie
+            data={platformData}
+            innerRadius={65} // Increased slightly for a thinner, more elegant ring
+            outerRadius={85}
+            paddingAngle={8} // More breathing room between segments
+            dataKey="value"
+            stroke="none" // Removes the default border between segments
+            animationBegin={200}
+            animationDuration={1800}
+          >
+            {platformData.map((entry, index) => (
+              <Cell 
+                key={`cell-${index}`} 
+                fill={isDark && (entry.color === '#000000' || entry.color === '#18181b') ? '#ffffff' : entry.color} 
+                className="hover:opacity-80 transition-opacity cursor-pointer outline-none"
+              />
+            ))}
+          </Pie>
+          <Tooltip 
+            contentStyle={{ 
+              backgroundColor: isDark ? 'rgba(9, 9, 11, 0.95)' : 'rgba(255, 255, 255, 0.95)', 
+              border: isDark ? '1px solid #27272a' : '1px solid #e4e4e7',
+              borderRadius: '16px', 
+              backdropFilter: 'blur(12px)',
+              fontSize: '11px',
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              padding: '12px'
+            }}
+            itemStyle={{ color: isDark ? '#fff' : '#000' }}
+          />
+        </RePieChart>
+      ) : (
+        <div className="h-full flex flex-col items-center justify-center space-y-2 opacity-40">
+            <PieChartIcon size={32} strokeWidth={1} />
+            <p className="text-[10px] font-black uppercase tracking-widest">No Signals Detected</p>
+        </div>
+      )}
+    </ResponsiveContainer>
+  </div>
+
+  {/* Footer Legend */}
+  <div className="mt-4 flex flex-wrap justify-center gap-4">
+    {platformData.slice(0, 3).map((entry, index) => (
+      <div key={index} className="flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
+        <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+          {entry.name}
+        </span>
+      </div>
+    ))}
+  </div>
+</div>
             </div>
 
-            {/* Platform Distribution */}
-            {platformData.length > 0 && (
-              <div className="rounded-xl shadow-sm p-6 border bg-white border-gray-200">
-                <h2 className="text-lg font-semibold mb-4 text-gray-900">Platform Distribution</h2>
-                <div className="space-y-3">
-                  {platformData.map((platform, index) => {
-                    const maxVal = Math.max(...platformData.map(p => p.value), 1);
-                    return (
-                      <div key={index}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="capitalize text-gray-700">{platform.name}</span>
-                          <span className="font-medium text-gray-900">{formatNumber(platform.value)}</span>
-                        </div>
-                        <div className="w-full rounded-full h-2 bg-gray-200">
-                          <div
-                            className="h-2 rounded-full"
-                            style={{
-                              width: `${(platform.value / maxVal) * 100}%`,
-                              backgroundColor: platform.color
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+          
 
-            {/* Upcoming Deadlines */}
-            {upcomingDeadlines.length > 0 && (
-              <div className="rounded-xl shadow-sm p-6 border bg-white border-gray-200">
-                <h2 className="text-lg font-semibold mb-4 text-gray-900">Upcoming Deadlines</h2>
-                <div className="space-y-3">
-                  {upcomingDeadlines.map((deal) => {
-                    const daysLeft = Math.ceil((new Date(deal.deadline) - new Date()) / (1000 * 60 * 60 * 24));
-                    return (
-                      <Link
-                        key={deal._id}
-                        to={`/creator/deals/${deal._id}`}
-                        className="block p-3 rounded-lg transition-all duration-200 border bg-gray-50 hover:bg-gray-100 border-gray-200"
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <p className="font-medium text-sm text-gray-900 truncate flex-1 mr-2">
-                            {deal.campaignId?.title || 'Campaign'}
-                          </p>
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
-                              daysLeft <= 2 ? 'bg-red-100 text-red-800' :
-                              daysLeft <= 5 ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-green-100 text-green-800'
-                            }`}
-                          >
-                            {daysLeft}d
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500">{deal.brandId?.brandName}</p>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Top Brands */}
+          {analytics?.topBrands?.length > 0 && (
+  <div className={`
+    group p-8 rounded-[2.5rem] border transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
+    ${isDark 
+      ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)]' 
+      : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)]'}
+  `}>
+    <div className="flex justify-between items-center mb-8">
+      <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-black'}`}>
+        Top Performing Partners
+      </h3>
+      <div className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-tighter ${isDark ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-100 text-zinc-400'}`}>
+        Ranked by Revenue
+      </div>
+    </div>
 
-            {/* Quick Actions */}
-            <div className="rounded-xl shadow-sm p-6 border bg-white border-gray-200">
-              <h2 className="text-lg font-semibold mb-4 text-gray-900">Quick Actions</h2>
-              <div className="grid grid-cols-2 gap-2">
-                <Link to="/creator/available-deals">
-                  <button className="w-full p-3 bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 text-[#667eea] rounded-lg hover:from-[#667eea]/20 hover:to-[#764ba2]/20 transition-all duration-200 text-sm font-medium border border-[#667eea]/20">
-                    Find Deals
-                  </button>
-                </Link>
-                <Link to="/creator/earnings">
-                  <button className="w-full p-3 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-all duration-200 text-sm font-medium border border-green-100">
-                    Withdraw
-                  </button>
-                </Link>
-                <Link to="/creator/profile">
-                  <button className="w-full p-3 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-all duration-200 text-sm font-medium border border-purple-100">
-                    Edit Profile
-                  </button>
-                </Link>
-                <Link to="/creator/settings">
-                  <button className="w-full p-3 rounded-lg transition-all duration-200 text-sm font-medium border bg-gray-50 text-gray-600 hover:bg-gray-100 border-gray-200">
-                    Settings
-                  </button>
-                </Link>
+    <div className="space-y-2">
+      {analytics.topBrands.map((brand, idx) => (
+        <div 
+          key={idx} 
+          className={`
+            group/item flex items-center justify-between p-4 rounded-2xl transition-all duration-500
+            ${isDark 
+              ? 'hover:bg-white/[0.03] border border-transparent hover:border-zinc-800' 
+              : 'hover:bg-zinc-50 border border-transparent hover:border-zinc-100'}
+          `}
+        >
+          <div className="flex items-center gap-4">
+            {/* The Beveled Avatar */}
+            <div className={`
+              w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-500
+              ${isDark 
+                ? 'bg-zinc-800 text-zinc-400 group-hover/item:bg-white group-hover/item:text-black' 
+                : 'bg-zinc-100 text-zinc-500 group-hover/item:bg-black group-hover/item:text-white'}
+            `}>
+              <span className="text-xs font-black uppercase">
+                {brand.brand?.brandName?.charAt(0) || 'B'}
+              </span>
+            </div>
+
+            <div>
+              <p className={`text-[13px] font-bold tracking-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                {brand.brand?.brandName || 'Unidentified Brand'}
+              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                  {brand.deals} Operations
+                </span>
+                <div className={`w-1 h-1 rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+                <span className={`text-[10px] font-medium ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                  Completed
+                </span>
               </div>
             </div>
           </div>
+
+          <div className="text-right">
+            <p className={`text-sm font-mono font-bold tracking-tighter transition-all duration-500 ${isDark ? 'text-emerald-400' : 'text-emerald-600'} group-hover/item:scale-110`}>
+              {formatCurrency(brand.earnings)}
+            </p>
+            <div className={`text-[9px] font-black uppercase tracking-tighter mt-0.5 ${isDark ? 'text-zinc-700' : 'text-zinc-300'}`}>
+              Net Yield
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+        </>
+        )}
         </div>
       </div>
     </div>

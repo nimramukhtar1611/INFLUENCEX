@@ -60,7 +60,6 @@ const Analytics = () => {
     color: p._id === 'instagram' ? '#E1306C' :
            p._id === 'youtube'   ? '#FF0000' :
            p._id === 'tiktok'    ? '#000000' :
-           p._id === 'twitter'   ? '#1DA1F2' :
            p._id === 'facebook'  ? '#4267B2' : '#4F46E5'
   }));
 
@@ -105,44 +104,44 @@ const Analytics = () => {
   }
 
   return (
-    <div className={`space-y-6 ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      {/* Header */}
-      <div className={`flex flex-col gap-4 p-6 rounded-xl ${isDark ? 'bg-gray-900/90 backdrop-blur-sm border border-gray-700/50 shadow-sm' : 'bg-white/90 backdrop-blur-sm border border-gray-200/50 shadow-sm'}`}>
-        <div>
-          <h1 className={`text-xl md:text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Analytics & Reports</h1>
-          <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Track your campaign performance and ROI</p>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          {/* Chart type toggle */}
-          <div className={`flex items-center rounded-lg border overflow-hidden shadow-sm ${
-            isDark ? 'bg-gray-800/50 border-gray-700/50' : 'bg-white/50 border-gray-300/50'
-          }`}>
-            {['area', 'bar', 'line'].map((t, i) => (
-              <button key={t} onClick={() => setChartType(t)}
-                className={`px-2 py-2 text-xs sm:text-sm sm:px-3 font-medium capitalize ${i > 0 ? 'border-l' : ''} ${
-                  chartType === t 
-                    ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white' 
-                    : isDark 
-                      ? 'hover:bg-gray-700/50 text-gray-300' 
-                      : 'hover:bg-gray-50 text-gray-700'
-                } ${
-                  i > 0 ? (isDark ? 'border-gray-700/50' : 'border-gray-300/50') : ''
-                }`}>
-                {t}
-              </button>
-            ))}
+    <div className={`min-h-screen `}>
+      <div className="max-w-7xl mx-auto px-6 pt-8">
+         <div>
+            <h1 className="text-3xl font-light tracking-tight font-semibold">Brand <span className="font-bold">Analytics</span></h1>
+            <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Track campaign performance and ROI metrics.</p>
           </div>
-          <select value={dateRange} onChange={e => setDateRange(e.target.value)}
-            className={`px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] shadow-sm ${
-              isDark ? 'bg-gray-800/50 border-gray-700/50 text-gray-100' : 'bg-white/50 border-gray-300/50 text-gray-900'
-            }`}>
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="90d">Last 90 Days</option>
-            <option value="12m">This Year</option>
-          </select>
-          <Button variant="outline" size="sm" icon={RefreshCw} onClick={() => fetchAnalytics(true)} loading={refreshing}>Refresh</Button>
+
+      {/* Controls */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Chart type toggle */}
+        <div className={`flex items-center rounded-lg border overflow-hidden shadow-sm ${
+          isDark ? 'bg-zinc-900/50 border-gray-700/50' : 'bg-white/50 border-gray-300/50'
+        }`}>
+          {['area', 'bar', 'line'].map((t, i) => (
+            <button key={t} onClick={() => setChartType(t)}
+              className={`px-2 py-2 text-xs sm:text-sm sm:px-3 font-medium capitalize ${i > 0 ? 'border-l' : ''} ${
+                chartType === t 
+                  ? 'bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white' 
+                  : isDark 
+                    ? 'hover:bg-gray-700/50 text-gray-300' 
+                    : 'hover:bg-gray-50 text-gray-700'
+              } ${
+                i > 0 ? (isDark ? 'border-gray-700/50' : 'border-gray-300/50') : ''
+              }`}>
+              {t}
+            </button>
+          ))}
         </div>
+        <select value={dateRange} onChange={e => setDateRange(e.target.value)}
+          className={`px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#667eea] shadow-sm ${
+            isDark ? 'bg-zinc-900/50 border-gray-700/50 text-gray-100' : 'bg-white/50 border-gray-300/50 text-gray-900'
+          }`}>
+          <option value="7d">Last 7 Days</option>
+          <option value="30d">Last 30 Days</option>
+          <option value="90d">Last 90 Days</option>
+          <option value="12m">This Year</option>
+        </select>
+        <Button variant="outline" size="sm" icon={RefreshCw} onClick={() => fetchAnalytics(true)} loading={refreshing}>Refresh</Button>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -190,7 +189,7 @@ const Analytics = () => {
             )}
           </ResponsiveContainer>
           ) : (
-            <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-gray-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
+            <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-zinc-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
               No campaign data for this period
             </div>
           )}
@@ -214,7 +213,7 @@ const Analytics = () => {
               </PieChart>
             </ResponsiveContainer>
             ) : (
-              <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-gray-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>No platform data yet</div>
+              <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-zinc-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>No platform data yet</div>
             )}
           </ChartCard>
 
@@ -234,7 +233,7 @@ const Analytics = () => {
               </PieChart>
             </ResponsiveContainer>
             ) : (
-              <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-gray-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>No deals yet</div>
+              <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-zinc-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>No deals yet</div>
             )}
           </ChartCard>
 
@@ -251,7 +250,7 @@ const Analytics = () => {
               </ComposedChart>
             </ResponsiveContainer>
             ) : (
-              <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-gray-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>No data yet</div>
+              <div className={`h-48 flex items-center justify-center rounded-lg border ${isDark ? 'border-gray-700 bg-zinc-900/50 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>No data yet</div>
             )}
           </ChartCard>
 
@@ -317,28 +316,28 @@ const Analytics = () => {
 
                 {/* Social engagement grid */}
                 <div className="grid grid-cols-2 gap-3 pt-2">
-                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-zinc-900/50' : 'bg-gray-50'}`}>
                     <Heart className="w-5 h-5 text-pink-600 mx-auto mb-1" />
                     <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
                       {totalLikes > 0 ? formatNumber(totalLikes) : <span className={isDark ? 'text-gray-400' : 'text-gray-400'}>No data</span>}
                     </p>
                     <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Total Likes</p>
                   </div>
-                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-zinc-900/50' : 'bg-gray-50'}`}>
                     <MessageSquare className="w-5 h-5 text-blue-600 mx-auto mb-1" />
                     <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
                       {totalComments > 0 ? formatNumber(totalComments) : <span className={isDark ? 'text-gray-400' : 'text-gray-400'}>No data</span>}
                     </p>
                     <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Comments</p>
                   </div>
-                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-zinc-900/50' : 'bg-gray-50'}`}>
                     <Share2 className="w-5 h-5 text-green-600 mx-auto mb-1" />
                     <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
                       {totalShares > 0 ? formatNumber(totalShares) : <span className={isDark ? 'text-gray-400' : 'text-gray-400'}>No data</span>}
                     </p>
                     <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Shares</p>
                   </div>
-                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                  <div className={`p-3 rounded-lg text-center ${isDark ? 'bg-zinc-900/50' : 'bg-gray-50'}`}>
                     <Eye className="w-5 h-5 text-purple-600 mx-auto mb-1" />
                     <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
                       {totalImpressions > 0 ? formatNumber(totalImpressions) : <span className={isDark ? 'text-gray-400' : 'text-gray-400'}>No data</span>}
@@ -351,6 +350,7 @@ const Analytics = () => {
             </div>
           </ChartCard>
         </div>
+      </div>
       </div>
     </div>
   );

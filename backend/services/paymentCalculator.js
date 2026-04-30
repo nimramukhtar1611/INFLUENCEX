@@ -1,5 +1,6 @@
 // services/paymentCalculator.js - COMPLETE FIXED VERSION
 const Fee = require('../models/Fee');
+const settingsService = require('./settingsService');
 const subscriptionPlans = require('../config/subscriptionPlans');
 
 class PaymentCalculator {
@@ -7,10 +8,13 @@ class PaymentCalculator {
   // ==================== CALCULATE FEES ====================
   async calculateFees(amount, userType, planId = 'free') {
     try {
-      // Get base commission rate
-      let commissionRate = subscriptionPlans.commissions.default;
+      // Get global settings
+      const settings = await settingsService.getSettings();
       
-      // Adjust based on plan
+      // Get commission rate from global settings
+      let commissionRate = settings.fees?.commissionRate || subscriptionPlans.commissions.default;
+      
+      // Adjust based on plan (fallback to subscription plans for premium plans)
       if (planId === 'professional') {
         commissionRate = subscriptionPlans.commissions.premium;
       } else if (planId === 'enterprise') {
@@ -20,9 +24,10 @@ class PaymentCalculator {
       // Calculate platform fee
       const platformFee = (amount * commissionRate) / 100;
 
-      // Calculate transaction fees (Stripe)
-      const transactionFee = (amount * subscriptionPlans.transactionFees.stripe) / 100 + 
-                             subscriptionPlans.transactionFees.stripeFixed;
+      // Calculate transaction fees from global settings
+      const transactionFeePercentage = settings.fees?.transactionFee?.percentage || subscriptionPlans.transactionFees.stripe;
+      const transactionFeeFixed = settings.fees?.transactionFee?.fixed || subscriptionPlans.transactionFees.stripeFixed;
+      const transactionFee = (amount * transactionFeePercentage) / 100 + transactionFeeFixed;
 
       // Total fees
       const totalFees = platformFee + transactionFee;
@@ -37,8 +42,8 @@ class PaymentCalculator {
           amount: parseFloat(platformFee.toFixed(2))
         },
         transactionFee: {
-          rate: subscriptionPlans.transactionFees.stripe,
-          fixed: subscriptionPlans.transactionFees.stripeFixed,
+          rate: transactionFeePercentage,
+          fixed: transactionFeeFixed,
           amount: parseFloat(transactionFee.toFixed(2))
         },
         total: parseFloat(totalFees.toFixed(2)),
@@ -53,14 +58,43 @@ class PaymentCalculator {
   // ==================== CALCULATE WITHDRAWAL FEES ====================
   async calculateWithdrawalFees(amount, method) {
     try {
+      // Get global settings
+      const settings = await settingsService.getSettings();
+      
       let fee = 0;
       let feeType = 'fixed';
       let feeRate = 0;
 
+      // Use withdrawal fee settings from global settings
+      const withdrawalFeeConfig = settings.fees?.withdrawalFee || {};
+      
       switch(method) {
         case 'bank_account':
-          fee = subscriptionPlans.withdrawalFees.bank;
-          feeType = 'fixed';
+          if (withdrawalFeeConfig.type === 'fixed') {
+            fee = withdrawalFeeConfig.amount || subscriptionPlans.withdrawalFees.bank;
+            feeType = 'fixed';
+          } else if (withdrawalFeeConfig.type === 'percentage') {
+            fee = (amount * (withdrawalFeeConfig.percentage || 0)) / 100;
+            feeType = 'percentage';
+            feeRate = withdrawalFeeConfig.percentage || 0;
+          } else if (withdrawalFeeConfig.type === 'tiered' && withdrawalFeeConfig.tiers) {
+            // Find appropriate tier
+            for (const tier of withdrawalFeeConfig.tiers) {
+              if (amount >= tier.minAmount && (!tier.maxAmount || amount <= tier.maxAmount)) {
+                fee = tier.fee;
+                feeType = 'tiered';
+                break;
+              }
+            }
+            // Fallback to fixed if no tier found
+            if (feeType === 'tiered' && fee === 0) {
+              fee = withdrawalFeeConfig.amount || subscriptionPlans.withdrawalFees.bank;
+              feeType = 'fixed';
+            }
+          } else {
+            fee = subscriptionPlans.withdrawalFees.bank;
+            feeType = 'fixed';
+          }
           break;
         case 'paypal':
           fee = (amount * subscriptionPlans.withdrawalFees.paypal) / 100;
