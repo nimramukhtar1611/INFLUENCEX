@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
-import Loader from '../../components/Common/Loader';
+import { Loader } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../utils/helpers';
 import { getStatusColor, getStatusIconColor } from '../../utils/colorScheme';
 import adminService from '../../services/adminService';
@@ -135,13 +135,13 @@ const Campaigns = () => {
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 animate-spin border-2 border-zinc-300 border-t-zinc-500 rounded-full mx-auto mb-4"></div>
-          <p className="text-zinc-500 text-xs font-medium">Loading campaigns...</p>
-        </div>
-      </div>
-    );
+         <div className="flex flex-col items-center justify-center min-h-[60vh]">
+           <div className="text-center">
+             <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+             <p className="text-zinc-500 text-xs font-medium">Loading admin campaign...</p>
+           </div>
+         </div>
+       );
   }
 
   return (

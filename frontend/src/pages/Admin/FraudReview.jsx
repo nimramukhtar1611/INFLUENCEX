@@ -3,7 +3,7 @@ import { AlertTriangle, Eye, RefreshCw, ShieldCheck, ShieldAlert, Search } from 
 import toast from 'react-hot-toast';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
-import Loader from '../../components/Common/Loader';
+import { Loader } from 'lucide-react';
 import adminService from '../../services/adminService';
 import { useTheme } from '../../hooks/useTheme';
 import { formatDate, timeAgo } from '../../utils/helpers';
@@ -157,10 +157,10 @@ const AdminFraudReview = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="w-8 h-8 animate-spin border-2 border-zinc-300 border-t-zinc-500 rounded-full mx-auto mb-4"></div>
-          <p className="text-zinc-500 text-xs font-medium">Loading fraud reviews...</p>
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+          <p className="text-zinc-500 text-xs font-medium">Loading fraud review...</p>
         </div>
       </div>
     );

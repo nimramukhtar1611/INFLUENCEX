@@ -8,9 +8,11 @@ import Button from '../../components/UI/Button';
 import StatsCard from '../../components/Common/StatsCard';
 import Modal from '../../components/Common/Modal';
 import toast from 'react-hot-toast';
+import { Loader } from 'lucide-react';
+
 
 const AdminDeals = () => {
-  const { deals, refreshing, refreshData, stats } = useAdminData();
+  const { deals, refreshing, refreshData, stats,loading } = useAdminData();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const [filteredDeals, setFilteredDeals] = useState(deals || []);
@@ -62,6 +64,16 @@ const AdminDeals = () => {
     setShowDetailsModal(true);
   };
 
+  if (loading) {
+      return (
+           <div className="flex flex-col items-center justify-center min-h-[60vh]">
+             <div className="text-center">
+               <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+               <p className="text-zinc-500 text-xs font-medium">Loading admin deals...</p>
+             </div>
+           </div>
+         );
+    }
   return (
     <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
       

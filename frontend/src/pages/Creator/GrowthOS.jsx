@@ -126,7 +126,7 @@ const CreatorGrowthOS = () => {
           <p className="text-sm text-zinc-500">Platform-specific suggestions for posting times, ideas, and audience quality growth.</p>
         </div>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           icon={RefreshCw}
           loading={refreshing}
@@ -223,25 +223,26 @@ const CreatorGrowthOS = () => {
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fetchGrowthOS(false, { onlyIdeas: true, contentType })}
-                  loading={ideasLoading}
-                  className="text-xs font-bold uppercase tracking-widest"
-                >
-                  Give Ideas
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  icon={RefreshCw}
-                  onClick={() => fetchGrowthOS(false, { onlyIdeas: true, contentType, refreshIdeas: true })}
-                  loading={ideasRefreshLoading}
-                  className="text-xs font-bold uppercase tracking-widest"
-                >
-                  Refresh
-                </Button>
+               <Button
+  variant="secondary"
+  size="sm"
+  onClick={() => fetchGrowthOS(false, { onlyIdeas: true, contentType })}
+  loading={ideasLoading}
+  className="h-8 px-4 text-[11px] font-semibold normal-case gap-1.5 rounded-md shadow-sm"
+>
+  Give Ideas
+</Button>
+              <Button
+  variant="secondary"
+  size="sm"
+  icon={RefreshCw}
+  onClick={() => fetchGrowthOS(false, { onlyIdeas: true, contentType, refreshIdeas: true })}
+  loading={ideasRefreshLoading}
+  
+  className="h-7 px-2 text-[10px] font-medium normal-case gap-1"
+>
+  Refresh
+</Button>
               </div>
             </div>
             {contentIdeas.length > 0 ? (

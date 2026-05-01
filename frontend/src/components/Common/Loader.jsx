@@ -4,7 +4,7 @@ import React from 'react';
 const Loader = ({ 
   size = 'medium', 
   fullScreen = false,
-  color = 'indigo',
+  color = 'gray',
   type = 'spinner',
   text,
   className = ''

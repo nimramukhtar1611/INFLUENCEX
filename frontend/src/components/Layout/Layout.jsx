@@ -54,13 +54,7 @@ const spacing = 0.8;
     }
   }, [propUserType, user, location]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader size="lg" />
-      </div>
-    );
-  }
+  
 
   // Debug log to check what user type is being used
   console.log('Layout - Current User Type:', currentUserType);

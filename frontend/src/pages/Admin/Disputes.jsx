@@ -3,7 +3,7 @@ import { Eye, RefreshCw, CheckCircle, AlertCircle, Download, XCircle, Search, Al
 import toast from 'react-hot-toast';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
-import Loader from '../../components/Common/Loader';
+import { Loader } from 'lucide-react';
 import { useAdminData } from '../../hooks/useAdminData';
 import { useTheme } from '../../hooks/useTheme';
 import { formatDate, timeAgo, formatCurrency } from '../../utils/helpers';

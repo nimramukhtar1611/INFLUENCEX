@@ -12,6 +12,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  ArrowRight,
   RefreshCw,
   AlertCircle,
   ArrowUpRight,

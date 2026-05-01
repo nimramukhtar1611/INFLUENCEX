@@ -42,10 +42,8 @@ import BrandSearchCreators from './pages/Brand/SearchCreators';
 import BrandDeals from './pages/Brand/Deals';
 import BrandCampaignEdit from './pages/Brand/CampaignEdit'
 import CreateDeal from './pages/Brand/CreateDeal';
-import CreateContract from './pages/Brand/CreateContract';
 import BrandCreatorProfile from './pages/Brand/CreatorProfile';
 import BrandDealDetails from './pages/Brand/DealDetails';
-import BrandAnalytics from './pages/Brand/Analytics';
 import BrandPayments from './pages/Brand/Payments';
 import BrandProfile from './pages/Brand/Profile';
 import BrandSettings from './pages/Brand/Settings';
@@ -57,7 +55,6 @@ import CreatorAvailableDeals from './pages/Creator/AvailableDeals';
 import CreatorDeals from './pages/Creator/Deals';
 import CreatorDealDetails from './pages/Creator/DealDetails';
 import CreatorDeliverables from './pages/Creator/Deliverables';
-import CreatorAnalytics from './pages/Creator/Analytics';
 import CreatorEarnings from './pages/Creator/Earnings';
 import CreatorWithdrawals from './pages/Creator/Withdrawals';
 import CreatorProfile from './pages/Creator/Profile';
@@ -169,7 +166,6 @@ function App() {
                                 <Route path="deals/:id" element={<BrandDealDetails />} />
                                 <Route path="payments" element={<BrandPayments />} />
                                 <Route path="createdeal" element={<CreateDeal />} />
-                                <Route path="createcontract" element={<CreateContract />} />
                                 <Route path="profile" element={<BrandProfile />} />
                                 <Route path="settings" element={<BrandSettings />} />
                                 <Route path="subscription" element={<SubscriptionManager />} />
@@ -177,7 +173,6 @@ function App() {
                                 <Route path="inbox" element={<BrandInbox />} />
                                 <Route path="notifications" element={<Notifications />} />
                                 <Route path="disputes" element={<Disputes />} />
-                                <Route path="contracts" element={<Contracts />} />
                               </Route>
 
                               {/* Creator Routes */}
@@ -202,7 +197,6 @@ function App() {
                                 <Route path="inbox" element={<CreatorInbox />} />
                                 <Route path="notifications" element={<Notifications />} />
                                 <Route path="disputes" element={<Disputes />} />
-                                <Route path="contracts" element={<Contracts />} />
                               </Route>
 
                               {/* Admin Routes */}

@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Download, FileText, RefreshCw, PlusCircle, CheckCircle, AlertCircle, XCircle, FileText as FileIcon, Calendar, Filter, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../../components/UI/Button';
-import Loader from '../../components/Common/Loader';
 import { useAdminData } from '../../hooks/useAdminData';
+import { Loader } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import adminService from '../../services/adminService';
 import { formatDate, timeAgo } from '../../utils/helpers';
@@ -116,10 +116,10 @@ const Reports = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
+     return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="w-8 h-8 animate-spin border-2 border-zinc-300 border-t-zinc-500 rounded-full mx-auto mb-4"></div>
+          <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
           <p className="text-zinc-500 text-xs font-medium">Loading reports...</p>
         </div>
       </div>

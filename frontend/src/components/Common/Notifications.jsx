@@ -169,7 +169,7 @@ const Notifications = () => {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="relative z-10">
-          <Loader className="w-8 h-8 animate-spin text-indigo-600" />
+          <Loader className="w-8 h-8 animate-spin text-gray-600" />
         </div>
       </div>
     );
@@ -299,21 +299,7 @@ const Notifications = () => {
             </p>
 
             <div className="flex items-center justify-between">
-              {/* Contextual Links */}
-              <div className="flex gap-2">
-                {notification.data?.dealId && (
-                  <Link 
-                    to={`/dashboard/deals/${notification.data.dealId}`}
-                    className={`
-                      flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
-                      ${isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-white hover:text-black' : 'bg-zinc-100 text-zinc-600 hover:bg-black hover:text-white'}
-                    `}
-                  >
-                    <Eye size={12} strokeWidth={3} />
-                    View Deal
-                  </Link>
-                )}
-              </div>
+             
 
               {/* Row Actions */}
               <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">

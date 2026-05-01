@@ -13,7 +13,25 @@ const createAdmin = async () => {
 
     const existingAdmin = await Admin.findOne({ email: 'InfluenceX102@gmail.com' });
     if (existingAdmin) {
-      console.log('⚠️ Admin already exists');
+      console.log('🔄 Updating existing admin...');
+      existingAdmin.email = 'InfluenceX102@gmail.com ';
+      existingAdmin.password = 'chsyen382738jsi2';
+      existingAdmin.fullName = 'admininfluence';
+      existingAdmin.role = 'super_admin';
+      existingAdmin.permissions = [
+        'manage_users',
+        'manage_campaigns',
+        'manage_disputes',
+        'manage_payments',
+        'manage_settings',
+        'view_analytics'
+      ];
+      existingAdmin.isActive = true;
+      
+      await existingAdmin.save();
+      console.log('✅ Admin updated successfully!');
+      console.log(' Email:', existingAdmin.email);
+      console.log(' Password: chsyen382738jsi2');
       process.exit(0);
     }
     const admin = new Admin({

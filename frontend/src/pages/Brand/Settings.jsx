@@ -827,7 +827,6 @@ const BrandSettings = () => {
          <Button
   onClick={handleSaveSettings}
   variant="secondary"
-  loading={saving}
   className={`
     flex items-center gap-2 px-6 py-2.5 
     bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full 

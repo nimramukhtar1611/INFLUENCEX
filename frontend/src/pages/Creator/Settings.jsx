@@ -735,7 +735,6 @@ const CreatorSettings = () => {
   icon={Save}
   onClick={handleSaveSettings}
   variant='secondary'
-  loading={saving}
   className="flex items-center gap-2 px-6 py-2.5 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full 
     transition-all duration-300 ease-out
     !bg-zinc-800 hover:shadow-[0_0_20px_rgba(0,0,0,0.3)] 

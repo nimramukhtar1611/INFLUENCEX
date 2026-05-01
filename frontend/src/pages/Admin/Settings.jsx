@@ -1242,14 +1242,14 @@ const AdminSettings = () => {
   };
 
   if (loading && !settings) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-zinc-950 text-white' : 'bg-white text-zinc-900'}`}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-zinc-200 border-t-black rounded-full animate-spin"></div>
-          <p className="text-sm font-medium animate-pulse uppercase tracking-widest">Loading Settings...</p>
+   return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+            <p className="text-zinc-500 text-xs font-medium">Loading admin settings...</p>
+          </div>
         </div>
-      </div>
-    );
+      );
   }
 
   return (
@@ -1268,7 +1268,6 @@ const AdminSettings = () => {
          <Button
   onClick={handleSave}
   variant="secondary"
-  loading={saving}
   disabled={Object.keys(validationErrors).length > 0}
   className={`
     flex items-center gap-2 px-6 py-2.5 
@@ -1348,73 +1347,7 @@ const AdminSettings = () => {
 
           {activeTab === 'general' && (
             <div className="space-y-6">
-              {/* Profile Section */}
-              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
-                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
-                  <UserCheck className="w-5 h-5" />
-                  Administrator Profile
-                </h3>
-                <ProfilePictureUpload
-                  currentImage={profileImage}
-                  fullName={user?.fullName}
-                  isDark={isDark}
-                  onUpload={async (imageUrl) => {
-                    console.log('🔍 Profile picture uploaded successfully:', imageUrl);
-                    
-                    // Immediately update local state
-                    setProfileImage(imageUrl);
-                    
-                    // Update formData to include the new profile picture
-                    setFormData(prev => ({
-                      ...prev,
-                      profilePicture: imageUrl,
-                      profileImage: imageUrl
-                    }));
-                    
-                    // Immediately update localStorage to ensure persistence
-                    try {
-                      const storedUser = localStorage.getItem('user');
-                      if (storedUser) {
-                        const parsedUser = JSON.parse(storedUser);
-                        parsedUser.profilePicture = imageUrl;
-                        parsedUser.profileImage = imageUrl;
-                        localStorage.setItem('user', JSON.stringify(parsedUser));
-                        console.log('🔍 Profile picture updated in localStorage immediately:', imageUrl);
-                        
-                        // Force a storage event to trigger the useEffect
-                        window.dispatchEvent(new StorageEvent('storage', {
-                          key: 'user',
-                          newValue: JSON.stringify(parsedUser)
-                        }));
-                      }
-                    } catch (error) {
-                      console.error('Error updating localStorage:', error);
-                    }
-                    
-                    // Update both profilePicture and profileImage fields for consistency
-                    if (updateUser) {
-                      console.log('🔍 Updating user context with new profile picture');
-                      updateUser({ 
-                        profilePicture: imageUrl, 
-                        profileImage: imageUrl 
-                      });
-                    }
-                    
-                    // Small delay to ensure state updates, then refresh
-                    setTimeout(async () => {
-                      // Refresh user data from server to ensure consistency
-                      if (refreshUser) {
-                        try {
-                          await refreshUser();
-                          console.log('🔍 User data refreshed from server');
-                        } catch (error) {
-                          console.error('Error refreshing user data:', error);
-                        }
-                      }
-                    }, 500);
-                  }}
-                />
-              </div>
+             
 
               {/* Platform Configuration */}
               <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
@@ -1467,124 +1400,7 @@ const AdminSettings = () => {
                 </h3>
                 
                 <div className="space-y-6">
-                  {/* SMTP Email Settings */}
-                  <div>
-                    <h4 className={`text-md font-medium mb-3 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>SMTP Email Settings</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input
-                        label="SMTP Host"
-                        value={formData.notifications?.email?.smtp?.host || ''}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          notifications: {
-                            ...formData.notifications,
-                            email: {
-                              ...formData.notifications?.email,
-                              smtp: {
-                                ...formData.notifications?.email?.smtp,
-                                host: e.target.value
-                              }
-                            }
-                          }
-                        })}
-                        placeholder="smtp.gmail.com"
-                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
-                      />
-                      
-                      <Input
-                        label="SMTP Port"
-                        type="number"
-                        value={formData.notifications?.email?.smtp?.port || 587}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          notifications: {
-                            ...formData.notifications,
-                            email: {
-                              ...formData.notifications?.email,
-                              smtp: {
-                                ...formData.notifications?.email?.smtp,
-                                port: parseInt(e.target.value) || 587
-                              }
-                            }
-                          }
-                        })}
-                        placeholder="587"
-                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
-                      />
-                      
-                      <Input
-                        label="SMTP Email"
-                        type="email"
-                        value={formData.notifications?.email?.smtp?.auth?.user || ''}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          notifications: {
-                            ...formData.notifications,
-                            email: {
-                              ...formData.notifications?.email,
-                              smtp: {
-                                ...formData.notifications?.email?.smtp,
-                                auth: {
-                                  ...formData.notifications?.email?.smtp?.auth,
-                                  user: e.target.value
-                                }
-                              }
-                            }
-                          }
-                        })}
-                        placeholder="your-email@gmail.com"
-                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
-                      />
-                      
-                      <Input
-                        label="App Password"
-                        type="password"
-                        value={formData.notifications?.email?.smtp?.auth?.pass || ''}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          notifications: {
-                            ...formData.notifications,
-                            email: {
-                              ...formData.notifications?.email,
-                              smtp: {
-                                ...formData.notifications?.email?.smtp,
-                                auth: {
-                                  ...formData.notifications?.email?.smtp?.auth,
-                                  pass: e.target.value
-                                }
-                              }
-                            }
-                          }
-                        })}
-                        placeholder="••••••••••••••••"
-                        className={isDark ? 'bg-zinc-900/50 border-zinc-600' : 'bg-white border-zinc-300'}
-                      />
-                    </div>
-                    
-                    <div className="mt-4">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={formData.notifications?.email?.smtp?.secure || false}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            notifications: {
-                              ...formData.notifications,
-                              email: {
-                                ...formData.notifications?.email,
-                                smtp: {
-                                  ...formData.notifications?.email?.smtp,
-                                  secure: e.target.checked
-                                }
-                              }
-                            }
-                          })}
-                          className={`mr-2 ${isDark ? 'bg-zinc-700 border-zinc-600' : 'bg-white border-zinc-300'}`}
-                        />
-                        <span className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Use SSL/TLS</span>
-                      </label>
-                    </div>
-                  </div>
+                
 
                   {/* Email Sender Details */}
                   <div>
@@ -1647,171 +1463,7 @@ const AdminSettings = () => {
 
           {activeTab === 'security' && (
             <div className="space-y-6">
-              {/* Admin Account Settings */}
-              <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
-                <h3 className="text-lg font-medium mb-4 flex items-center gap-2" style={{ fontFamily: 'Playfair Display, serif' }}>
-                  <UserCheck className="w-5 h-5" />
-                  Admin Account Settings
-                </h3>
-                
-                <div className="space-y-4">
-                  {/* Email Change */}
-                  <div className={`p-4 ${isDark ? 'bg-zinc-900/50' : 'bg-zinc-100'} rounded-lg`}>
-                    <div className="mb-4">
-                      <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                        Current Email
-                      </label>
-                      <input
-                        type="email"
-                        value={user?.email || ''}
-                        disabled
-                        className={`w-full px-4 py-2 border rounded-lg bg-opacity-50 ${
-                          isDark ? 'bg-zinc-800 border-zinc-600 text-zinc-400' : 'bg-gray-100 border-gray-300 text-gray-500'
-                        }`}
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                          New Email
-                        </label>
-                        <input
-                          type="email"
-                          value={formData.newEmail || ''}
-                          onChange={(e) => setFormData({...formData, newEmail: e.target.value})}
-                          placeholder="Enter new email"
-                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
-                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                          Confirm New Email
-                        </label>
-                        <input
-                          type="email"
-                          value={formData.confirmNewEmail || ''}
-                          onChange={(e) => setFormData({...formData, confirmNewEmail: e.target.value})}
-                          placeholder="Confirm new email"
-                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
-                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                    
-                 <div className="mt-4">
-  <Button
-    variant="secondry" 
-    onClick={handleEmailChange}
-    loading={saving}
-    disabled={!formData.newEmail || formData.newEmail !== formData.confirmNewEmail}
-    className="
-      relative overflow-hidden
-      bg-blue-600 text-white
-      px-8 py-2.5 rounded-lg
-      font-medium tracking-wide
-      transition-all duration-300 ease-in-out
-      
-      /* Hover: Lift effect and soft blue glow */
-      hover:bg-blue-500 
-      hover:-translate-y-0.5 
-      hover:shadow-[0_10px_20px_-10px_rgba(37,99,235,0.5)]
-      
-      /* Active: Physical press sensation */
-      active:scale-95 active:translate-y-0
-      
-      /* Disabled state: Clean and muted */
-      disabled:opacity-40 disabled:grayscale-[0.5] 
-      disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none
-    "
-  >
-    <span className="relative z-10 flex items-center gap-2">
-      Update Email
-    </span>
-    
-    {/* Subtle Inner Highlight for a 'Glass' feel */}
-    <div className="absolute inset-0 bg-gradient-to-t from-white/0 to-white/10 opacity-0 hover:opacity-100 transition-opacity duration-300" />
-  </Button>
-</div>
-                  </div>
-
-                  {/* Password Change */}
-                  <div className={`p-4 ${isDark ? 'bg-zinc-900/50' : 'bg-zinc-100'} rounded-lg`}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                          Current Password
-                        </label>
-                        <input
-                          type="password"
-                          value={formData.currentPassword || ''}
-                          onChange={(e) => setFormData({...formData, currentPassword: e.target.value})}
-                          placeholder="Enter current password"
-                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
-                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                          New Password
-                        </label>
-                        <input
-                          type="password"
-                          value={formData.newPassword || ''}
-                          onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
-                          placeholder="Enter new password"
-                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
-                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                          Confirm New Password
-                        </label>
-                        <input
-                          type="password"
-                          value={formData.confirmNewPassword || ''}
-                          onChange={(e) => setFormData({...formData, confirmNewPassword: e.target.value})}
-                          placeholder="Confirm new password"
-                          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
-                            isDark ? 'bg-zinc-900/50 border-zinc-600 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                    
-                  <div className="mt-4">
-  <Button
-    variant="secondry"
-    onClick={handlePasswordChange}
-    loading={saving}
-    disabled={!formData.currentPassword || !formData.newPassword || formData.newPassword !== formData.confirmNewPassword}
-    // Added: smooth transitions, scale on tap, and refined shadows
-    className="
-      relative overflow-hidden
-      bg-green-600 hover:bg-green-500 
-      text-white font-medium
-      px-6 py-2 rounded-lg
-      transition-all duration-300 ease-out
-      hover:shadow-[0_0_20px_rgba(22,163,74,0.4)]
-      active:scale-95
-      disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none
-    "
-  >
-    <span className="relative z-10">Update Password</span>
-  </Button>
-</div>
-                  </div>
-                </div>
-              </div>
+           
 
               {/* Two-Factor Authentication */}
               <div className={`p-6 rounded-xl border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
