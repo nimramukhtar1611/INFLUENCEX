@@ -60,6 +60,42 @@ class CampaignService {
     }
   }
 
+  // ==================== GET ALL CAMPAIGNS ====================
+
+  /**
+   * Get all campaigns for the current user
+   * @param {Object} filters - Optional filters
+   * @returns {Promise<Object>}
+   */
+  async getCampaigns(filters = {}) {
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key]) params.append(key, filters[key]);
+      });
+      const response = await api.get(`/campaigns?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get campaigns error:', error);
+      return this._handleError(error, 'Failed to load campaigns');
+    }
+  }
+
+  /**
+   * Get campaign details by ID
+   * @param {string} campaignId - Campaign ID
+   * @returns {Promise<Object>}
+   */
+  async getCampaignDetails(campaignId) {
+    try {
+      const response = await api.get(`/campaigns/${campaignId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Get campaign details error:', error);
+      return this._handleError(error, 'Failed to load campaign details');
+    }
+  }
+
   // ==================== GET SINGLE CAMPAIGN ====================
 
   /**

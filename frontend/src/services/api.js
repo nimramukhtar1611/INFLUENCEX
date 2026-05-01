@@ -84,6 +84,31 @@ const clearTokens = () => {
 // ==================== REQUEST INTERCEPTOR ====================
 api.interceptors.request.use(
   async (config) => {
+    // Check for rate limiting before making request
+    const rateLimitKey = `rate_limit_${config.url}`;
+    const rateLimitData = localStorage.getItem(rateLimitKey);
+    
+    if (rateLimitData) {
+      try {
+        const { timestamp, retryAfter } = JSON.parse(rateLimitData);
+        if (Date.now() - timestamp < retryAfter) {
+          // Still within rate limit window, reject the request
+          return Promise.reject({
+            success: false,
+            error: 'Rate limit exceeded. Please wait before making this request.',
+            code: 'RATE_LIMIT_STILL_ACTIVE',
+            shouldNotLogout: true
+          });
+        } else {
+          // Rate limit expired, clear it
+          localStorage.removeItem(rateLimitKey);
+        }
+      } catch (error) {
+        // Invalid rate limit data, clear it
+        localStorage.removeItem(rateLimitKey);
+      }
+    }
+    
     const token = localStorage.getItem('token');
     
     if (token && token !== 'undefined' && token !== 'null') {
@@ -162,7 +187,7 @@ api.interceptors.response.use(
   async (error) => {
         
     if (import.meta.env.DEV) {
-      console.error(`❌ ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
+      console.error(`❌ ${error.config?.method?.toUpperCase() || 'UNKNOWN'} ${error.config?.url || 'UNKNOWN'}`, {
         status: error.response?.status,
         message: error.message,
         data: error.response?.data
@@ -170,11 +195,13 @@ api.interceptors.response.use(
     }
     const originalRequest = error.config;
 
-    // Initialize retry count
-    originalRequest._retryCount = originalRequest._retryCount || 0;
+    // Initialize retry count (only if originalRequest exists)
+    if (originalRequest) {
+      originalRequest._retryCount = originalRequest._retryCount || 0;
+    }
     
     // Check if we should retry this error (before auth handling)
-    if (shouldRetry(error) && originalRequest._retryCount < MAX_RETRIES) {
+    if (shouldRetry(error) && originalRequest && originalRequest._retryCount < MAX_RETRIES) {
       originalRequest._retryCount++;
       console.log(`🔄 API request retry ${originalRequest._retryCount}/${MAX_RETRIES} for ${originalRequest.method?.toUpperCase()} ${originalRequest.url}`);
       
@@ -187,7 +214,7 @@ api.interceptors.response.use(
     }
 
     // Prevent infinite loops for auth retries
-    if (originalRequest._retry) {
+    if (originalRequest && originalRequest._retry) {
       return Promise.reject(error);
     }
 
@@ -211,7 +238,7 @@ api.interceptors.response.use(
     const { status, data } = error.response;
 
     // Handle 401 Unauthorized - IMPROVED RACE CONDITION HANDLING
-    if (status === 401 && !originalRequest._retry) {
+    if (status === 401 && originalRequest && !originalRequest._retry) {
       // Don't retry on auth endpoints including refresh
       const isAuthEndpoint =
         originalRequest.url?.includes('/admin/login') ||
@@ -257,7 +284,9 @@ api.interceptors.response.use(
       }
 
       // Mark request for retry to prevent infinite loops
-      originalRequest._retry = true;
+      if (originalRequest) {
+        originalRequest._retry = true;
+      }
 
       // If already refreshing, queue request
       if (isRefreshing) {
@@ -265,8 +294,11 @@ api.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return api(originalRequest);
+            if (originalRequest && originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return api(originalRequest);
+            }
+            throw new Error('Original request configuration is missing');
           })
           .catch((err) => Promise.reject(err));
       }
@@ -284,8 +316,11 @@ api.interceptors.response.use(
         processQueue(null, newToken);
 
         // Retry original request
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        return api(originalRequest);
+        if (originalRequest && originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        }
+        throw new Error('Original request configuration is missing');
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError.message);
         processQueue(refreshError, null);
@@ -321,10 +356,18 @@ api.interceptors.response.use(
       });
     }
 
-    // Handle 429 Rate Limit
+    // Handle 429 Rate Limit - Enhanced to prevent API flooding
     if (status === 429) {
       const retryAfter = error.response.headers['retry-after'] || 60;
       console.warn(`⚠️ Rate limit hit, retry after ${retryAfter}s`);
+      
+      // Store rate limit info to prevent immediate retries
+      const rateLimitKey = originalRequest ? `rate_limit_${originalRequest.url}` : 'rate_limit_unknown';
+      const rateLimitData = {
+        timestamp: Date.now(),
+        retryAfter: retryAfter * 1000
+      };
+      localStorage.setItem(rateLimitKey, JSON.stringify(rateLimitData));
       
       // Return a promise that rejects after delay to prevent immediate retry
       return new Promise((resolve) => {

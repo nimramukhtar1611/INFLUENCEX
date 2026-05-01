@@ -40,6 +40,9 @@ async function checkBrandOwnership(req, res, next) {
 // Update a campaign
 router.put('/:id', authorize('brand'), hasPermission('edit_campaigns'), checkBrandOwnership, campaignController.updateCampaign);
 
+// Get all campaigns (for current user)
+router.get('/', campaignController.getBrandCampaigns);
+
 // Get campaigns created by the brand
 router.get('/brand', authorize('brand'), hasPermission('view_campaigns'), campaignController.getBrandCampaigns);
 

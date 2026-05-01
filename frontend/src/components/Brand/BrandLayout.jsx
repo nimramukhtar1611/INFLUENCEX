@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
 const BrandLayout = ({ 
@@ -58,7 +58,7 @@ const BrandLayout = ({
                   onClick={() => onTabChange?.(tab.id)}
                   className={`flex items-center gap-2 px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border whitespace-nowrap ${
                     activeTab === tab.id 
-                      ? (isDark ? 'bg-zinc-900 border-white text-gray-800' : 'bg-black border-black text-white')
+                      ? (isDark ? 'bg-white border-white text-white' : 'bg-black border-black text-white')
                       : (isDark ? 'border-zinc-800 text-zinc-400 hover:border-zinc-600' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400')
                   }`}
                 >
@@ -86,7 +86,7 @@ const BrandLayout = ({
                 onClick={() => onFilterChange?.(filter.id)}
                 className={`px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border whitespace-nowrap ${
                   activeFilter === filter.id 
-                    ? (isDark ? 'bg-zinc-900 border-white text-gray-400' : 'bg-black border-black text-white')
+                    ? (isDark ? 'bg-white border-white text-gray-400' : 'bg-black border-black text-white')
                     : (isDark ? 'border-zinc-800 text-zinc-400 hover:border-zinc-600' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400')
                 }`}
               >

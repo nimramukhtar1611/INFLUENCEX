@@ -132,51 +132,67 @@ const updateContract = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Generate contract from template
+// @desc    Generate contract from template or create contract directly
 // @route   POST /api/contracts/generate
 // @access  Private
 const generateFromTemplate = asyncHandler(async (req, res) => {
-  const { campaignId, creatorId, template } = req.body;
+  const { campaignId, creatorId, template, ...contractData } = req.body;
   
-  // Get campaign
-  const Campaign = require('../models/Campaign');
-  const campaign = await Campaign.findById(campaignId);
-  
-  if (!campaign) {
-    res.status(404);
-    throw new Error('Campaign not found');
+  // If campaignId and creatorId are provided, use template generation
+  if (campaignId && creatorId) {
+    // Get campaign
+    const Campaign = require('../models/Campaign');
+    const campaign = await Campaign.findById(campaignId);
+    
+    if (!campaign) {
+      res.status(404);
+      throw new Error('Campaign not found');
+    }
+
+    // Get creator
+    const Creator = require('../models/Creator');
+    const creator = await Creator.findById(creatorId);
+    
+    if (!creator) {
+      res.status(404);
+      throw new Error('Creator not found');
+    }
+
+    // Create deal temporarily for contract generation
+    const tempDeal = {
+      _id: new mongoose.Types.ObjectId(),
+      brandId: req.user._id,
+      creatorId,
+      campaignId,
+      deliverables: campaign.deliverables,
+      budget: campaign.budget,
+      platformFee: campaign.budget * 0.1,
+      netAmount: campaign.budget * 0.9,
+      deadline: campaign.endDate,
+      createdBy: req.user._id
+    };
+
+    const contract = await ContractService.createContractFromDeal(tempDeal);
+
+    res.json({
+      success: true,
+      message: 'Contract generated successfully',
+      contract
+    });
+  } else {
+    // Direct contract creation
+    const contract = await ContractService.createContractFromData({
+      ...contractData,
+      brandId: req.user._id,
+      createdBy: req.user._id
+    });
+
+    res.json({
+      success: true,
+      message: 'Contract created successfully',
+      contract
+    });
   }
-
-  // Get creator
-  const Creator = require('../models/Creator');
-  const creator = await Creator.findById(creatorId);
-  
-  if (!creator) {
-    res.status(404);
-    throw new Error('Creator not found');
-  }
-
-  // Create deal temporarily for contract generation
-  const tempDeal = {
-    _id: new mongoose.Types.ObjectId(),
-    brandId: req.user._id,
-    creatorId,
-    campaignId,
-    deliverables: campaign.deliverables,
-    budget: campaign.budget,
-    platformFee: campaign.budget * 0.1,
-    netAmount: campaign.budget * 0.9,
-    deadline: campaign.endDate,
-    createdBy: req.user._id
-  };
-
-  const contract = await ContractService.createContractFromDeal(tempDeal);
-
-  res.json({
-    success: true,
-    message: 'Contract generated successfully',
-    contract
-  });
 });
 
 // @desc    Sign contract

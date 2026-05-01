@@ -9,6 +9,7 @@ import { SocketProvider } from './context/SocketContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { CampaignProvider } from './context/CampaignContext';
 import { DealProvider } from './context/DealContext';
+import { ContractProvider } from './context/ContractContext';
 import { MessageProvider } from './context/MessageContext';
 import { PaymentProvider } from './context/PaymentContext';
 import { SearchProvider } from './context/SearchContext';
@@ -41,6 +42,7 @@ import BrandSearchCreators from './pages/Brand/SearchCreators';
 import BrandDeals from './pages/Brand/Deals';
 import BrandCampaignEdit from './pages/Brand/CampaignEdit'
 import CreateDeal from './pages/Brand/CreateDeal';
+import CreateContract from './pages/Brand/CreateContract';
 import BrandCreatorProfile from './pages/Brand/CreatorProfile';
 import BrandDealDetails from './pages/Brand/DealDetails';
 import BrandAnalytics from './pages/Brand/Analytics';
@@ -80,7 +82,7 @@ import AdminLogin from './pages/Admin/AdminLogin';
 // Common Pages
 import Notifications from './components/Common/Notifications';
 import Disputes from './components/Common/Disputes';
-import Contracts from './components/Common/Contracts';
+import Contracts from './pages/Brand/Contracts';
 import FAQs from './pages/FAQs';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -119,7 +121,8 @@ function App() {
                 <NotificationProvider>     
                   <CampaignProvider>
                     <DealProvider>
-                      <MessageProvider>
+                      <ContractProvider>
+                        <MessageProvider>
                         <PaymentProvider>
                           <SubscriptionProvider>
                             <SearchProvider>
@@ -164,9 +167,9 @@ function App() {
                                 <Route path="creators/:id" element={<BrandCreatorProfile />} />
                                 <Route path="deals" element={<BrandDeals />} />
                                 <Route path="deals/:id" element={<BrandDealDetails />} />
-                                <Route path="analytics" element={<BrandAnalytics />} />
                                 <Route path="payments" element={<BrandPayments />} />
                                 <Route path="createdeal" element={<CreateDeal />} />
+                                <Route path="createcontract" element={<CreateContract />} />
                                 <Route path="profile" element={<BrandProfile />} />
                                 <Route path="settings" element={<BrandSettings />} />
                                 <Route path="subscription" element={<SubscriptionManager />} />
@@ -190,7 +193,6 @@ function App() {
                                 <Route path="deals/:id" element={<CreatorDealDetails />} />
                                 <Route path="deliverables/:dealId" element={<CreatorDeliverables />} />
                                 <Route path="brands/:id" element={<BrandProfileView />} />
-                                <Route path="analytics" element={<CreatorAnalytics />} />
                                 <Route path="growth-os" element={<CreatorGrowthOSGate><CreatorGrowthOS /></CreatorGrowthOSGate>} />
                                 <Route path="earnings" element={<CreatorEarnings />} />
                                 <Route path="withdrawals" element={<CreatorWithdrawals />} />
@@ -232,6 +234,7 @@ function App() {
                           </SubscriptionProvider>
                         </PaymentProvider>
                       </MessageProvider>
+                      </ContractProvider>
                     </DealProvider>
                   </CampaignProvider>
                 </NotificationProvider>

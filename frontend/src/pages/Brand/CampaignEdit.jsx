@@ -582,8 +582,8 @@ const CampaignEdit = () => {
                 className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
                     ? isDark
-                      ? 'border-gray-500 text-gray-400'
-                      : 'border-gray-500 text-gray-600'
+                      ? 'border-gray-500  text-white'
+                      : 'border-gray-500  text-gray-600'
                     : isDark
                     ? 'border-transparent text-zinc-400 hover:text-zinc-300 hover:border-zinc-700'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

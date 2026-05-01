@@ -792,7 +792,7 @@ const BrandInbox = () => {
           relative px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border shrink-0
           ${filter === f
             ? (isDark 
-                ? 'bg-black text-white border-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.2)]' 
+                ? 'bg-white text-white border-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.2)]' 
                 : 'bg-black border-black text-white shadow-[0_10px_20px_rgba(0,0,0,0.1)]')
             : (isDark 
                 ? 'bg-zinc-900/40 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300' 

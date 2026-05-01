@@ -481,145 +481,110 @@ const AdminUsers = () => {
       <div 
         key={user._id}
         className={`
-          group relative grid grid-cols-1 md:grid-cols-12 items-center px-8 py-5 rounded-[2.5rem] border 
+          group relative grid grid-cols-1 md:grid-cols-12 items-center px-6 py-4 rounded-[2rem] border 
           transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
           ${isDark 
             ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)]' 
             : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]'}
         `}
       >
-        {/* Profile Identity - The "Identity Card" Look */}
-        <div className="col-span-4 flex items-center gap-5">
+        {/* Profile Identity - Fixed Truncation */}
+        <div className="col-span-4 flex items-center gap-4 min-w-0">
           <div className="relative shrink-0">
             <div className={`
-                p-1 rounded-[1.4rem] border transition-all duration-700 
-                ${isDark ? 'bg-zinc-800 border-zinc-700 group-hover:border-zinc-500' : 'bg-white border-zinc-100 shadow-sm group-hover:border-zinc-300'}
+                p-1 rounded-[1.2rem] border transition-all duration-700 
+                ${isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-100 shadow-sm'}
             `}>
               {user.profilePicture ? (
                 <img 
                   src={user.profilePicture} 
-                  className="w-12 h-12 rounded-[1rem] object-cover grayscale group-hover:grayscale-0 transition-all duration-700 ease-in-out group-hover:scale-110" 
+                  className="w-10 h-10 rounded-[0.8rem] object-cover grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" 
                   alt="" 
                 />
               ) : (
-                <div className={`w-12 h-12 rounded-[1rem] flex items-center justify-center ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}>
-                  <User className="w-6 h-6 text-zinc-500 opacity-40" />
+                <div className={`w-10 h-10 rounded-[0.8rem] flex items-center justify-center ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}>
+                  <User className="w-5 h-5 text-zinc-500 opacity-40" />
                 </div>
               )}
             </div>
-            {/* Minimalist Online/Status Dot */}
-            <div className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full border-[3px] shadow-sm ${isDark ? 'border-zinc-900' : 'border-white'} ${user.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+            <div className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[3px] ${isDark ? 'border-zinc-900' : 'border-white'} ${user.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
           </div>
           
-          <div className="flex flex-col min-w-0">
-            <span className={`font-bold text-[15px] tracking-tight leading-tight ${isDark ? 'text-zinc-100 group-hover:text-white' : 'text-zinc-900'}`}>
+          <div className="flex flex-col min-w-0 overflow-hidden">
+            <span className={`font-bold text-[14px] truncate tracking-tight leading-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
               {user.fullName}
             </span>
-            <span className={`text-[11px] font-medium text-zinc-500 opacity-60 truncate tracking-tight mt-0.5`}>
+            <span className={`text-[10px] font-medium text-zinc-500 opacity-60 truncate tracking-tight`}>
               {user.email}
             </span>
           </div>
         </div>
 
-        {/* Type Col - Modern Ghost Tag */}
-        <div className="col-span-2 mt-3 md:mt-0">
-          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all duration-500 ${
+        {/* Type Col */}
+        <div className="col-span-2 mt-3 md:mt-0 overflow-hidden">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
             user.userType === 'brand' 
-              ? 'bg-blue-500/5 border-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]'
-              : 'bg-purple-500/5 border-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white group-hover:shadow-[0_0_20_rgba(168,85,247,0.3)]'
+              ? 'bg-blue-500/5 border-blue-500/10 text-blue-500'
+              : 'bg-purple-500/5 border-purple-500/10 text-purple-500'
           }`}>
-            <TypeIcon size={12} strokeWidth={3} />
-            {user.userType}
+            <TypeIcon size={10} strokeWidth={3} />
+            <span className="truncate">{user.userType}</span>
           </span>
         </div>
 
-        {/* Status Col - Centered Glass Pill */}
-        <div className="col-span-2 mt-3 md:mt-0 flex justify-center">
-          <div className={`
-            flex items-center gap-2.5 px-4 py-1.5 rounded-full border transition-all duration-300
-            ${isDark ? 'bg-zinc-800/40 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}
-          `}>
-             <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'active' ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-zinc-400 opacity-50'}`} />
-             <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{user.status}</span>
+        {/* Status Col */}
+        <div className="col-span-2 mt-3 md:mt-0 flex md:justify-center">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isDark ? 'bg-zinc-800/40 border-zinc-800' : 'bg-zinc-50 border-zinc-100'}`}>
+             <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400 opacity-50'}`} />
+             <span className={`text-[9px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{user.status}</span>
           </div>
         </div>
 
-        {/* Verification Col - The "Vetting" Label */}
-        <div className="col-span-2 mt-3 md:mt-0 flex flex-col items-center">
-          <div className={`flex items-center gap-1.5 text-[10px] font-black tracking-[0.15em] transition-all duration-500 ${user.isVerified ? 'text-emerald-500' : 'text-zinc-500 opacity-40'}`}>
-            {user.isVerified ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+        {/* Verification Col */}
+        <div className="col-span-2 mt-3 md:mt-0 flex flex-col md:items-center">
+          <div className={`flex items-center gap-1.5 text-[9px] font-black tracking-widest ${user.isVerified ? 'text-emerald-500' : 'text-zinc-500 opacity-40'}`}>
+            {user.isVerified ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
             {user.isVerified ? 'VERIFIED' : 'PENDING'}
           </div>
-          <span className="text-[8px] font-bold text-zinc-500 opacity-30 uppercase mt-1">Vetting Status</span>
         </div>
 
-        {/* Actions Col - "Floating Utility" Layout */}
-       {/* Actions Col - "Floating Utility" Layout */}
-<div className="col-span-2 mt-4 md:mt-0 flex justify-end gap-2">
-  {[
-    { 
-      icon: Eye, 
-      label: "View", 
-      onClick: () => { setSelectedUser(user); setShowUserModal(true); } 
-    },
-    ...(!user.isVerified ? [{ 
-      icon: CheckCircle, 
-      label: "Verify", 
-      onClick: () => handleVerify(user._id) 
-    }] : []),
-    ...(user.status === 'active' 
-      ? [{ 
-          icon: Ban, 
-          label: "Suspend", 
-          onClick: () => { setSelectedUser(user); setShowSuspendModal(true); } 
-        }]
-      : [{ 
-          icon: ThumbsUp, 
-          label: "Activate", 
-          onClick: () => handleActivate(user._id) 
-        }]
-    ),
-    { 
-      icon: Trash2, 
-      label: "Delete", 
-      onClick: () => { setSelectedUser(user); setShowDeleteModal(true); }, 
-      isDelete: true 
-    }
-  ].map((action, i) => (
-    <button
-      key={i}
-      onClick={(e) => { e.stopPropagation(); action.onClick(); }}
-      className={`
-        p-3 rounded-xl border transition-all duration-300 group/btn
-        hover:scale-110 active:scale-90 hover:shadow-xl
-        ${action.isDelete 
-          ? 'text-red-500 border-transparent hover:bg-red-500 hover:text-white shadow-red-500/20' 
-          : isDark 
-            ? 'bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:bg-white hover:text-black hover:border-white' 
-            : 'bg-zinc-100/50 border-zinc-200/50 text-zinc-500 hover:bg-black hover:text-white hover:border-black shadow-sm'
-        }
-      `}
-      title={action.label}
-    >
-      <action.icon className="w-4 h-4 transition-transform duration-300 group-hover/btn:rotate-[-5deg]" strokeWidth={2.5} />
-    </button>
-  ))}
-</div>
+        {/* Actions Col - Fixed Overlap and Sizing */}
+        <div className="col-span-2 mt-4 md:mt-0 flex justify-end flex-wrap gap-1.5">
+          {[
+            { icon: Eye, label: "View", onClick: () => { setSelectedUser(user); setShowUserModal(true); } },
+            ...(!user.isVerified ? [{ icon: CheckCircle, label: "Verify", onClick: () => handleVerify(user._id) }] : []),
+            ...(user.status === 'active' 
+              ? [{ icon: Ban, label: "Suspend", onClick: () => { setSelectedUser(user); setShowSuspendModal(true); } }]
+              : [{ icon: ThumbsUp, label: "Activate", onClick: () => handleActivate(user._id) }]
+            ),
+            { icon: Trash2, label: "Delete", onClick: () => { setSelectedUser(user); setShowDeleteModal(true); }, isDelete: true }
+          ].map((action, i) => (
+            <button
+              key={i}
+              onClick={(e) => { e.stopPropagation(); action.onClick(); }}
+              className={`
+                p-2 rounded-lg border transition-all duration-200 group/btn
+                hover:scale-105 active:scale-95
+                ${action.isDelete 
+                  ? 'text-red-500 border-transparent hover:bg-red-500 hover:text-white shadow-sm' 
+                  : isDark 
+                    ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-white hover:text-white' 
+                    : 'bg-zinc-100 border-zinc-200 text-zinc-500 hover:bg-black hover:text-white'
+                }
+              `}
+              title={action.label}
+            >
+              <action.icon className="w-3.5 h-3.5" strokeWidth={2.5} />
+            </button>
+          ))}
+        </div>
       </div>
     );
   }) : (
-    /* Empty State - Modern Search Vibe */
-    <div className={`
-      flex flex-col items-center justify-center py-32 rounded-[3rem] border-2 border-dashed transition-all
-      ${isDark ? 'border-zinc-800 bg-zinc-900/10' : 'border-zinc-100 bg-zinc-50/50'}
-    `}>
-      <div className={`p-8 rounded-[2.5rem] mb-6 shadow-inner ${isDark ? 'bg-zinc-800/50' : 'bg-white'}`}>
-        <Search className="w-12 h-12 text-zinc-500 opacity-20 stroke-[1px]" />
-      </div>
-      <h3 className="text-lg font-bold tracking-tight">Zero Identities Found</h3>
-      <p className="text-[12px] text-zinc-500 mt-2 max-w-[240px] text-center leading-relaxed">
-        No accounts match your current directory filters. Try adjusting your search query.
-      </p>
+    /* Empty State */
+    <div className={`flex flex-col items-center justify-center py-20 rounded-[2rem] border-2 border-dashed ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+      <Search className="w-10 h-10 text-zinc-500 opacity-20 mb-4" />
+      <h3 className="text-md font-bold">No Records</h3>
     </div>
   )}
 </div>

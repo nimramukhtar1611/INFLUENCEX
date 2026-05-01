@@ -55,9 +55,20 @@ const BrandDashboard = () => {
   const fetchDashboardDataRef = useRef(null);
   
   const fetchDashboardData = useCallback(async (showToast = false) => {
+    // Prevent duplicate calls using ref
+    if (fetchDashboardDataRef.current?.loading) {
+      console.log('Dashboard data fetch already in progress, skipping');
+      return;
+    }
+
     try {
       if (showToast) setRefreshing(true);
       else setLoading(true);
+
+      // Mark as loading
+      if (fetchDashboardDataRef.current) {
+        fetchDashboardDataRef.current.loading = true;
+      }
 
       const results = await Promise.allSettled([
         brandService.getProfile(),
@@ -109,31 +120,38 @@ const BrandDashboard = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      // Mark as not loading
+      if (fetchDashboardDataRef.current) {
+        fetchDashboardDataRef.current.loading = false;
+      }
     }
-  }, []); // Remove dateRange dependency to prevent infinite loop
+  }, [dateRange]); // Add dateRange dependency properly
 
   // Store the latest function in ref
-  fetchDashboardDataRef.current = fetchDashboardData;
+  fetchDashboardDataRef.current = { 
+    fetch: fetchDashboardData, 
+    loading: false 
+  };
 
   useEffect(() => {
     // Delay API calls to prevent race condition with auth state
     const timer = setTimeout(() => {
-      if (fetchDashboardDataRef.current) {
-        fetchDashboardDataRef.current();
+      if (fetchDashboardDataRef.current && !fetchDashboardDataRef.current.loading) {
+        fetchDashboardDataRef.current.fetch();
       }
-    }, 100);
+    }, 300); 
     
     return () => clearTimeout(timer);
-  }, [dateRange]); // Only depend on dateRange, not fetchDashboardData
+  }, [dateRange]);
 
-  const handleRefresh = () => {
-    if (fetchDashboardDataRef.current) {
-      fetchDashboardDataRef.current(true);
+  const handleRefresh = () => {
+    if (fetchDashboardDataRef.current && !fetchDashboardDataRef.current.loading) {
+      fetchDashboardDataRef.current.fetch(true);
     }
   };
 
-  const activeDealsList = useMemo(() => (deals || []).filter(d => ['accepted', 'in-progress'].includes(d.status)), [deals]);
-  const completedDealsList = useMemo(() => (deals || []).filter(d => d.status === 'completed'), [deals]);
+  const activeDealsList = useMemo(() => (deals || []).filter(d => ['accepted', 'in-progress'].includes(d.status)), [deals]);
+  const completedDealsList = useMemo(() => (deals || []).filter(d => d.status === 'completed'), [deals]);
 
   const processedAnalytics = analytics ? {
     campaignPerformance: analytics.campaignPerformance || [],

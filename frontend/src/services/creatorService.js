@@ -242,6 +242,37 @@ class CreatorService {
     }
   }
 
+  // ==================== SEARCH ====================
+
+  /**
+   * Search creators with filters
+   * @param {Object} filters - Search filters including campaign, query, niche, etc.
+   * @returns {Promise<Object>} { success, creators, pagination }
+   */
+  async searchCreators(filters = {}) {
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== undefined && filters[key] !== '') {
+          // Map frontend parameter names to backend parameter names
+          if (key === 'campaign') {
+            params.append('campaignId', filters[key]);
+          } else if (key === 'query') {
+            params.append('q', filters[key]);
+          } else {
+            params.append(key, filters[key]);
+          }
+        }
+      });
+      
+      const response = await api.get(`/search/creators?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Search creators error:', error);
+      return this._handleError(error, 'Failed to search creators');
+    }
+  }
+
   // ==================== BRAND INTERACTIONS ====================
 
   /**

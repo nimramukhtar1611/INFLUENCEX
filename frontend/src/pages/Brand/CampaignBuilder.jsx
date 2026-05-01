@@ -1475,7 +1475,7 @@ case 5:
         className={`flex items-center justify-center w-full h-8 rounded-lg border-2 transition-colors text-xs font-medium px-2
         ${
           currentStep === step.number
-            ? `${isDark ? 'border-zinc-300 text-zinc-300' : 'border-zinc-700 text-zinc-700'}`
+            ? `${isDark ? 'border-zinc-300 bg-white text-zinc-300' : 'border-zinc-700 text-zinc-700'}`
             : 'border-zinc-300 text-zinc-400'
         }`}
       >
@@ -1494,7 +1494,7 @@ case 5:
         className={`flex items-center justify-center w-28 h-6 rounded-lg border-2 transition-colors text-xs font-medium px-2
         ${
           currentStep === step.number
-            ? `${isDark ? 'border-zinc-300 text-zinc-300' : 'border-zinc-700 bg-black text-white'}`
+            ? `${isDark ? 'border-zinc-300 bg-white text-zinc-300' : 'border-zinc-700 bg-black text-white'}`
             : 'border-zinc-300 text-zinc-400'
         }`}
       >

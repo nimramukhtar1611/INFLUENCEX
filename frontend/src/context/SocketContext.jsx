@@ -1,6 +1,6 @@
 // context/SocketContext.jsx
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from './AuthContext';
 import io from 'socket.io-client';
 import toast from 'react-hot-toast';
 import { getStorage } from '../utils/storage';
@@ -24,7 +24,16 @@ export const useSocket = () => {
 };
 
 export const SocketProvider = ({ children }) => {
-  const { user, token: authToken } = useAuth();
+  let authContext = { user: null, token: null };
+  try {
+    authContext = useAuth() || { user: null, token: null };
+  } catch (error) {
+    console.warn('AuthContext not available in SocketProvider:', error.message);
+    // Use fallback values
+  }
+  
+  const user = authContext?.user || null;
+  const authToken = authContext?.token || null;
   const token = authToken || localStorage.getItem('token');
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
@@ -175,7 +184,7 @@ export const SocketProvider = ({ children }) => {
     const payload = {
       ...data,
       conversationId: normalizedConversationId,
-      senderId: user?._id
+      senderId: user?._id || null
     };
 
     if (typeof onAck === 'function') {

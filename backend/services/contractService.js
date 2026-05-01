@@ -608,6 +608,98 @@ Date: _____________                 Date: _____________
     }
   }
 
+  // ==================== CREATE CONTRACT FROM DATA ====================
+  async createContractFromData(contractData) {
+    try {
+      // Generate contract number
+      const contractNumber = await this.generateContractNumber();
+
+      // Generate contract content from template or use provided content
+      const content = contractData.content || await this.generateContractContentFromData(contractData);
+
+      // Create contract
+      const contract = await Contract.create({
+        contractNumber,
+        brandId: contractData.brandId,
+        creatorId: contractData.creatorId,
+        campaignId: contractData.campaignId,
+        title: contractData.title,
+        description: contractData.description,
+        type: contractData.type || 'campaign',
+        content,
+        deliverables: contractData.deliverables || [],
+        paymentTerms: {
+          total: contractData.paymentTerms?.total || 0,
+          currency: contractData.paymentTerms?.currency || 'USD',
+          paymentSchedule: contractData.paymentTerms?.paymentSchedule || 'upon_completion',
+          milestones: contractData.paymentTerms?.milestones || [],
+          platformFee: contractData.paymentTerms?.platformFee || 0,
+          netAmount: contractData.paymentTerms?.netAmount || contractData.paymentTerms?.total || 0,
+          escrowRequired: contractData.paymentTerms?.escrowRequired !== false
+        },
+        timeline: contractData.timeline || {},
+        terms: contractData.terms || {},
+        status: contractData.status || 'draft',
+        version: 1,
+        createdBy: contractData.createdBy,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+      });
+
+      // Generate PDF if status is not draft
+      if (contractData.status !== 'draft') {
+        await this.generateContractPDF(contract._id);
+      }
+
+      return contract;
+    } catch (error) {
+      console.error('Error creating contract from data:', error);
+      throw error;
+    }
+  }
+
+  // ==================== GENERATE CONTRACT CONTENT FROM DATA ====================
+  async generateContractContentFromData(contractData) {
+    try {
+      const template = `
+CONTRACT AGREEMENT
+
+Contract Number: ${await this.generateContractNumber()}
+Date: ${new Date().toLocaleDateString()}
+
+PARTIES:
+Brand: ${contractData.brandId}
+Creator: ${contractData.creatorId}
+
+CAMPAIGN DETAILS:
+Title: ${contractData.title || 'N/A'}
+Description: ${contractData.description || 'N/A'}
+
+DELIVERABLES:
+${contractData.deliverables?.map(d => `- ${d.title}: ${d.quantity} x ${d.type}`).join('\n') || 'N/A'}
+
+PAYMENT TERMS:
+Total Amount: ${contractData.paymentTerms?.total || 0} ${contractData.paymentTerms?.currency || 'USD'}
+Payment Schedule: ${contractData.paymentTerms?.paymentSchedule || 'upon_completion'}
+
+TIMELINE:
+Start Date: ${contractData.timeline?.startDate || 'TBD'}
+End Date: ${contractData.timeline?.endDate || 'TBD'}
+
+TERMS:
+Exclusivity: ${contractData.terms?.exclusivity ? 'Yes' : 'No'}
+Confidentiality: ${contractData.terms?.confidentiality ? 'Yes' : 'No'}
+Usage Rights: ${contractData.terms?.usageRights || 'standard'}
+
+This contract is automatically generated and subject to the terms and conditions of the platform.
+      `.trim();
+
+      return template;
+    } catch (error) {
+      console.error('Error generating contract content from data:', error);
+      throw error;
+    }
+  }
+
   // ==================== VERIFY SIGNATURE ====================
   verifySignature(contract, signature) {
     // In a real implementation, this would verify cryptographic signatures

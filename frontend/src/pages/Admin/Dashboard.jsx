@@ -94,10 +94,18 @@ const AdminDashboard = () => {
   const [recentActivity, setRecentActivity] = useState([]);
   const [showActivityModal, setShowActivityModal] = useState(false);
 
-  // Fetch dashboard data when dateRange changes
+  // Fetch dashboard data when dateRange changes with proper loading protection
   useEffect(() => {
-    fetchDashboardData();
-  }, [dateRange]);
+    const fetchWithDelay = async () => {
+      // Wait for auth to be ready
+      await new Promise(resolve => setTimeout(resolve, 300));
+      if (!loading) {
+        fetchDashboardData();
+      }
+    };
+    
+    fetchWithDelay();
+  }, [dateRange, loading]);
 
   // Process dashboard data when it arrives
   useEffect(() => {

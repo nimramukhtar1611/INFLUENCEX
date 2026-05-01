@@ -14,7 +14,15 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const { getSetting } = useGlobalSettings();
+  let globalSettings;
+  try {
+    globalSettings = useGlobalSettings();
+  } catch (error) {
+    console.warn('GlobalSettings not available in AuthProvider during initial render:', error.message);
+    globalSettings = { getSetting: () => null };
+  }
+  
+  const { getSetting } = globalSettings;
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -61,72 +69,51 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     
+    // Validate token format before making any API calls
+    if (storedToken === 'undefined' || storedToken === 'null') {
+      console.log("❌ Invalid token format, clearing and skipping /auth/me");
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      setUser(null);
+      setIsAuthenticated(false);
+      setToken(null);
+      setRefreshToken(null);
+      setLoading(false);
+      return;
+    }
+    
+    // Check if token has valid JWT format (3 parts separated by dots)
+    const tokenParts = storedToken.split('.');
+    if (tokenParts.length !== 3) {
+      console.log("❌ Invalid JWT format, clearing and skipping /auth/me");
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      setUser(null);
+      setIsAuthenticated(false);
+      setToken(null);
+      setRefreshToken(null);
+      setLoading(false);
+      return;
+    }
+    
     if (storedToken && storedUser) {
       try {
         authLoadingRef.current = true;
         setAuthLoading(true);
         
         // Add delay to prevent rapid successive calls
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
         
         // First, validate the token with backend (with retry logic for server restarts)
         let response;
         let retryCount = 0;
-        const maxRetries = 3;
+        const maxRetries = 2; // Reduced from 3
         const retryDelay = 1000; // 1 second
-        
-        // Add a small delay to ensure token is properly available
-        await new Promise(resolve => setTimeout(resolve, 50));
         
         const token = localStorage.getItem("token");
         console.log("Calling /auth/me with token:", token);
-        
-        // Enhanced server crash resilience: check if token is still valid locally first
-        if (token && token !== 'undefined' && token !== 'null') {
-          try {
-            const tokenParts = token.split('.');
-            if (tokenParts.length === 3) {
-              const payload = JSON.parse(atob(tokenParts[1]));
-              const currentTime = Date.now() / 1000;
-              
-              // If token still has more than 1 day left, try localStorage first during server issues
-              if (payload.exp - currentTime > 86400) { // More than 1 day
-                console.log('Token has long expiry, will fallback to localStorage if server is down');
-              }
-            }
-          } catch (tokenError) {
-            console.warn('Token parsing failed:', tokenError);
-          }
-        }
-        
-        // Validate token format before sending
-        if (!token || token === 'undefined' || token === 'null') {
-          console.log("❌ Invalid token format, clearing and skipping /auth/me");
-          localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
-          setUser(null);
-          setIsAuthenticated(false);
-          setToken(null);
-          setRefreshToken(null);
-          setLoading(false);
-          return;
-        }
-        
-        // Check if token has valid JWT format (3 parts separated by dots)
-        const tokenParts = token.split('.');
-        if (tokenParts.length !== 3) {
-          console.log("❌ Invalid JWT format, clearing and skipping /auth/me");
-          localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
-          setUser(null);
-          setIsAuthenticated(false);
-          setToken(null);
-          setRefreshToken(null);
-          setLoading(false);
-          return;
-        }
         
         while (retryCount < maxRetries) {
           try {
@@ -173,36 +160,34 @@ export const AuthProvider = ({ children }) => {
           console.warn('⚠️ Server crash or network issue detected, preserving session:', error.message);
           
           // Enhanced fallback: validate token locally before restoring session
-          if (storedToken && storedToken !== 'undefined' && storedToken !== 'null') {
-            try {
-              const tokenParts = storedToken.split('.');
-              if (tokenParts.length === 3) {
-                const payload = JSON.parse(atob(tokenParts[1]));
-                const currentTime = Date.now() / 1000;
-                
-                // Only restore session if token is still valid for at least 1 hour
-                if (payload.exp - currentTime > 3600) {
-                  const localUser = JSON.parse(storedUser);
-                  const normalized = normalizeUser(localUser);
-                  setUser(normalized);
-                  setIsAuthenticated(true);
-                  setToken(storedToken);
-                  setRefreshToken(storedRefreshToken);
-                  console.log('✅ Session preserved during server crash - token still valid');
-                  return;
-                } else {
-                  console.log('⚠️ Token expired during server crash, clearing session');
-                  localStorage.removeItem('token');
-                  localStorage.removeItem('refreshToken');
-                  localStorage.removeItem('user');
-                }
+          try {
+            const tokenParts = storedToken.split('.');
+            if (tokenParts.length === 3) {
+              const payload = JSON.parse(atob(tokenParts[1]));
+              const currentTime = Date.now() / 1000;
+              
+              // Only restore session if token is still valid for at least 30 minutes
+              if (payload.exp - currentTime > 1800) {
+                const localUser = JSON.parse(storedUser);
+                const normalized = normalizeUser(localUser);
+                setUser(normalized);
+                setIsAuthenticated(true);
+                setToken(storedToken);
+                setRefreshToken(storedRefreshToken);
+                console.log('✅ Session preserved during server crash - token still valid');
+                return;
+              } else {
+                console.log('⚠️ Token expired during server crash, clearing session');
+                localStorage.removeItem('token');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('user');
               }
-            } catch (tokenError) {
-              console.error('Token validation failed:', tokenError);
-              localStorage.removeItem('token');
-              localStorage.removeItem('refreshToken');
-              localStorage.removeItem('user');
             }
+          } catch (tokenError) {
+            console.error('Token validation failed:', tokenError);
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
           }
           
           // Fallback to basic restore if token validation fails
@@ -630,7 +615,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => { 
-    loadUser(); 
+    const initializeAuth = async () => {
+      // Add a small delay to ensure all providers are mounted
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await loadUser(); 
+    };
+    
+    initializeAuth();
   }, []);
 
   // Separate effect for setting up auto-refresh when authenticated (only on initial auth)

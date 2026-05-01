@@ -77,10 +77,10 @@ const CreatorGrowthOS = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-black' : 'bg-white'}`}>
         <div className="text-center">
           <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
-          <p className="text-zinc-500 text-xs font-medium">Loading Creator Growth OS...</p>
+          <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Loading Creator Growth OS...</p>
         </div>
       </div>
     );
@@ -112,47 +112,48 @@ const CreatorGrowthOS = () => {
   ];
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-slate-100'}`}>
-      <div className={`sticky top-0 z-10 ${isDark ? 'bg-gray-900 border-b border-gray-800' : 'bg-white border-b border-gray-200'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Lightbulb className="w-6 h-6 text-amber-500" />
-                <h1 className={`text-2xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Creator Growth OS</h1>
-              </div>
-              <p className={`mt-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Platform-specific suggestions for posting times, ideas, and audience quality growth.</p>
+    <div className={`max-w-7xl mx-auto p-6 space-y-8 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="text-left">
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`p-2 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-white border'}`}>
+              <Lightbulb className="w-5 h-5 text-amber-500" />
             </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              icon={RefreshCw}
-              loading={refreshing}
-              onClick={() => fetchGrowthOS(true)}
-            >
-              Refresh
-            </Button>
+            <h1 className="text-3xl font-semibold tracking-tight">Creator <span className="font-bold">Growth OS</span></h1>
           </div>
-
-          {error && (
-            <div className={`mt-4 rounded-lg p-4 flex items-center gap-3 border ${
-              isDark ? 'bg-red-950/40 border-red-900' : 'bg-red-50 border-red-200'
-            }`}>
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <p className={isDark ? 'text-red-300' : 'text-red-700'}>{error}</p>
-            </div>
-          )}
+          <p className="text-sm text-zinc-500">Platform-specific suggestions for posting times, ideas, and audience quality growth.</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          icon={RefreshCw}
+          loading={refreshing}
+          onClick={() => fetchGrowthOS(true)}
+          className="text-xs font-bold uppercase tracking-widest"
+        >
+          Refresh
+        </Button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        <div className={`rounded-xl shadow-sm p-6 border ${
-          isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'
+      {error && (
+        <div className={`p-4 rounded-2xl flex items-center gap-3 border ${
+          isDark ? 'bg-red-950/40 border-red-900' : 'bg-red-50 border-red-200'
         }`}>
-          <div className="flex items-center gap-2 mb-4">
-            <Clock3 className="w-5 h-5 text-indigo-600" />
-            <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Best Posting Time</h2>
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <p className={`text-sm ${isDark ? 'text-red-300' : 'text-red-700'}`}>{error}</p>
+        </div>
+      )}
+
+      <div className="space-y-8">
+        {/* Best Posting Time Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-white border'}`}>
+              <Clock3 className="w-4 h-4 text-indigo-600" />
+            </div>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-500">Best Posting Time</h2>
           </div>
 
           {postingInsights.length > 0 ? (
@@ -160,28 +161,28 @@ const CreatorGrowthOS = () => {
               {postingInsights.map((insight) => (
                 <div
                   key={insight.platform}
-                  className={`border rounded-xl p-4 transition-colors ${
-                    isDark ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'
+                  className={`p-5 rounded-2xl border transition-all ${
+                    isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className={`text-sm font-semibold capitalize ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{insight.platform}</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className={`text-sm font-semibold capitalize ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{insight.platform}</p>
                     <span className={`text-xs px-2 py-1 rounded-full capitalize ${
                       isDark ? 'bg-indigo-950 text-indigo-300' : 'bg-indigo-100 text-indigo-700'
                     }`}>
                       {insight.confidence} confidence
                     </span>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {(insight.windows || []).map((window) => (
                       <div
                         key={`${insight.platform}-${window.label}`}
-                        className={`p-2 rounded-lg border ${
-                          isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'
+                        className={`p-3 rounded-xl border ${
+                          isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-50 border-zinc-200'
                         }`}
                       >
-                        <p className={`text-sm font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{window.label}</p>
-                        <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{window.reason}</p>
+                        <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{window.label}</p>
+                        <p className={`text-xs mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{window.reason}</p>
                       </div>
                     ))}
                   </div>
@@ -189,27 +190,33 @@ const CreatorGrowthOS = () => {
               ))}
             </div>
           ) : (
-            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No posting-time insight available yet.</p>
+            <div className={`p-8 rounded-2xl border text-center ${
+              isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
+            }`}>
+              <p className="text-sm text-zinc-500">No posting-time insight available yet.</p>
+            </div>
           )}
-        </div>
+        </section>
 
+        {/* Content Ideas and Audience Tips Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className={`rounded-xl shadow-sm p-6 border ${
-            isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'
-          }`}>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-fuchsia-600" />
-                <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Content Ideas</h2>
+          {/* Content Ideas Section */}
+          <section className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-white border'}`}>
+                  <Sparkles className="w-4 h-4 text-fuchsia-600" />
+                </div>
+                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-500">Content Ideas</h2>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   value={contentType}
                   onChange={(e) => setContentType(e.target.value)}
-                  className={`px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`px-3 py-2 text-xs rounded-xl border focus:outline-none transition-all ${
                     isDark
-                      ? 'bg-gray-800 border-gray-700 text-gray-100'
-                      : 'bg-white border-gray-300 text-gray-900'
+                      ? 'bg-zinc-900 border-zinc-800 focus:border-zinc-500 text-white'
+                      : 'bg-white border-zinc-200 focus:border-black text-black'
                   }`}
                 >
                   {contentTypeOptions.map((opt) => (
@@ -221,6 +228,7 @@ const CreatorGrowthOS = () => {
                   size="sm"
                   onClick={() => fetchGrowthOS(false, { onlyIdeas: true, contentType })}
                   loading={ideasLoading}
+                  className="text-xs font-bold uppercase tracking-widest"
                 >
                   Give Ideas
                 </Button>
@@ -230,6 +238,7 @@ const CreatorGrowthOS = () => {
                   icon={RefreshCw}
                   onClick={() => fetchGrowthOS(false, { onlyIdeas: true, contentType, refreshIdeas: true })}
                   loading={ideasRefreshLoading}
+                  className="text-xs font-bold uppercase tracking-widest"
                 >
                   Refresh
                 </Button>
@@ -240,7 +249,7 @@ const CreatorGrowthOS = () => {
                 {contentIdeas.map((idea) => (
                   <div
                     key={idea}
-                    className={`p-3 rounded-lg border text-sm ${
+                    className={`p-4 rounded-2xl border text-sm transition-all hover:scale-[1.02] ${
                       isDark
                         ? 'bg-fuchsia-950/35 border-fuchsia-900 text-fuchsia-100'
                         : 'bg-fuchsia-50 border-fuchsia-100 text-gray-800'
@@ -251,23 +260,28 @@ const CreatorGrowthOS = () => {
                 ))}
               </div>
             ) : (
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No content ideas available yet.</p>
+              <div className={`p-8 rounded-2xl border text-center ${
+                isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
+              }`}>
+                <p className="text-sm text-zinc-500">No content ideas available yet.</p>
+              </div>
             )}
-          </div>
+          </section>
 
-          <div className={`rounded-xl shadow-sm p-6 border ${
-            isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'
-          }`}>
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="w-5 h-5 text-emerald-600" />
-              <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Audience Improvement Tips</h2>
+          {/* Audience Tips Section */}
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-white border'}`}>
+                <Users className="w-4 h-4 text-emerald-600" />
+              </div>
+              <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-500">Audience Improvement Tips</h2>
             </div>
             {audienceTips.length > 0 ? (
               <div className="space-y-3">
                 {audienceTips.map((tip) => (
                   <div
                     key={tip}
-                    className={`p-3 rounded-lg border text-sm ${
+                    className={`p-4 rounded-2xl border text-sm transition-all hover:scale-[1.02] ${
                       isDark
                         ? 'bg-emerald-950/35 border-emerald-900 text-emerald-100'
                         : 'bg-emerald-50 border-emerald-100 text-gray-800'
@@ -278,9 +292,13 @@ const CreatorGrowthOS = () => {
                 ))}
               </div>
             ) : (
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No audience tips available yet.</p>
+              <div className={`p-8 rounded-2xl border text-center ${
+                isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
+              }`}>
+                <p className="text-sm text-zinc-500">No audience tips available yet.</p>
+              </div>
             )}
-          </div>
+          </section>
         </div>
       </div>
     </div>

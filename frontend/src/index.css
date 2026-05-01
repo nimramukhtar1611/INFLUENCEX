@@ -129,12 +129,12 @@ h2 {
   so we remap the common utility colors when html has class="dark".
 */
 @layer utilities {
-  .dark .bg-white { background-color: #111827 !important; }
-  .dark .bg-gray-50 { background-color: #111827e4 !important; }
+.dark .bg-white { 
+    background: linear-gradient(135deg, #8e9eab 0%, #3a3a3a 100%) !important; 
+} .dark .bg-gray-50 { background-color: #111827e4 !important; }
   .dark .bg-gray-100 { background-color: #1F2937 !important; }
   .dark .bg-gray-200 { background-color: #374151 !important; }
   .dark .bg-gray-300 { background-color: #4B5563 !important; }
-
   .dark .text-gray-900 { color: #F9FAFB !important; }
   .dark .text-gray-800 { color: #F3F4F6 !important; }
   .dark .text-gray-700 { color: #E5E7EB !important; }
@@ -159,7 +159,8 @@ font-family: 'Playfair Display', serif;  }
   }
 
   /* Hover states */
-  .dark .hover\:bg-white:hover { background-color: #1F2937 !important; }
+  .dark .hover\:bg-white:hover {     background: linear-gradient(135deg, #8e9eab 0%, #3a3a3a 100%) !important; 
+ }
   .dark .hover\:bg-gray-50:hover { background-color: #374151 !important; }
   .dark .hover\:bg-gray-100:hover { background-color: #4B5563 !important; }
   .dark .hover\:bg-gray-200:hover { background-color: #6B7280 !important; }
