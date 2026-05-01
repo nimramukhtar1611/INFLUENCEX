@@ -148,6 +148,29 @@ const fetchDeal = useCallback(async (id) => {
     }
   }, []);
 
+  // ==================== CREATE PERFORMANCE DEAL ====================
+  const createPerformanceDeal = useCallback(async (dealData) => {
+    try {
+      setLoading(true);
+      const response = await dealService.createPerformanceDeal(dealData);
+      
+      if (response?.success) {
+        toast.success('Performance deal offer sent successfully');
+        setDeals(prev => [response.deal, ...prev]);
+        return response.deal;
+      } else {
+        toast.error(response?.error || 'Failed to create performance deal');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error creating performance deal:', error);
+      toast.error('Failed to create performance deal');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // ==================== UPDATE DEAL STATUS (FIXED) ====================
   const updateDealStatus = useCallback(async (dealId, newStatus, reason = '') => {
     try {
@@ -430,6 +453,7 @@ const fetchDeal = useCallback(async (id) => {
     fetchCreatorDeals,
     fetchDeal,
     createDeal,
+    createPerformanceDeal,
     updateDealStatus,
     acceptDeal,
     rejectDeal,

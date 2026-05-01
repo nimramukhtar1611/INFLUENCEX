@@ -528,7 +528,6 @@ messageSchema.index({ created_at: -1 });
 
 const Conversation = mongoose.model('Conversation', conversationSchema);
 const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
-module.exports = {
-  Conversation,
-  Message
-};
+module.exports = Conversation;
+module.exports.Conversation = Conversation;
+module.exports.Message = Message;

@@ -1,6 +1,8 @@
 // Simplified Settings Controller for minimalist admin interface
 const Settings = require('../../models/Settings');
 const AuditLog = require('../../models/AuditLog');
+const feeService = require('../../services/feeService');
+const settingsService = require('../../services/settingsService');
 
 // ==================== GET SIMPLIFIED SETTINGS ====================
 exports.getSettings = async (req, res) => {
@@ -202,6 +204,10 @@ exports.updateSettings = async (req, res) => {
 
     await settings.save();
 
+    // Clear caches to ensure updates reflect globally immediately
+    settingsService.clearCache();
+    feeService.clearCache();
+
     // Log the action
     try {
       await AuditLog.create({
@@ -222,6 +228,46 @@ exports.updateSettings = async (req, res) => {
     // Return updated settings
     const updatedSettings = await exports.getSettings(req, res);
     if (!updatedSettings.headersSent) {
+      // Emit real-time update event before returning response
+      if (global.socketService) {
+        // We need the flat settings for the socket event
+        const settings = await Settings.findOne();
+        const simplifiedSettings = {
+          platformName: String(settings?.platform?.name || 'InfluenceX').trim(),
+          platformDescription: String(settings?.platform?.description || '').trim(),
+          supportEmail: String(settings?.platform?.supportEmail || '').trim().toLowerCase(),
+          commissionRate: parseFloat(settings?.fees?.commissionRate ?? 10),
+          senderName: String(settings?.notifications?.email?.fromName || 'InfluenceX'),
+          emailFooter: String(settings?.notifications?.email?.footer || ''),
+          notifications: {
+            email: {
+              smtp: {
+                host: settings?.notifications?.email?.smtp?.host || '',
+                port: settings?.notifications?.email?.smtp?.port || 587,
+                secure: settings?.notifications?.email?.smtp?.secure || false,
+                auth: {
+                  user: settings?.notifications?.email?.smtp?.auth?.user || '',
+                  pass: settings?.notifications?.email?.smtp?.auth?.pass || ''
+                }
+              }
+            }
+          },
+          emailNotifications: {
+            newUser: Boolean(settings?.notifications?.admin?.email?.newUser ?? true),
+            newCampaign: Boolean(settings?.notifications?.admin?.email?.newCampaign ?? true),
+            paymentReceived: Boolean(settings?.notifications?.admin?.email?.paymentReceived ?? true),
+            disputeRaised: Boolean(settings?.notifications?.admin?.email?.disputeRaised ?? true),
+            reportGenerated: Boolean(settings?.notifications?.admin?.email?.reportGenerated ?? true)
+          }
+        };
+
+        global.socketService.emitToAdmins('settingsUpdated', {
+          type: 'GLOBAL_SETTINGS_UPDATE',
+          timestamp: new Date().toISOString(),
+          settings: simplifiedSettings
+        });
+        console.log('📡 Real-time update (simplified) emitted to admins');
+      }
       return updatedSettings;
     }
 

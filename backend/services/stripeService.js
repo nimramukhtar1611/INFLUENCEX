@@ -108,13 +108,31 @@ class StripeService {
     const stripeInterval = stripeSubscription?.items?.data?.[0]?.price?.recurring?.interval;
     console.log(`⏰ [WEBHOOK] Stripe interval: ${stripeInterval}`);
 
-    // Prefer Stripe price mapping over metadata because metadata can be stale after portal updates.
-    const planId = planByPrice?.planId || metadata.planId || existingLocalSubscription?.planId || 'free';
+    // Resolve planId: prefer metadata (explicitly set at checkout) over price-based lookup.
+    // Price-based lookup can silently resolve to the wrong plan if the same price ID is
+    // stored under multiple plans or the DB has stale stripePriceId values.
+    const resolvedByPrice = planByPrice?.planId || null;
+    const resolvedByMeta  = metadata.planId     || null;
+    const resolvedByExisting = existingLocalSubscription?.planId || null;
+
+    let planId;
+    if (resolvedByMeta && resolvedByMeta !== 'free') {
+      // Metadata is the most reliable source — set explicitly at checkout session creation
+      planId = resolvedByMeta;
+      if (resolvedByPrice && resolvedByPrice !== resolvedByMeta) {
+        console.warn(`⚠️ [WEBHOOK] Plan mismatch: metadata says '${resolvedByMeta}' but price lookup says '${resolvedByPrice}'. Preferring metadata.`);
+      }
+    } else {
+      planId = resolvedByPrice || resolvedByExisting || 'free';
+    }
+
     const interval = stripeInterval || planByPrice?.interval || metadata.interval || existingLocalSubscription?.planDetails?.interval || 'month';
     
     console.log(`🎯 [WEBHOOK] Resolved planId: ${planId}, interval: ${interval}`);
 
-    const plan = planByPrice || await Plan.findOne({ planId });
+    // Always fetch the plan matching the resolved planId so metadata-overridden plans
+    // get the correct plan details (limits, price, name) rather than the price-mapped plan.
+    const plan = (planByPrice?.planId === planId) ? planByPrice : (await Plan.findOne({ planId }) || planByPrice);
     if (!plan) {
       console.error('❌ [WEBHOOK] Unable to resolve plan for Stripe subscription:', stripeSubscription?.id);
       console.error(`🔍 [WEBHOOK] Plan lookup failed for planId: ${planId}`);

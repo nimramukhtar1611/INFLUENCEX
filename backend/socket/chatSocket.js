@@ -48,6 +48,12 @@ const initializeSocket = (socketIo) => {
     // Join user's personal room
     socket.join(`user_${userId}`);
 
+    // Join admin room if user is an admin
+    if (socket.user?.userType === 'admin') {
+      socket.join('admins');
+      console.log(`👨‍💼 Admin joined admins room: ${socket.user.email}`);
+    }
+
     // Mark user as online
     await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() })
       .catch(err => console.error('User online update error:', err.message));
@@ -343,4 +349,24 @@ const sendToUser = (userId, event, data) => {
   io.to(`user_${userId}`).emit(event, data);
 };
 
-module.exports = { initializeSocket, getIO, sendToConversation, sendToUser };
+const emitToAdmins = (event, data) => {
+  if (io) {
+    io.to('admins').emit(event, data);
+  }
+};
+
+// Set global socket service for controllers to use
+global.socketService = {
+  emitToAdmins,
+  sendToUser,
+  sendToConversation,
+  getIO
+};
+
+module.exports = { 
+  initializeSocket, 
+  getIO, 
+  sendToConversation, 
+  sendToUser, 
+  emitToAdmins 
+};

@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import dealService from '../../services/dealService';
 import disputeService from '../../services/disputeService';
-import { formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
+import { formatNumber, formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
 import { getStatusColor } from '../../utils/colorScheme';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
@@ -59,6 +59,13 @@ const normalizeConversationId = (value) => {
 };
 
 const getMessageConversationId = (message) => normalizeConversationId(message?.conversationId);
+
+const MetricItem = ({ label, val, isDark }) => (
+  <div className="space-y-1">
+    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{label}</p>
+    <p className={`text-base font-black tabular-nums ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{val}</p>
+  </div>
+);
 
 const DealDetails = () => {
   const { id } = useParams();
@@ -705,7 +712,7 @@ const DealDetails = () => {
             </h1>
           </div>
           <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-            {deal.campaignId?.title || 'Untitled Deal'} • Manage your deal details and communications.
+            {deal.campaignId?.title || 'Untitled Deal'} ?? Manage your deal details and communications.
           </p>
         </div>
         
@@ -791,7 +798,7 @@ const DealDetails = () => {
 </div>
 
       {/* Progress bar - Compact like CampaignDetails */}
-    <div className={`
+    <div className={`
   group relative p-4 rounded-2xl border transition-all duration-500
   ${isDark 
     ? 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-700' 
@@ -915,120 +922,217 @@ const DealDetails = () => {
 </div>
 
       {/* Tab Content */}
-   {activeTab === 'overview' && (
-  <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      
-      {/* LEFT COLUMN: PRIMARY INTEL (8/12) */}
-      <div className="lg:col-span-8 space-y-6">
-        
-        {/* Deal Abstract Card */}
-        <div className={`p-6 rounded-[2rem] border transition-all ${
-          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
-        }`}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
-              <FileText className="w-5 h-5" />
-            </div>
-            <h2 className={`text-lg font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-              Campaign Blueprint
-            </h2>
-          </div>
+   {activeTab === 'overview' && (
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      {/* LEFT COLUMN: PRIMARY INTEL (8/12) */}
+      <div className="lg:col-span-8 space-y-6">
+        
+        {/* Deal Abstract Card */}
+        <div className={`p-6 rounded-[2rem] border transition-all ${
+          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+        }`}>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+              <FileText className="w-5 h-5" />
+            </div>
+            <h2 className={`text-lg font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+              Campaign Blueprint
+            </h2>
+          </div>
 
-          <p className={`text-sm leading-relaxed mb-8 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            {deal.campaignId?.description || 'No project scope defined.'}
-          </p>
+          <p className={`text-sm leading-relaxed mb-8 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            {deal.campaignId?.description || 'No project scope defined.'}
+          </p>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Campaign ID', value: deal.campaignId?.title || '—', color: 'zinc' },
-              { label: 'Model', value: deal.paymentType || 'Fixed', color: 'zinc', capitalize: true },
-              { label: 'Gross Budget', value: formatCurrency(deal.budget || 0), color: 'emerald' },
-              { label: 'System Fee', value: `-${formatCurrency(deal.platformFee || 0)}`, color: 'rose' },
-              { label: 'Net Payout', value: formatCurrency(deal.netAmount || deal.budget || 0), color: 'indigo' },
-              { label: 'Hard Deadline', value: deal.deadline ? formatDate(deal.deadline) : 'OPEN', color: 'zinc' }
-            ].map((stat, i) => (
-              <div key={i} className={`p-4 rounded-2xl border ${
-                isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-zinc-50/50 border-zinc-100'
-              }`}>
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">{stat.label}</p>
-                <p className={`text-[13px] font-mono font-bold ${
-                  stat.color === 'emerald' ? 'text-emerald-500' : 
-                  stat.color === 'rose' ? 'text-rose-500' : 
-                  stat.color === 'indigo' ? 'text-indigo-500' : 
-                  isDark ? 'text-zinc-100' : 'text-zinc-900'
-                } ${stat.capitalize ? 'capitalize' : ''}`}>
-                  {stat.value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {[
+              { label: 'Campaign ID', value: deal.campaignId?.title || '??', color: 'zinc' },
+              { label: 'Model', value: deal.paymentType || 'Fixed', color: 'zinc', capitalize: true },
+              { label: 'Gross Budget', value: formatCurrency(deal.budget || 0), color: 'emerald' },
+              { label: 'System Fee', value: `-${formatCurrency(deal.platformFee || 0)}`, color: 'rose' },
+              { label: 'Net Payout', value: formatCurrency(deal.netAmount || deal.budget || 0), color: 'indigo' },
+              { label: 'Hard Deadline', value: deal.deadline ? formatDate(deal.deadline) : 'OPEN', color: 'zinc' }
+            ].map((stat, i) => (
+              <div key={i} className={`p-4 rounded-2xl border ${
+                isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-zinc-50/50 border-zinc-100'
+              }`}>
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">{stat.label}</p>
+                <p className={`text-[13px] font-mono font-bold ${
+                  stat.color === 'emerald' ? 'text-emerald-500' : 
+                  stat.color === 'rose' ? 'text-rose-500' : 
+                  stat.color === 'indigo' ? 'text-indigo-500' : 
+                  isDark ? 'text-zinc-100' : 'text-zinc-900'
+                } ${stat.capitalize ? 'capitalize' : ''}`}>
+                  {stat.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
 
-        {/* Dynamic Performance Engine */}
-        {deal.paymentType !== 'fixed' && deal.performanceMetrics && (
-          <div className={`p-6 rounded-[2rem] border ${
-            isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100'
-          }`}>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
-                  <Activity className="w-5 h-5" />
-                </div>
-                <h2 className="text-sm font-black uppercase tracking-widest opacity-70">Metric Tracking</h2>
-              </div>
-              <span className="px-3 py-1 bg-indigo-500 text-white text-[10px] font-black rounded-full uppercase">
-                {deal.paymentType} Protocol
-              </span>
-            </div>
+        {/* Dynamic Performance Engine */}
+        {deal.paymentType !== 'fixed' && deal.performanceMetrics && (
+          <div className={`p-6 rounded-[2rem] border ${
+            isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <h2 className={`text-lg font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                  Performance Metrics
+                </h2>
+              </div>
+              <span className="px-3 py-1 bg-indigo-500 text-white text-[10px] font-black rounded-full uppercase tracking-widest">
+                {deal.paymentType} Model
+              </span>
+            </div>
 
-            {/* Performance Grid Logic - Modularized for any type */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-               {/* Simplified Example for CPE/CPA/CPM */}
-               <div className={`p-4 rounded-2xl border ${isDark ? 'bg-zinc-950/50 border-zinc-800' : 'bg-zinc-50/50 border-zinc-100'}`}>
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">Current Velocity</p>
-                <p className="text-lg font-mono font-bold text-indigo-500">
-                  {deal.metrics?.likes || deal.metrics?.conversions || 0}
-                </p>
-              </div>
-              {/* ... other metrics follow same pattern */}
-            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+              {deal.paymentType === 'cpe' && deal.performanceMetrics.cpe && (
+                <>
+                  <MetricItem label="Target Engagements" val={formatNumber(deal.performanceMetrics.cpe.targetEngagements || deal.performanceMetrics.cpe.targetLikes)} isDark={isDark} />
+                  <MetricItem label="Base Rate" val={formatCurrency(deal.performanceMetrics.cpe.baseRate)} isDark={isDark} />
+                  <MetricItem label="Bonus Rate" val={formatCurrency(deal.performanceMetrics.cpe.bonusRate)} isDark={isDark} />
+                </>
+              )}
+              {deal.paymentType === 'cpa' && deal.performanceMetrics.cpa && (
+                <>
+                  <MetricItem label="Target Conversions" val={formatNumber(deal.performanceMetrics.cpa.targetConversions)} isDark={isDark} />
+                  <MetricItem label="Commission" val={formatCurrency(deal.performanceMetrics.cpa.commissionRate)} isDark={isDark} />
+                  <MetricItem label="Base Rate" val={formatCurrency(deal.performanceMetrics.cpa.baseRate)} isDark={isDark} />
+                </>
+              )}
+              {deal.paymentType === 'cpm' && deal.performanceMetrics.cpm && (
+                <>
+                  <MetricItem label="Target Impressions" val={formatNumber(deal.performanceMetrics.cpm.targetImpressions)} isDark={isDark} />
+                  <MetricItem label="CPM Rate" val={formatCurrency(deal.performanceMetrics.cpm.ratePerThousand)} isDark={isDark} />
+                  <MetricItem label="Base Rate" val={formatCurrency(deal.performanceMetrics.cpm.baseRate)} isDark={isDark} />
+                </>
+              )}
+            </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-tighter opacity-60">
-                <span>KPI Fulfillment</span>
-                <span>{/* Calculation Logic % */}</span>
-              </div>
-              <div className={`h-2 w-full rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'} overflow-hidden`}>
-                <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(99,102,241,0.4)]" style={{width: '65%'}} />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-end">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Current Efficiency</span>
+                <span className="text-sm font-black tabular-nums text-indigo-500">{deal.progress || 0}%</span>
+              </div>
+              <div className={`h-2 w-full rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'} overflow-hidden p-0.5`}>
+                <div 
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-purple-500 shadow-[0_0_12px_rgba(99,102,241,0.4)] transition-all duration-1000" 
+                  style={{ width: `${deal.progress || 0}%` }} 
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
-      {/* RIGHT COLUMN: PARTNER & LOGISTICS (4/12) */}
-      <div className="lg:col-span-4 space-y-6">
-        
-        {/* Identity Card */}
-        <div className={`p-6 rounded-[2rem] border text-center ${
-          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
-        }`}>
-          <div className="relative inline-block mb-4">
-            <img 
-              src={otherParty?.profilePicture || otherParty?.logo} 
-              className="w-20 h-20 rounded-[2rem] object-cover ring-4 ring-indigo-500/10 shadow-xl" 
-            />
-            <div className="absolute -bottom-2 -right-2 bg-yellow-400 p-1.5 rounded-xl shadow-lg">
-              <Star className="w-4 h-4 text-black fill-current" />
-            </div>
-          </div>
-          <h3 className="text-lg font-bold tracking-tight mb-1">
-            {isCreator ? otherParty?.brandName : otherParty?.displayName}
-          </h3>
-          <p className="text-xs font-mono opacity-50 mb-4">@{otherParty?.handle || 'unlinked'}</p>
-          
-          <MotionLink
+        {/* Negotiation History Log */}
+        {deal.negotiation && deal.negotiation.length > 0 && (
+          <div className={`p-6 rounded-[2rem] border ${
+            isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+          }`}>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <h2 className={`text-lg font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                Negotiation Log
+              </h2>
+            </div>
+
+            <div className="space-y-4">
+              {deal.negotiation.map((entry, index) => {
+                const isProposedByMe = String(entry.proposedBy?._id || entry.proposedBy) === String(user?._id);
+                return (
+                  <div 
+                    key={index} 
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isProposedByMe 
+                        ? (isDark ? 'bg-indigo-500/5 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100')
+                        : (isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100')
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${
+                          isProposedByMe ? 'text-indigo-500' : 'text-zinc-500'
+                        }`}>
+                          {isProposedByMe ? 'Your Proposal' : 'Partner Proposal'}
+                        </span>
+                        {entry.source === 'ai' && (
+                          <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 text-[8px] font-black uppercase tracking-tighter">
+                            AI
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] font-mono text-zinc-500">
+                        {formatDate(entry.createdAt)}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Budget</p>
+                        <p className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                          {formatCurrency(entry.budget)}
+                        </p>
+                      </div>
+                      {entry.deadline && (
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Deadline</p>
+                          <p className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                            {formatDate(entry.deadline)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {entry.message && (
+                      <p className={`text-xs leading-relaxed italic ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                        "{entry.message}"
+                      </p>
+                    )}
+                    
+                    {entry.status === 'accepted' && (
+                      <div className="mt-3 pt-3 border-t border-zinc-800/50 flex items-center gap-2">
+                        <CheckCircle className="w-3 h-3 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Accepted</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT COLUMN: PARTNER & LOGISTICS (4/12) */}
+      <div className="lg:col-span-4 space-y-6">
+        
+        {/* Identity Card */}
+        <div className={`p-6 rounded-[2rem] border text-center ${
+          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+        }`}>
+          <div className="relative inline-block mb-4">
+            <img 
+              src={otherParty?.profilePicture || otherParty?.logo} 
+              className="w-20 h-20 rounded-[2rem] object-cover ring-4 ring-indigo-500/10 shadow-xl" 
+            />
+            <div className="absolute -bottom-2 -right-2 bg-yellow-400 p-1.5 rounded-xl shadow-lg">
+              <Star className="w-4 h-4 text-black fill-current" />
+            </div>
+          </div>
+          <h3 className="text-lg font-bold tracking-tight mb-1">
+            {isCreator ? otherParty?.brandName : otherParty?.displayName}
+          </h3>
+          <p className="text-xs font-mono opacity-50 mb-4">@{otherParty?.handle || 'unlinked'}</p>
+          
+          <MotionLink
   to={isCreator ? `/creator/brands/${otherParty?._id}` : `/brand/creators/${otherParty?._id}`}
   state={{ brandData: otherParty }}
   // Framer Motion Props
@@ -1049,16 +1153,16 @@ const DealDetails = () => {
 >
   Access Profile
 </MotionLink>
-          </div>
+          </div>
 
-        {/* Command Actions */}
-        <div className={`p-6 rounded-[2rem] border ${
-          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100'
-        }`}>
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-6">Action Terminal</h2>
-          <div className="space-y-3">
-            {/* Logic for specific buttons based on status */}
-            {deal.status === 'pending' && (
+        {/* Command Actions */}
+        <div className={`p-6 rounded-[2rem] border ${
+          isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100'
+        }`}>
+          <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-6">Action Terminal</h2>
+          <div className="space-y-3">
+            {/* Logic for specific buttons based on status */}
+            {deal.status === 'pending' && (
               <Button 
                 variant="primary" 
                 fullWidth 
@@ -1072,24 +1176,50 @@ const DealDetails = () => {
               </Button>
             )}
 
-            {/* AI Counter Agent - Make this look unique */}
-            {canCreatorCounter && aiCounterAccess?.canUse && (
-              <button 
-                onClick={handleStartAiCounter}
-                className="w-full h-12 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-300"
-              >
-                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Deploy AI Negotiator</span>
-              </button>
-            )}
+            {/* AI Counter Agent - Make this look unique */}
+            {canCreatorCounter && aiCounterAccess?.canUse && (
+              <button 
+                onClick={handleStartAiCounter}
+                className="w-full h-12 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+              >
+                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Deploy AI Negotiator</span>
+              </button>
+            )}
 
-            {['accepted', 'in-progress', 'revision'].includes(deal.status) && (
-              <Button variant="outline" fullWidth icon={Upload} onClick={() => navigate(`/creator/deliverables/${deal._id}`)} className="rounded-xl h-12">
-                Submit Asset
-              </Button>
-            )}
-            
-           <motion.button
+            {canCreatorCounter && (
+              <Button 
+                variant="outline" 
+                fullWidth 
+                icon={Edit} 
+                onClick={() => setShowCounterModal(true)}
+                disabled={manualCounterDisabled || loading}
+                className="rounded-xl h-12 text-[11px] font-black uppercase tracking-widest"
+              >
+                {manualCounterDisabled ? 'AI Negotiating...' : 'Manual Counter'}
+              </Button>
+            )}
+
+            {canCreatorAcceptCounter && (
+              <Button 
+                variant="success" 
+                fullWidth 
+                icon={CheckCircle} 
+                onClick={handleAcceptCounterOffer}
+                disabled={loading}
+                className="rounded-xl h-12 text-[11px] font-black uppercase tracking-widest"
+              >
+                Accept Counter Offer
+              </Button>
+            )}
+
+            {['accepted', 'in-progress', 'revision'].includes(deal.status) && (
+              <Button variant="outline" fullWidth icon={Upload} onClick={() => navigate(`/creator/deliverables/${deal._id}`)} className="rounded-xl h-12">
+                Submit Asset
+              </Button>
+            )}
+            
+           <motion.button
   whileHover={{ scale: 1.01, opacity: 1 }}
   whileTap={{ scale: 0.98 }}
   onClick={() => setActiveTab('messages')}
@@ -1118,12 +1248,12 @@ const DealDetails = () => {
     </div>
   )}
 </motion.button>
-          </div>
-        </div>
+          </div>
+        </div>
 
-      </div>
-    </div>
-  </div>
+      </div>
+    </div>
+  </div>
 )} 
 
 {activeTab === 'deliverables' && (

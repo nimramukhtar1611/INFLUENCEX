@@ -212,6 +212,8 @@ const CreatorEarnings = () => {
     }
   };
 
+  const getDisplayAmount = (transaction) => Number(transaction?.netAmount ?? transaction?.amount ?? 0);
+
   // ==================== CHART DATA ====================
   const chartData = earningsHistory.map(item => ({
     date: `${item._id?.month || ''}/${item._id?.year || ''}`,
@@ -465,7 +467,7 @@ const CreatorEarnings = () => {
                   </div>
 
                   <div className="col-span-2 mt-2 md:mt-0">
-                    <span className="text-lg font-light tracking-tighter">{formatCurrency(t.amount)}</span>
+                    <span className="text-lg font-light tracking-tighter">{formatCurrency(getDisplayAmount(t))}</span>
                   </div>
 
                   <div className="col-span-3 mt-2 md:mt-0">
@@ -522,7 +524,7 @@ const CreatorEarnings = () => {
                   </div>
 
                   <div className="col-span-2 mt-2 md:mt-0">
-                    <span className="text-lg font-light tracking-tighter">{formatCurrency(t.amount)}</span>
+                    <span className="text-lg font-light tracking-tighter">{formatCurrency(getDisplayAmount(t))}</span>
                   </div>
 
                   <div className="col-span-3 mt-2 md:mt-0">
@@ -671,7 +673,7 @@ const CreatorEarnings = () => {
               </div>
               <div>
                 <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`} mb-1>Amount</p>
-                <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatCurrency(selectedTransaction.amount)}</p>
+                <p className={`text-xl font-bold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>{formatCurrency(getDisplayAmount(selectedTransaction))}</p>
               </div>
               <div>
                 <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`} mb-1>Fee</p>

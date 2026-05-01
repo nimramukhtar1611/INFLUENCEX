@@ -2,6 +2,27 @@
 const mongoose = require('mongoose');
 const User = require('./User');
 
+const isInstagramHandleOrUrl = (value) => {
+  if (!value || typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  const handle = trimmed.replace(/^@+/, '');
+  const handleRegex = /^[a-zA-Z0-9._]{1,30}$/;
+  if (handleRegex.test(handle)) return true;
+
+  try {
+    const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const url = new URL(candidate);
+    const host = url.hostname.replace(/^www\./i, '').toLowerCase();
+    const firstPath = url.pathname.split('/').filter(Boolean)[0] || '';
+    const normalizedPath = firstPath.replace(/^@+/, '');
+    return host === 'instagram.com' && handleRegex.test(normalizedPath);
+  } catch (error) {
+    return false;
+  }
+};
+
 const brandSchema = new mongoose.Schema({
   brandName: {
     type: String,
@@ -41,30 +62,31 @@ const brandSchema = new mongoose.Schema({
     validate: {
       validator: function(v) {
         if (!v) return true;
-        return /^\d{4}$/.test(v);
+        return v.length <= 20; // Just some reasonable limit
       },
-      message: 'Founded year must be a valid 4-digit year'
+      message: 'Please enter a valid founded year or date'
     }
   },
   
   employees: {
     type: String,
     enum: {
-      values: ['1-10', '11-50', '51-200', '201-500', '500+'],
+      values: ['', '1-10', '11-50', '51-200', '201-500', '500+'],
       message: '{VALUE} is not a valid employee range'
-    }
+    },
+    default: ''
   },
   
   companySize: {
     type: String,
-    enum: ['1-10', '11-50', '51-200', '201-500', '500+'],
-    default: '1-10'
+    enum: ['', '1-10', '11-50', '51-200', '201-500', '500+'],
+    default: ''
   },
   
   businessType: {
     type: String,
     enum: {
-      values: ['individual', 'sole_proprietor', 'llc', 'corporation', 'non_profit', 'partnership'],
+      values: ['', 'individual', 'sole_proprietor', 'llc', 'corporation', 'non_profit', 'partnership'],
       message: '{VALUE} is not a valid business type'
     },
     default: 'individual'
@@ -75,7 +97,7 @@ const brandSchema = new mongoose.Schema({
     validate: {
       validator: function(v) {
         if (!v) return true;
-        return /^[A-Z0-9-]+$/.test(v);
+        return /^[A-Z0-9\s-]+$/i.test(v);
       },
       message: 'Please enter a valid tax ID'
     }
@@ -94,7 +116,7 @@ const brandSchema = new mongoose.Schema({
       validate: {
         validator: function(v) {
           if (!v) return true;
-          return /^[A-Z0-9-]+$/.test(v);
+          return /^[A-Z0-9\s-]+$/i.test(v);
         },
         message: 'Please enter a valid ZIP code'
       }
@@ -115,7 +137,7 @@ const brandSchema = new mongoose.Schema({
       validate: {
         validator: function(v) {
           if (!v) return true;
-          return /^@?[a-zA-Z0-9._]{1,30}$/.test(v.replace('@', ''));
+          return isInstagramHandleOrUrl(v);
         },
         message: 'Please enter a valid Instagram handle'
       }

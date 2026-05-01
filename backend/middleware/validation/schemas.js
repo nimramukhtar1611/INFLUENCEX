@@ -175,7 +175,8 @@ const brandValidation = {
       preferredPlatforms: Joi.array().items(Joi.string().valid('instagram', 'youtube', 'tiktok', 'twitter')).optional(),
       minFollowers: Joi.number().min(0).optional(),
       maxFollowers: Joi.number().min(0).optional(),
-      minEngagement: Joi.number().min(0).max(100).optional()
+      minEngagement: Joi.number().min(0).max(100).optional(),
+      aiCounterEnabled: Joi.boolean().optional()
     }).optional()
   }),
 

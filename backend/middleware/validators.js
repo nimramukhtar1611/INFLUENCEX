@@ -343,12 +343,12 @@ const brandValidations = {
     
     body('industry')
       .optional()
-      .isIn(['Fashion', 'Beauty', 'Technology', 'Food & Beverage', 'Fitness', 'Travel', 'Gaming', 'Lifestyle', 'Other'])
+      .isIn(['Fashion', 'Beauty', 'Technology', 'Food & Beverage', 'Fitness', 'Travel', 'Gaming', 'Lifestyle', 'Parenting', 'Finance', 'Education', 'Entertainment', 'Sports', 'Automotive', 'Real Estate', 'Health', 'Wellness', 'Other'])
       .withMessage('Please select a valid industry'),
     
     body('website')
-      .optional()
-      .isURL()
+      .optional({ nullable: true, checkFalsy: true })
+      .isString()
       .withMessage('Please enter a valid website URL'),
     
     body('description')
@@ -357,9 +357,9 @@ const brandValidations = {
       .withMessage('Description cannot exceed 500 characters'),
     
     body('founded')
-      .optional()
-      .matches(/^\d{4}$/)
-      .withMessage('Founded year must be a valid 4-digit year'),
+      .optional({ nullable: true, checkFalsy: true })
+      .isLength({ max: 20 })
+      .withMessage('Please enter a valid founded year or date'),
     
     body('employees')
       .optional()
@@ -392,8 +392,8 @@ const brandValidations = {
       .withMessage('ZIP code must be a string'),
     
     body('socialMedia.instagram')
-      .optional()
-      .custom((value) => isInstagramHandleOrUrl(value))
+      .optional({ nullable: true, checkFalsy: true })
+      .isString()
       .withMessage('Please enter a valid Instagram URL or handle'),
     
     body('socialMedia.twitter')
@@ -402,24 +402,20 @@ const brandValidations = {
       .withMessage('Please enter a valid Twitter/X URL or handle'),
     
     body('socialMedia.facebook')
-      .optional()
-      .isURL()
-      .withMessage('Please enter a valid Facebook URL'),
+      .optional({ nullable: true, checkFalsy: true })
+      .isString(),
     
     body('socialMedia.linkedin')
-      .optional()
-      .isURL()
-      .withMessage('Please enter a valid LinkedIn URL'),
+      .optional({ nullable: true, checkFalsy: true })
+      .isString(),
     
     body('socialMedia.youtube')
-      .optional()
-      .isURL()
-      .withMessage('Please enter a valid YouTube URL'),
+      .optional({ nullable: true, checkFalsy: true })
+      .isString(),
     
     body('socialMedia.tiktok')
-      .optional()
-      .isURL()
-      .withMessage('Please enter a valid TikTok URL'),
+      .optional({ nullable: true, checkFalsy: true })
+      .isString(),
     
     body('preferences.preferredNiches')
       .optional()

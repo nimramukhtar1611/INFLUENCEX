@@ -1,7 +1,7 @@
 // routes/payment.routes.js - FULL FIXED VERSION
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, resolveBrandContext } = require('../middleware/auth');
 const paymentController = require('../controllers/paymentController');
 
 // ============================================================
@@ -17,7 +17,7 @@ router.post(
 // ============================================================
 // All routes below require authentication
 // ============================================================
-router.use(protect);
+router.use(protect, resolveBrandContext);
 
 // ==================== BALANCE ====================
 router.get('/balance', paymentController.getBalance);

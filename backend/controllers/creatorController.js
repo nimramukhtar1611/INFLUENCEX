@@ -736,8 +736,10 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
    try {
     const allowedUpdates = [
+      'fullName',
       'displayName',
       'handle',
+      'email',
       'bio',
       'location',
       'website',
@@ -746,6 +748,7 @@ exports.updateProfile = async (req, res) => {
       'gender',
       'phone',
       'profilePicture',
+      'coverPicture',
       'socialMedia',
       'socialVerification',
       'niches',

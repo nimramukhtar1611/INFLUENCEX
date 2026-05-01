@@ -35,9 +35,10 @@ export const FeeProvider = ({ children }) => {
       setError(null);
       
       const response = await api.get('/global/settings');
+      console.log('💰 FeeContext: API Response:', response.status, response.data);
       
-      if (response?.success && response?.settings) {
-        const settings = response.settings;
+      if (response?.data?.success && response?.data?.settings) {
+        const settings = response.data.settings;
         
         const newFees = {
           commissionRate: parseFloat(settings.commissionRate ?? 10),
@@ -49,20 +50,22 @@ export const FeeProvider = ({ children }) => {
           minEscrowAmount: parseFloat(settings.minEscrowAmount ?? 100),
           taxInclusive: Boolean(settings.taxInclusive ?? false),
           withdrawalFeeType: String(settings.withdrawalFeeType ?? 'fixed'),
-          lastUpdated: settings.version ? new Date() : fees.lastUpdated
+          lastUpdated: new Date()
         };
         
         setFees(newFees);
         return newFees;
+      } else {
+        console.warn('💰 FeeContext: Invalid settings response:', response.data);
       }
     } catch (err) {
-      console.error('Failed to fetch fees:', err);
+      console.error('💰 FeeContext: Failed to fetch fees:', err);
       setError(err.message || 'Failed to load fee settings');
       toast.error('Failed to load current fee settings');
     } finally {
       setLoading(false);
     }
-  }, [fees.lastUpdated]);
+  }, []); // Remove dependency on fees.lastUpdated to prevent infinite loop
 
   // Calculate platform commission
   const calculateCommission = useCallback((amount) => {
@@ -193,7 +196,8 @@ export const FeeProvider = ({ children }) => {
   // Initialize fees on mount
   useEffect(() => {
     fetchFees();
-  }, [fetchFees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
   const value = {
     // State

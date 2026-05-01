@@ -18,6 +18,8 @@ const CREATOR_EXCLUDED_EARNING_TYPES = ['withdrawal', 'refund', 'fee', 'penalty'
 
 const getFrontendBaseUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
 
+const getEffectiveBrandId = (req) => req.brandId || req.user?._id;
+
 const getPaymentsPathByUserType = (userType) => {
   if (userType === 'brand') return '/brand/payments';
   if (userType === 'creator') return '/creator/earnings';
@@ -43,17 +45,13 @@ const getBrandFinancials = async (userId) => {
 
   // For brands: balance = wallet deposits (self-to-self) + refunds - deal payments - withdrawals - reserved
   const [walletDeposits, refunds, dealPayments, reservedOutflows] = await Promise.all([
-    // Wallet top-ups (brand paying themselves)
+    // Wallet top-ups (brand paying themselves — from.userId === to.userId, metadata.kind === 'deposit')
     Payment.aggregate([
       {
         $match: {
-          $or: [
-            { 'from.userId': normalizedUserId },
-            { 'from.userId': userIdString }
-          ],
-          $or: [
-            { 'to.userId': normalizedUserId },
-            { 'to.userId': userIdString }
+          $and: [
+            { $or: [{ 'from.userId': normalizedUserId }, { 'from.userId': userIdString }] },
+            { $or: [{ 'to.userId': normalizedUserId }, { 'to.userId': userIdString }] }
           ],
           status: 'completed',
           type: 'payment',
@@ -239,10 +237,11 @@ exports.getBalance = catchAsync(async (req, res) => {
   let balance = 0;
   let pending = 0;
   let available = 0;
+  const brandId = getEffectiveBrandId(req);
 
   if (req.user.userType === 'brand') {
     console.log(`💰 [API] Calculating brand balance...`);
-    const brandFinancials = await getBrandFinancials(req.user._id);
+    const brandFinancials = await getBrandFinancials(brandId);
     balance = brandFinancials.available;
     pending = brandFinancials.reserved;
     available = brandFinancials.available;
@@ -279,9 +278,10 @@ exports.getBalance = catchAsync(async (req, res) => {
 // ==================== GET TRANSACTIONS ====================
 exports.getTransactions = catchAsync(async (req, res) => {
   const { page = 1, limit = 10, type, status, startDate, endDate } = req.query;
+  const brandId = getEffectiveBrandId(req);
 
   const query = req.user.userType === 'brand'
-    ? { 'from.userId': req.user._id }
+    ? { 'from.userId': brandId }
     : { 'to.userId': req.user._id };
 
   if (type) query.type = type;
@@ -333,9 +333,10 @@ exports.getTransactions = catchAsync(async (req, res) => {
 // ==================== GET PAYMENT METHODS ====================
 exports.getPaymentMethods = catchAsync(async (req, res) => {
   let paymentMethods = [];
+  const brandId = getEffectiveBrandId(req);
 
   if (req.user.userType === 'brand') {
-    const brand = await Brand.findById(req.user._id).select('paymentMethods');
+    const brand = await Brand.findById(brandId).select('paymentMethods');
     paymentMethods = brand?.paymentMethods || [];
   } else if (req.user.userType === 'creator') {
     const creator = await Creator.findById(req.user._id).select('paymentMethods');
@@ -348,6 +349,7 @@ exports.getPaymentMethods = catchAsync(async (req, res) => {
 // ==================== ADD PAYMENT METHOD ====================
 exports.addPaymentMethod = catchAsync(async (req, res) => {
   const { type, ...details } = req.body;
+  const brandId = getEffectiveBrandId(req);
 
   if (!type) {
     return res.status(400).json({ success: false, error: 'Payment method type is required' });
@@ -364,7 +366,7 @@ exports.addPaymentMethod = catchAsync(async (req, res) => {
   let updatedUser;
   if (req.user.userType === 'brand') {
     updatedUser = await Brand.findByIdAndUpdate(
-      req.user._id,
+      brandId,
       { $push: { paymentMethods: newMethod } },
       { new: true }
     ).select('paymentMethods');
@@ -386,12 +388,13 @@ exports.addPaymentMethod = catchAsync(async (req, res) => {
 // ==================== SET DEFAULT PAYMENT METHOD ====================
 exports.setDefaultMethod = catchAsync(async (req, res) => {
   const { methodId } = req.params;
+  const brandId = getEffectiveBrandId(req);
 
   // Reset default flag on all methods
   if (req.user.userType === 'brand') {
-    await Brand.updateOne({ _id: req.user._id }, { $set: { 'paymentMethods.$[].isDefault': false } });
+    await Brand.updateOne({ _id: brandId }, { $set: { 'paymentMethods.$[].isDefault': false } });
     await Brand.findOneAndUpdate(
-      { _id: req.user._id, 'paymentMethods._id': methodId },
+      { _id: brandId, 'paymentMethods._id': methodId },
       { $set: { 'paymentMethods.$.isDefault': true } }
     );
   } else if (req.user.userType === 'creator') {
@@ -408,9 +411,10 @@ exports.setDefaultMethod = catchAsync(async (req, res) => {
 // ==================== DELETE PAYMENT METHOD ====================
 exports.deletePaymentMethod = catchAsync(async (req, res) => {
   const { methodId } = req.params;
+  const brandId = getEffectiveBrandId(req);
 
   if (req.user.userType === 'brand') {
-    await Brand.findByIdAndUpdate(req.user._id, { $pull: { paymentMethods: { _id: methodId } } });
+    await Brand.findByIdAndUpdate(brandId, { $pull: { paymentMethods: { _id: methodId } } });
   } else if (req.user.userType === 'creator') {
     await Creator.findByIdAndUpdate(req.user._id, { $pull: { paymentMethods: { _id: methodId } } });
   }
@@ -1053,9 +1057,10 @@ exports.getWithdrawals = catchAsync(async (req, res) => {
 // ==================== GET INVOICES ====================
 exports.getInvoices = catchAsync(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
+  const brandId = getEffectiveBrandId(req);
 
   const query = {
-    'from.userId': req.user._id,
+    'from.userId': req.user.userType === 'brand' ? brandId : req.user._id,
     status: 'completed',
   };
 
@@ -1085,11 +1090,12 @@ exports.getInvoices = catchAsync(async (req, res) => {
 // ==================== DOWNLOAD INVOICE ====================
 exports.downloadInvoice = catchAsync(async (req, res) => {
   const { invoiceId } = req.params;
+  const brandId = getEffectiveBrandId(req);
 
   // Find the payment record (since getInvoices returns Payment records)
   const payment = await Payment.findOne({
     _id: invoiceId,
-    'from.userId': req.user._id,
+    'from.userId': req.user.userType === 'brand' ? brandId : req.user._id,
     status: 'completed'
   }).populate('from.userId', 'fullName email phone');
 
@@ -1154,6 +1160,7 @@ exports.downloadInvoice = catchAsync(async (req, res) => {
 // ==================== CREATE DEPOSIT CHECKOUT SESSION ====================
 exports.createDepositCheckoutSession = catchAsync(async (req, res) => {
   const { amount, currency = 'usd' } = req.body;
+  const brandId = getEffectiveBrandId(req);
 
   const normalizedAmount = Number(amount);
   if (!Number.isFinite(normalizedAmount) || normalizedAmount < 10) {
@@ -1169,7 +1176,11 @@ exports.createDepositCheckoutSession = catchAsync(async (req, res) => {
     const customer = await stripe.customers.create({
       email: req.user.email,
       name: req.user.fullName,
-      metadata: { userId: req.user._id.toString(), userType: req.user.userType }
+      metadata: {
+        userId: brandId.toString(),
+        userType: req.user.userType,
+        ownerUserId: req.user._id.toString()
+      }
     });
     stripeCustomerId = customer.id;
     await User.findByIdAndUpdate(req.user._id, { stripeCustomerId });
@@ -1201,8 +1212,9 @@ exports.createDepositCheckoutSession = catchAsync(async (req, res) => {
     client_reference_id: req.user._id.toString(),
     metadata: {
       purpose: 'wallet_topup',
-      userId: req.user._id.toString(),
+      userId: brandId.toString(),
       userType: req.user.userType,
+      ownerUserId: req.user._id.toString(),
       amount: String(normalizedAmount)
     }
   });

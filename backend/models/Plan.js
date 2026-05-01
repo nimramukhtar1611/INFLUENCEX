@@ -76,7 +76,7 @@ const planSchema = new mongoose.Schema({
   }
 });
 
-// ✅ FIXED initializeDefaults method - with try/catch and no throw
+// ✅ FIXED initializeDefaults method - includes stripePriceId from environment variables
 planSchema.statics.initializeDefaults = async function() {
   try {
     console.log('📦 Initializing default plans...');
@@ -117,6 +117,11 @@ planSchema.statics.initializeDefaults = async function() {
         price: 49,
         userType: 'both',
         description: 'For growing brands',
+        stripePriceId: {
+          month: process.env.STRIPE_PRICE_STARTER_MONTH || null,
+          year: process.env.STRIPE_PRICE_STARTER_YEAR || null
+        },
+        stripeProductId: process.env.STRIPE_PRODUCT_STARTER || null,
         features: [
           'Up to 10 campaigns',
           'Advanced creator search',
@@ -147,6 +152,11 @@ planSchema.statics.initializeDefaults = async function() {
         price: 149,
         userType: 'both',
         description: 'For serious marketers',
+        stripePriceId: {
+          month: process.env.STRIPE_PRICE_PROFESSIONAL_MONTH || null,
+          year: process.env.STRIPE_PRICE_PROFESSIONAL_YEAR || null
+        },
+        stripeProductId: process.env.STRIPE_PRODUCT_PROFESSIONAL || null,
         features: [
           'Unlimited campaigns',
           'AI-powered creator matching',
@@ -178,6 +188,11 @@ planSchema.statics.initializeDefaults = async function() {
         price: 499,
         userType: 'both',
         description: 'For large organizations',
+        stripePriceId: {
+          month: process.env.STRIPE_PRICE_ENTERPRISE_MONTH || null,
+          year: process.env.STRIPE_PRICE_ENTERPRISE_YEAR || null
+        },
+        stripeProductId: process.env.STRIPE_PRODUCT_ENTERPRISE || null,
         features: [
           'Everything in Professional',
           'Dedicated account manager',
@@ -209,9 +224,28 @@ planSchema.statics.initializeDefaults = async function() {
 
     for (const planData of defaultPlans) {
       try {
+        // Build the update — strip null stripePriceId values so we don't overwrite
+        // prices already set manually (e.g. in production via admin panel).
+        const update = { ...planData };
+        if (update.stripePriceId) {
+          // Only include non-null price IDs in the update
+          const monthPrice = update.stripePriceId.month;
+          const yearPrice  = update.stripePriceId.year;
+          if (!monthPrice && !yearPrice) {
+            // No env vars set — don't touch existing stripePriceId
+            delete update.stripePriceId;
+          } else {
+            // Partial update: only set the prices that have values
+            update.stripePriceId = {};
+            if (monthPrice) update.stripePriceId.month = monthPrice;
+            if (yearPrice)  update.stripePriceId.year  = yearPrice;
+          }
+        }
+        if (!update.stripeProductId) delete update.stripeProductId;
+
         await this.findOneAndUpdate(
           { planId: planData.planId },
-          planData,
+          { $set: update },
           { upsert: true, new: true }
         );
         console.log(`  ✅ Plan ${planData.name} initialized`);
@@ -227,6 +261,7 @@ planSchema.statics.initializeDefaults = async function() {
     return { success: false, error: error.message };
   }
 };
+
 
 // ✅ Add this method to check if plans exist
 planSchema.statics.checkPlans = async function() {

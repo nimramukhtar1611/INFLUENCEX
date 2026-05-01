@@ -196,7 +196,7 @@ const ProfilePictureUpload = ({ currentImage, onUpload, fullName, isDark }) => {
 const AdminSettings = () => {
   const { user, refreshUser, updateUser } = useAuth();
   const { theme } = useTheme();
-  const { refreshSecuritySettings } = useGlobalSettings();
+  const { refreshSecuritySettings, refreshSettings } = useGlobalSettings();
   const { refreshFees } = useFees();
   const isDark = theme === 'dark';
   const {
@@ -206,7 +206,7 @@ const AdminSettings = () => {
 
   const [activeTab, setActiveTab] = useState('general');
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [validationErrors, setValidationErrors] = useState({});
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -237,7 +237,7 @@ const AdminSettings = () => {
     profileImage: '',
 
     // Platform Fees
-    commissionRate: 10,
+    commissionRate: null,
     creatorPayoutMin: 50,
     brandEscrowMin: 100,
     escrowFee: 0,
@@ -1040,6 +1040,14 @@ const AdminSettings = () => {
           } catch (securityRefreshError) {
             console.error('Failed to refresh security settings:', securityRefreshError);
           }
+
+          // Refresh global settings context to ensure real-time reflection
+          try {
+            await refreshSettings();
+            console.log('Global settings refreshed after settings save');
+          } catch (settingsRefreshError) {
+            console.error('Failed to refresh global settings:', settingsRefreshError);
+          }
           
           // Verify settings were actually saved by re-fetching after a short delay
           setTimeout(async () => {
@@ -1232,6 +1240,17 @@ const AdminSettings = () => {
       setLoading(false);
     }
   };
+
+  if (loading && !settings) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-zinc-950 text-white' : 'bg-white text-zinc-900'}`}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-zinc-200 border-t-black rounded-full animate-spin"></div>
+          <p className="text-sm font-medium animate-pulse uppercase tracking-widest">Loading Settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>

@@ -37,7 +37,12 @@ const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       console.log("🔍 Auth middleware - token decoded successfully:", decoded.id || decoded.userId);
       
-      const user = await User.findById(decoded.id || decoded.userId).select('-password -refreshToken');
+      let user = await User.findById(decoded.id || decoded.userId).select('-password -refreshToken');
+
+      if (!user) {
+        // Check Admin collection as well
+        user = await Admin.findById(decoded.id || decoded.userId).select('-password -twoFactorSecret');
+      }
 
       if (!user) {
         return res.status(401).json({

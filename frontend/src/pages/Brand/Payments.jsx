@@ -96,14 +96,23 @@ const Payments = () => {
     }
   };
 
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const refreshPaymentDataAfterDeposit = async () => {
+    await wait(1500);
+    await fetchPaymentData(true);
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const depositStatus = params.get('deposit');
     if (depositStatus === 'success') {
       toast.success('Stripe payment completed successfully.');
-      fetchPaymentData();
       window.history.replaceState({}, '', window.location.pathname);
+      refreshPaymentDataAfterDeposit();
+      return;
     }
+
     fetchPaymentData();
   }, []);
 

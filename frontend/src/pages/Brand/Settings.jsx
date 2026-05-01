@@ -37,6 +37,14 @@ const toSocialUrl = (platform, value) => {
   return map[platform] || trimmed;
 };
 
+const normalizeUrl = (value) => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
+
 const ProfilePictureUpload = ({ currentImage, onUpload }) => {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(currentImage || '');
@@ -529,7 +537,7 @@ const BrandSettings = () => {
               facebook: toSocialUrl('facebook', brand.socialMedia?.facebook || ''),
               youtube: toSocialUrl('youtube', brand.socialMedia?.youtube || '')
             },
-            aiCounterEnabled: brand.aiCounterEnabled || false
+            aiCounterEnabled: brand.preferences?.aiCounterEnabled ?? brand.aiCounterEnabled ?? false
           });
         }
       } catch (error) {
@@ -569,16 +577,24 @@ const BrandSettings = () => {
 
       // Remove empty strings to avoid backend validation errors
       if (!payload.website || payload.website.trim() === '') delete payload.website;
+      else payload.website = normalizeUrl(payload.website);
       if (!payload.founded || payload.founded.trim() === '') delete payload.founded;
       if (!payload.taxId || payload.taxId.trim() === '') delete payload.taxId;
       if (!payload.phone || payload.phone.trim() === '') delete payload.phone;
+
+      // Move AI setting into preferences for backend schema
+      payload.preferences = {
+        ...(payload.preferences || {}),
+        aiCounterEnabled: Boolean(payload.aiCounterEnabled)
+      };
+      delete payload.aiCounterEnabled;
 
       // Clean social media empty strings
       if (payload.socialMedia) {
         const cleanedSocial = {};
         Object.keys(payload.socialMedia).forEach(key => {
           if (payload.socialMedia[key] && payload.socialMedia[key].trim() !== '') {
-            cleanedSocial[key] = payload.socialMedia[key];
+            cleanedSocial[key] = toSocialUrl(key, payload.socialMedia[key]);
           }
         });
         payload.socialMedia = cleanedSocial;
@@ -600,6 +616,11 @@ const BrandSettings = () => {
       const res = await brandService.updateProfile(payload);
 
       if (res?.success) {
+        const savedAiCounterEnabled = res?.brand?.preferences?.aiCounterEnabled ?? payload.preferences?.aiCounterEnabled ?? false;
+        setSettings((prev) => ({
+          ...prev,
+          aiCounterEnabled: savedAiCounterEnabled
+        }));
         toast.success('Settings updated in database successfully!');
         if (refreshUser) await refreshUser(); // sync user context
       } else {

@@ -355,6 +355,20 @@ exports.updateProfile = async (req, res) => {
       if (req.body[key] !== undefined) updateData[key] = req.body[key];
     }
 
+    if (req.body.aiCounterEnabled !== undefined) {
+      updateData.preferences = {
+        ...(updateData.preferences || {}),
+        aiCounterEnabled: Boolean(req.body.aiCounterEnabled)
+      };
+    }
+
+    if (updateData.preferences && typeof updateData.preferences === 'object' && updateData.preferences.aiCounterEnabled !== undefined) {
+      updateData.preferences = {
+        ...updateData.preferences,
+        aiCounterEnabled: Boolean(updateData.preferences.aiCounterEnabled)
+      };
+    }
+
     if (updateData.socialMedia && typeof updateData.socialMedia === 'object') {
       updateData.socialMedia = {
         ...updateData.socialMedia,
@@ -384,6 +398,9 @@ exports.updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error('Brand update profile error:', error);
+    if (error.errors) {
+      console.error('Validation errors:', Object.keys(error.errors).map(key => `${key}: ${error.errors[key].message}`).join(', '));
+    }
 
     if (error.name === 'ValidationError') {
       const firstError = Object.values(error.errors || {})[0];

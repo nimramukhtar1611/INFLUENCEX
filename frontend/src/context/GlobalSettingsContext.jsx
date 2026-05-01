@@ -311,13 +311,13 @@ export const GlobalSettingsProvider = ({ children }) => {
           const handleSettingsUpdate = (data) => {
             console.log('📡 Real-time settings update received:', data);
             
-            if (data.type === 'GLOBAL_SETTINGS_UPDATE' && data.data) {
+            if (data.type === 'GLOBAL_SETTINGS_UPDATE' && data.settings) {
               // Update global settings immediately
-              setSettings(data.data);
+              setSettings(data.settings);
               setLastUpdated(new Date(data.timestamp));
               
               // Update localStorage
-              localStorage.setItem('globalSettings', JSON.stringify(data.data));
+              localStorage.setItem('globalSettings', JSON.stringify(data.settings));
               localStorage.setItem('globalSettingsUpdated', data.timestamp);
               
               // Show toast notification for user feedback

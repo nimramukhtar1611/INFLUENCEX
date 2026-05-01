@@ -317,7 +317,49 @@ const getCurrentSubscription = asyncHandler(async (req, res) => {
   }).populate('planId');
 
   if (!subscription) {
-    return res.json({ success: true, subscription: null, message: 'No active subscription' });
+    // ── Stripe recovery: webhook may have failed to write the DB record ──────
+    // If the user has a stripeCustomerId, check Stripe directly for active subs.
+    if (req.user.stripeCustomerId) {
+      try {
+        console.log(`🔄 [getCurrentSubscription] No local subscription for user ${req.user._id}. Checking Stripe for active subscriptions...`);
+        const stripeSubs = await stripe.subscriptions.list({
+          customer: req.user.stripeCustomerId,
+          status: 'active',
+          limit: 1,
+          expand: ['data.items.data.price']
+        });
+
+        if (stripeSubs.data.length > 0) {
+          console.log(`✅ [getCurrentSubscription] Found active Stripe subscription: ${stripeSubs.data[0].id}. Syncing to DB...`);
+          const synced = await stripeService.upsertSubscriptionFromStripe(stripeSubs.data[0]);
+          if (synced?._id) {
+            subscription = await Subscription.findById(synced._id).populate('planId');
+            console.log(`✅ [getCurrentSubscription] Recovery sync complete. Plan: ${synced.planId}`);
+          }
+        } else {
+          // Also check 'trialing' and 'past_due' statuses
+          const otherSubs = await stripe.subscriptions.list({
+            customer: req.user.stripeCustomerId,
+            status: 'trialing',
+            limit: 1,
+            expand: ['data.items.data.price']
+          });
+          if (otherSubs.data.length > 0) {
+            const synced = await stripeService.upsertSubscriptionFromStripe(otherSubs.data[0]);
+            if (synced?._id) {
+              subscription = await Subscription.findById(synced._id).populate('planId');
+            }
+          }
+        }
+      } catch (stripeErr) {
+        console.warn(`⚠️ [getCurrentSubscription] Stripe recovery check failed (non-fatal): ${stripeErr.message}`);
+      }
+    }
+
+    // If still no subscription after recovery attempt, return null
+    if (!subscription) {
+      return res.json({ success: true, subscription: null, message: 'No active subscription' });
+    }
   }
 
   let upcomingInvoice = null;
@@ -329,8 +371,19 @@ const getCurrentSubscription = asyncHandler(async (req, res) => {
       });
       const synced = await stripeService.upsertSubscriptionFromStripe(stripeSubscription);
       if (synced?._id) {
-        const refreshed = await Subscription.findById(synced._id).populate('planId');
-        if (refreshed) subscription = refreshed;
+        // Only apply the sync if it doesn't downgrade the current plan.
+        // Price-based resolution can map to a lower-tier plan when stripePriceId
+        // in the DB is stale or misconfigured. Metadata-based resolution (fixed in
+        // stripeService) handles most cases, but this is an extra safety net.
+        const PLAN_TIERS = { free: 0, starter: 1, professional: 2, enterprise: 3 };
+        const currentTier = PLAN_TIERS[String(subscription.planId || 'free').toLowerCase()] ?? 0;
+        const syncedTier  = PLAN_TIERS[String(synced.planId    || 'free').toLowerCase()] ?? 0;
+        if (syncedTier >= currentTier) {
+          const refreshed = await Subscription.findById(synced._id).populate('planId');
+          if (refreshed) subscription = refreshed;
+        } else {
+          console.warn(`⚠️ [getCurrentSubscription] Skipping sync: would downgrade from '${subscription.planId}' (tier ${currentTier}) to '${synced.planId}' (tier ${syncedTier})`);
+        }
       }
 
       const invoice = await stripe.invoices.retrieveUpcoming({
@@ -1449,10 +1502,33 @@ const checkLimits = asyncHandler(async (req, res) => {
     ? ((brandDoc?.teamMembers || []).filter((member) => String(member?.status || '') !== 'removed').length)
     : 0;
 
-  const subscription = await Subscription.findOne({
+  let subscription = await Subscription.findOne({
     userId: req.user._id,
     status: { $in: ['active', 'trialing'] }
   }).populate('planId');
+
+  if (!subscription) {
+    // ── Stripe recovery: webhook may have missed creating the local record ───
+    if (req.user.stripeCustomerId) {
+      try {
+        const stripeSubs = await stripe.subscriptions.list({
+          customer: req.user.stripeCustomerId,
+          status: 'active',
+          limit: 1,
+          expand: ['data.items.data.price']
+        });
+        if (stripeSubs.data.length > 0) {
+          console.log(`🔄 [checkLimits] Recovery: syncing Stripe sub ${stripeSubs.data[0].id} for user ${req.user._id}`);
+          const synced = await stripeService.upsertSubscriptionFromStripe(stripeSubs.data[0]);
+          if (synced?._id) {
+            subscription = await Subscription.findById(synced._id).populate('planId');
+          }
+        }
+      } catch (stripeErr) {
+        console.warn(`⚠️ [checkLimits] Stripe recovery failed (non-fatal): ${stripeErr.message}`);
+      }
+    }
+  }
 
   if (!subscription) {
     const freePlan = await Plan.findOne({ planId: 'free' });

@@ -154,7 +154,6 @@ const customSanitization = (req, res, next) => {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;')
         .trim();
     };
 

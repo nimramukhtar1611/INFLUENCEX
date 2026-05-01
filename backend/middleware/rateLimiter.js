@@ -8,7 +8,7 @@ const RATE_LIMITS = {
   // General API limits
   api: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 2000, // Further increased to 2000 requests per window for development
+    max: 5000, // Significantly increased for development
     message: 'Too many requests from this IP, please try again later.'
   },
   
@@ -86,7 +86,7 @@ const RATE_LIMITS = {
   // Admin routes (higher limits)
   admin: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // 500 requests per window
+    max: 2000, // 2000 requests per window
     message: 'Too many requests, please slow down.'
   },
   

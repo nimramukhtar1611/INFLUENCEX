@@ -4,7 +4,7 @@ import {
   Building2, Globe, Mail, Phone, MapPin, Users,
   Edit2, Camera, Save, X, Calendar, DollarSign,
   TrendingUp, Award, Star, CheckCircle, Loader,
-  Instagram, Facebook, Youtube,
+  Instagram, Facebook, Youtube, Twitter,
   AlertCircle, Check
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -27,7 +27,9 @@ const toSocialUrl = (platform, value) => {
   const map = {
     instagram: `https://instagram.com/${clean}`,
     facebook: `https://facebook.com/${clean}`,
-    youtube: `https://youtube.com/@${clean}`
+    youtube: `https://youtube.com/@${clean}`,
+    twitter: `https://twitter.com/${clean}`,
+    tiktok: `https://tiktok.com/@${clean}`
   };
 
   return map[platform] || trimmed;
@@ -744,11 +746,11 @@ const BrandProfile = () => {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Facebook className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                    <Twitter className="w-5 h-5 text-blue-400 flex-shrink-0" />
                     <Input
-                      placeholder="pagename"
-                      value={formData.socialMedia.facebook}
-                      onChange={(e) => handleSocialChange('facebook', e.target.value)}
+                      placeholder="@username"
+                      value={formData.socialMedia.twitter}
+                      onChange={(e) => handleSocialChange('twitter', e.target.value)}
                       disabled={!isEditing}
                       className="flex-1"
                     />
@@ -759,6 +761,16 @@ const BrandProfile = () => {
                       placeholder="@channel"
                       value={formData.socialMedia.youtube}
                       onChange={(e) => handleSocialChange('youtube', e.target.value)}
+                      disabled={!isEditing}
+                      className="flex-1"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 flex items-center justify-center font-bold text-black border-2 border-black rounded-sm text-[8px] flex-shrink-0">T</span>
+                    <Input
+                      placeholder="@username"
+                      value={formData.socialMedia.tiktok}
+                      onChange={(e) => handleSocialChange('tiktok', e.target.value)}
                       disabled={!isEditing}
                       className="flex-1"
                     />

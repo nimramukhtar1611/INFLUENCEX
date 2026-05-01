@@ -123,6 +123,7 @@ const DealDetails = () => {
   const typingTimeoutRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState(null);
+  const autoAiCounterTriggeredRef = useRef(null);
 
   useEffect(() => {
     if (id) {
@@ -131,12 +132,16 @@ const DealDetails = () => {
   }, [id]);
 
   useEffect(() => {
+    autoAiCounterTriggeredRef.current = null;
+  }, [id]);
+
+  useEffect(() => {
     const fetchBrandAiSetting = async () => {
       if (user?.userType === 'brand' && user?._id) {
         try {
           const res = await brandService.getProfile();
           if (res?.success && res.brand) {
-            setBrandAiCounterEnabled(res.brand.aiCounterEnabled || false);
+            setBrandAiCounterEnabled(res.brand.preferences?.aiCounterEnabled ?? res.brand.aiCounterEnabled ?? false);
           }
         } catch (error) {
           console.error('Error fetching brand AI setting:', error);
@@ -145,6 +150,40 @@ const DealDetails = () => {
     };
     fetchBrandAiSetting();
   }, [user?.userType, user?._id]);
+
+  useEffect(() => {
+    const currentLatestCounter = deal?.negotiation?.length
+      ? deal.negotiation[deal.negotiation.length - 1]
+      : null;
+    const currentLatestCounterProposedById = currentLatestCounter?.proposedBy?._id || currentLatestCounter?.proposedBy;
+
+    const shouldAutoStartAiCounter =
+      user?.userType === 'brand' &&
+      brandAiCounterEnabled &&
+      aiCounterAccess.canUse &&
+      deal?.status === 'negotiating' &&
+      currentLatestCounterProposedById &&
+      String(currentLatestCounterProposedById) !== String(user?._id) &&
+      deal?.negotiationSettings?.mode !== 'ai' &&
+      autoAiCounterTriggeredRef.current !== deal?._id &&
+      !startingAiCounter;
+
+    if (!shouldAutoStartAiCounter) {
+      return;
+    }
+
+    autoAiCounterTriggeredRef.current = deal?._id;
+    handleStartAiCounter();
+  }, [
+    user?.userType,
+    user?._id,
+    brandAiCounterEnabled,
+    aiCounterAccess.canUse,
+    deal?.status,
+    deal?._id,
+    deal?.negotiationSettings?.mode,
+    startingAiCounter
+  ]);
 
   useEffect(() => () => {
     if (conversationId) leaveConversation(conversationId);
@@ -481,6 +520,20 @@ const DealDetails = () => {
     }
   };
 
+  const handleAcceptCounterOffer = async () => {
+    try {
+      const response = await updateDealStatus(id, 'accepted', 'Counter offer accepted');
+      if (response?.success) {
+        toast.success('Counter offer accepted successfully');
+        loadDeal();
+      } else {
+        toast.error(response?.error || 'Failed to accept counter offer');
+      }
+    } catch (error) {
+      toast.error('Failed to accept counter offer');
+    }
+  };
+
   const handleStartAiCounter = async () => {
     try {
       setStartingAiCounter(true);
@@ -563,6 +616,7 @@ const DealDetails = () => {
     ? deal.negotiation[deal.negotiation.length - 1]
     : null;
   const latestCounterProposedById = latestCounter?.proposedBy?._id || latestCounter?.proposedBy;
+  const brandAiCounterActive = isBrand && brandAiCounterEnabled && aiCounterAccess.canUse;
   const canBrandAcceptCounter = Boolean(
     deal.status === 'negotiating' &&
     latestCounter &&
@@ -570,7 +624,7 @@ const DealDetails = () => {
     String(latestCounterProposedById) !== String(user?._id)
   );
   const manualCounterDisabled = isManualCounterDisabledForActor(deal, 'brand');
-  const canBrandCounter = deal.status === 'negotiating' && canBrandAcceptCounter;
+  const canBrandCounter = deal.status === 'negotiating' && canBrandAcceptCounter && !brandAiCounterActive;
 
   return (
     <div className={`max-w-7xl mx-auto space-y-8 p-6 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
@@ -592,7 +646,7 @@ const DealDetails = () => {
             </h1>
           </div>
           <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-            {deal.campaignId?.title || 'Untitled Deal'} • Manage your deal details and communications.
+            {deal.campaignId?.title || 'Untitled Deal'} ?? Manage your deal details and communications.
           </p>
         </div>
         
@@ -846,7 +900,7 @@ const DealDetails = () => {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Campaign', val: deal.campaignId?.title || '—', color: 'blue' },
+              { label: 'Campaign', val: deal.campaignId?.title || '??', color: 'blue' },
               { label: 'Payment', val: deal.paymentType || 'fixed', color: 'purple' },
               { label: 'Created', val: formatDate(deal.createdAt), color: 'zinc' },
               { label: 'Activity', val: timeAgo(deal.updatedAt), color: 'emerald' }
@@ -881,15 +935,27 @@ const DealDetails = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               {/* Dynamic Metric Mapping Based on Type */}
-              {/* This is a clean abstraction of your conditional logic */}
-              {deal.paymentType === 'cpe' && (
+              {deal.paymentType === 'cpe' && deal.performanceMetrics.cpe && (
                 <>
-                  <MetricItem label="Target Likes" val={deal.performanceMetrics.cpe.targetLikes} isDark={isDark} />
+                  <MetricItem label="Target Engagements" val={formatNumber(deal.performanceMetrics.cpe.targetEngagements || deal.performanceMetrics.cpe.targetLikes)} isDark={isDark} />
                   <MetricItem label="Base Rate" val={formatCurrency(deal.performanceMetrics.cpe.baseRate)} isDark={isDark} />
-                  <MetricItem label="Bonus" val={formatCurrency(deal.performanceMetrics.cpe.bonusRate)} isDark={isDark} />
+                  <MetricItem label="Bonus Rate" val={formatCurrency(deal.performanceMetrics.cpe.bonusRate)} isDark={isDark} />
                 </>
               )}
-              {/* ... Repeat logic for CPA/CPM/RevShare with similar MetricItem components */}
+              {deal.paymentType === 'cpa' && deal.performanceMetrics.cpa && (
+                <>
+                  <MetricItem label="Target Conversions" val={formatNumber(deal.performanceMetrics.cpa.targetConversions)} isDark={isDark} />
+                  <MetricItem label="Commission" val={formatCurrency(deal.performanceMetrics.cpa.commissionRate)} isDark={isDark} />
+                  <MetricItem label="Base Rate" val={formatCurrency(deal.performanceMetrics.cpa.baseRate)} isDark={isDark} />
+                </>
+              )}
+              {deal.paymentType === 'cpm' && deal.performanceMetrics.cpm && (
+                <>
+                  <MetricItem label="Target Impressions" val={formatNumber(deal.performanceMetrics.cpm.targetImpressions)} isDark={isDark} />
+                  <MetricItem label="CPM Rate" val={formatCurrency(deal.performanceMetrics.cpm.ratePerThousand)} isDark={isDark} />
+                  <MetricItem label="Base Rate" val={formatCurrency(deal.performanceMetrics.cpm.baseRate)} isDark={isDark} />
+                </>
+              )}
             </div>
 
             {/* Performance Bar Upgrade */}
@@ -920,6 +986,86 @@ const DealDetails = () => {
                   <span className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{req}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Negotiation History Log */}
+        {deal.negotiation && deal.negotiation.length > 0 && (
+          <div className={`p-6 rounded-[2rem] border mt-6 ${
+            isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-white border-zinc-100 shadow-sm'
+          }`}>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <h2 className={`text-lg font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                Negotiation Log
+              </h2>
+            </div>
+
+            <div className="space-y-4">
+              {deal.negotiation.map((entry, index) => {
+                const isProposedByMe = String(entry.proposedBy?._id || entry.proposedBy) === String(user?._id);
+                return (
+                  <div 
+                    key={index} 
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isProposedByMe 
+                        ? (isDark ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-100')
+                        : (isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-50 border-zinc-100')
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${
+                          isProposedByMe ? 'text-blue-500' : 'text-zinc-500'
+                        }`}>
+                          {isProposedByMe ? 'Your Proposal' : 'Creator Proposal'}
+                        </span>
+                        {entry.source === 'ai' && (
+                          <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 text-[8px] font-black uppercase tracking-tighter">
+                            AI
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] font-mono text-zinc-500">
+                        {formatDate(entry.createdAt)}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Budget</p>
+                        <p className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                          {formatCurrency(entry.budget)}
+                        </p>
+                      </div>
+                      {entry.deadline && (
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Deadline</p>
+                          <p className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                            {formatDate(entry.deadline)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {entry.message && (
+                      <p className={`text-xs leading-relaxed italic ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                        "{entry.message}"
+                      </p>
+                    )}
+                    
+                    {entry.status === 'accepted' && (
+                      <div className="mt-3 pt-3 border-t border-zinc-800/50 flex items-center gap-2">
+                        <CheckCircle className="w-3 h-3 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Accepted</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -957,6 +1103,40 @@ const DealDetails = () => {
         {/* Quick Actions Bar */}
         <section className="space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 px-1">Control Center</p>
+          
+          {canBrandCounter && (
+            <Button 
+              variant="outline" 
+              fullWidth 
+              icon={Edit} 
+              onClick={() => setShowCounterModal(true)}
+              disabled={manualCounterDisabled || loading}
+              className="rounded-xl h-10 text-[10px] font-black uppercase tracking-widest mb-2"
+            >
+              {manualCounterDisabled ? 'AI Negotiating...' : 'Manual Counter'}
+            </Button>
+          )}
+
+          {isBrand && brandAiCounterEnabled && (
+            <div className={`mb-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${
+              isDark ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}>
+              AI Counter enabled
+            </div>
+          )}
+
+          {canBrandAcceptCounter && (
+            <Button 
+              variant="success" 
+              fullWidth 
+              icon={CheckCircle} 
+              onClick={handleAcceptCounterOffer}
+              disabled={loading}
+              className="rounded-xl h-10 text-[10px] font-black uppercase tracking-widest mb-2"
+            >
+              Accept Counter Offer
+            </Button>
+          )}
           
           {/* Example Action Button */}
           <Link 
@@ -1026,7 +1206,7 @@ const DealDetails = () => {
                       </span>
                       {del.submittedAt && (
                         <>
-                          <span className="text-zinc-500 text-[10px]">•</span>
+                          <span className="text-zinc-500 text-[10px]">??</span>
                           <span className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
                             {formatDate(del.submittedAt)}
                           </span>

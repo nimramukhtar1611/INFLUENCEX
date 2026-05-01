@@ -7,14 +7,16 @@ const Creator = require('../models/Creator');
 const Notification = require('../models/Notification');
 const Brand = require('../models/Brand');
 const Message = require('../models/Message');
+const { Conversation } = require('../models/Conversation');
 const { protect } = require('../middleware/auth');
 const { catchAsync } = require('../utils/catchAsync');
 const { isValidObjectId } = require('../utils/validation');
 
+
 // ==================== INPUT VALIDATION HELPERS ====================
 const validateDealInput = (req) => {
   const errors = [];
-  
+
   // Sanitize and validate campaignId
   const campaignId = req.body.campaignId?.trim();
   if (!campaignId) {
@@ -22,7 +24,7 @@ const validateDealInput = (req) => {
   } else if (!isValidObjectId(campaignId)) {
     errors.push('Invalid campaign ID format');
   }
-  
+
   // Sanitize and validate creatorId
   const creatorId = req.body.creatorId?.trim();
   if (!creatorId) {
@@ -30,7 +32,7 @@ const validateDealInput = (req) => {
   } else if (!isValidObjectId(creatorId)) {
     errors.push('Invalid creator ID format');
   }
-  
+
   // Validate budget
   const budget = parseFloat(req.body.budget);
   if (!budget || isNaN(budget)) {
@@ -40,7 +42,7 @@ const validateDealInput = (req) => {
   } else if (budget > 1000000) {
     errors.push('Budget cannot exceed $1,000,000');
   }
-  
+
   // Validate deadline
   const deadline = req.body.deadline?.trim();
   if (!deadline) {
@@ -50,7 +52,7 @@ const validateDealInput = (req) => {
     const now = new Date();
     const minDeadline = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // 24 hours from now
     const maxDeadline = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000)); // 1 year from now
-    
+
     if (isNaN(deadlineDate.getTime())) {
       errors.push('Invalid deadline format');
     } else if (deadlineDate <= minDeadline) {
@@ -59,7 +61,7 @@ const validateDealInput = (req) => {
       errors.push('Deadline cannot be more than 1 year from now');
     }
   }
-  
+
   // Validate deliverables
   const deliverables = req.body.deliverables;
   if (!deliverables || !Array.isArray(deliverables) || deliverables.length === 0) {
@@ -77,27 +79,27 @@ const validateDealInput = (req) => {
       }
     });
   }
-  
+
   // Validate terms (optional but if provided, sanitize)
   const terms = req.body.terms?.trim();
   if (terms && terms.length > 2000) {
     errors.push('Terms cannot exceed 2000 characters');
   }
-  
+
   // Validate payment terms
   const validPaymentTerms = ['escrow', 'milestone', 'upon_completion'];
   const paymentTerms = req.body.paymentTerms?.trim();
   if (paymentTerms && !validPaymentTerms.includes(paymentTerms)) {
     errors.push('Invalid payment terms. Must be: escrow, milestone, or upon_completion');
   }
-  
+
   // Validate payment type
   const validPaymentTypes = ['fixed', 'hourly', 'commission'];
   const paymentType = req.body.paymentType?.trim();
   if (paymentType && !validPaymentTypes.includes(paymentType)) {
     errors.push('Invalid payment type. Must be: fixed, hourly, or commission');
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors,
@@ -122,7 +124,7 @@ const validateDealStatusUpdate = (status) => {
 const sanitizeDealUpdate = (req) => {
   const allowedFields = ['status', 'notes', 'completionDate', 'rating', 'feedback'];
   const sanitized = {};
-  
+
   allowedFields.forEach(field => {
     if (req.body[field] !== undefined) {
       if (field === 'status') {
@@ -144,12 +146,13 @@ const sanitizeDealUpdate = (req) => {
       }
     }
   });
-  
+
   return sanitized;
 };
 
 const Subscription = require('../models/Subscription');
 const { isValidBudget, isValidFutureDate } = require('../utils/validators');
+const { formatCurrency } = require('../utils/helpers');
 const { getBrandFinancials } = require('./paymentController');
 const PaymentCalculator = require('../services/paymentCalculator');
 const feeService = require('../services/feeService');
@@ -485,6 +488,7 @@ const runDualAiSettlement = ({
   const attempts = { brand: 0, creator: 0 };
   const offers = { brand: [], creator: [] };
 
+  // Determine starting point
   const latestSeededOffer = Array.isArray(deal?.negotiation)
     ? [...deal.negotiation].reverse().find((entry) => entry?.source === 'ai' && Number.isFinite(Number(entry?.budget)))
     : null;
@@ -496,6 +500,7 @@ const runDualAiSettlement = ({
 
   let nextRole = seededRole === 'brand' ? 'creator' : 'brand';
 
+  // Perform the 5-round negotiation simulation
   while (attempts.brand < maxAttemptsPerSide || attempts.creator < maxAttemptsPerSide) {
     if (attempts[nextRole] >= maxAttemptsPerSide) {
       nextRole = nextRole === 'brand' ? 'creator' : 'brand';
@@ -512,6 +517,7 @@ const runDualAiSettlement = ({
       ? Number(latestPending.budget)
       : Number(deal?.budget || 0);
 
+    // Decline previous pending offer before adding new one
     if (latestPending && latestPending.status === 'pending') {
       latestPending.status = 'declined';
     }
@@ -530,10 +536,10 @@ const runDualAiSettlement = ({
       proposedBy: proposerId,
       budget: aiSuggestion.suggestedBudget,
       deadline: aiSuggestion.suggestedDeadline ? new Date(aiSuggestion.suggestedDeadline) : undefined,
-      message: aiSuggestion.message,
+      message: `[AI Round ${attempts[nextRole] + 1}] ${aiSuggestion.message}`,
       source: 'ai',
       status: 'pending',
-      createdAt: new Date(),
+      createdAt: new Date()
     });
 
     attempts[nextRole] += 1;
@@ -541,42 +547,37 @@ const runDualAiSettlement = ({
     nextRole = nextRole === 'brand' ? 'creator' : 'brand';
   }
 
-  const creatorHighestOffer = offers.creator.length
-    ? Math.max(...offers.creator)
-    : Number(deal?.budget || 0);
-  const brandFifthOffer = offers.brand[maxAttemptsPerSide - 1]
-    ?? offers.brand[offers.brand.length - 1]
-    ?? Number(deal?.budget || 0);
+  // Calculate final budget as average of the 5th round offers
+  const finalBrandOffer = offers.brand[offers.brand.length - 1] || Number(deal?.budget || 0);
+  const finalCreatorOffer = offers.creator[offers.creator.length - 1] || Number(deal?.budget || 0);
+  const finalBudget = Math.round((finalBrandOffer + finalCreatorOffer) / 2);
 
-  const finalBudget = Math.round((creatorHighestOffer + brandFifthOffer) / 2);
-
-  const pendingOffers = Array.isArray(deal.negotiation)
-    ? deal.negotiation.filter((entry) => entry.status === 'pending')
-    : [];
-  const latestPendingOffer = pendingOffers.length ? pendingOffers[pendingOffers.length - 1] : null;
-
-  if (latestPendingOffer?.deadline) {
-    deal.deadline = latestPendingOffer.deadline;
-  }
+  // Set the final offer to the averaged budget and accept it
+  const allPending = deal.negotiation.filter(n => n.status === 'pending');
+  const latestPendingOffer = allPending.length ? allPending[allPending.length - 1] : null;
 
   if (latestPendingOffer) {
     latestPendingOffer.budget = finalBudget;
-    latestPendingOffer.message = `AI auto-settlement accepted after ${maxAttemptsPerSide} attempts each. Final budget: ${finalBudget}.`;
+    latestPendingOffer.message = `AI Dual-Settlement complete. Averaged final offers: ${formatCurrency(finalBrandOffer)} (Brand) & ${formatCurrency(finalCreatorOffer)} (Creator). Settle at: ${formatCurrency(finalBudget)}.`;
     latestPendingOffer.status = finalize ? 'accepted' : 'pending';
   }
 
+  // Ensure all other negotiation entries are declined
   deal.negotiation.forEach((entry) => {
-    if (latestPendingOffer && entry._id.toString() === latestPendingOffer._id.toString()) return;
+    if (latestPendingOffer && entry._id && entry._id.toString() === latestPendingOffer._id?.toString()) return;
     if (entry.status === 'pending') entry.status = 'declined';
   });
 
   deal.budget = finalBudget;
-  deal.status = finalize ? 'accepted' : 'negotiating';
+  if (finalize) {
+    deal.status = 'accepted';
+    deal.acceptedAt = new Date();
+  }
 
   return {
     attemptsPerSide: maxAttemptsPerSide,
-    creatorHighestOffer,
-    brandFifthOffer,
+    brandFinalOffer: finalBrandOffer,
+    creatorFinalOffer: finalCreatorOffer,
     finalBudget
   };
 };
@@ -630,10 +631,10 @@ const getInsufficientFundsPayload = ({ financials, requiredAmount, message }) =>
 
 const ensureBrandCanFundDeal = async ({ deal, message }) => {
   const financials = await getBrandFinancials(deal.brandId);
-  
+
   // Use dynamic fee service instead of hardcoded 10%
   const commission = await feeService.calculateCommission(deal?.budget || 0);
-  
+
   const budgetAmount = Number(deal?.budget || 0);
   const platformFee = commission.commissionAmount;
   const requiredAmount = budgetAmount + platformFee;
@@ -664,7 +665,7 @@ const ensureEscrowForAcceptedDeal = async ({ deal, acceptedByUserId }) => {
     const commission = await feeService.calculateCommission(deal.budget);
     const platformFee = commission.commissionAmount;
     const totalAmount = deal.budget + platformFee;
-    
+
     if (existingEscrow.amount !== totalAmount) {
       const fees = await PaymentCalculator.calculateFees(totalAmount, 'brand');
       existingEscrow.amount = totalAmount;
@@ -695,7 +696,7 @@ const ensureEscrowForAcceptedDeal = async ({ deal, acceptedByUserId }) => {
 
   // Use dynamic fee service instead of hardcoded 10%
   const commission = await feeService.calculateCommission(deal.budget);
-  
+
   const platformFee = commission.commissionAmount;
   deal.platformFee = platformFee;
   deal.commissionRate = commission.commissionRate;
@@ -799,7 +800,7 @@ const ensureReleasedPaymentRecord = async (deal, releasedByUserId) => {
 exports.createDeal = catchAsync(async (req, res) => {
   // Comprehensive input validation
   const validation = validateDealInput(req);
-  
+
   if (!validation.isValid) {
     return res.status(400).json({
       success: false,
@@ -883,35 +884,7 @@ exports.createDeal = catchAsync(async (req, res) => {
 
     await deal.save({ session });
 
-    // Calculate fees and create escrow payment
-    const PaymentCalculator = require('../services/paymentCalculator');
-    const fees = await PaymentCalculator.calculateFees(budget, 'deal');
-    
-    // Create escrow payment for deal budget
-    const payment = new Payment({
-      transactionId: `DEAL-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-      type: 'escrow',
-      status: 'pending', // Will be moved to in-escrow when deal is accepted
-      amount: budget,
-      fee: fees.total,
-      netAmount: budget - fees.total,
-      from: { userId: brandId, accountType: 'brand' },
-      to: { userId: creatorId, accountType: 'creator' },
-      dealId: deal._id,
-      campaignId: campaign._id,
-      description: `Escrow for deal: ${campaign.title} - ${creator.displayName}`,
-      metadata: { 
-        fees, 
-        source: 'deal_creation',
-        createdBy: req.user._id,
-        paymentTerms,
-        paymentType
-      }
-    });
-    await payment.save({ session });
-
-    // Update deal with payment reference
-    deal.paymentId = payment._id;
+    // Escrow is created only when the deal is accepted.
     deal.paymentStatus = 'pending';
     await deal.save({ session });
 
@@ -933,7 +906,6 @@ exports.createDeal = catchAsync(async (req, res) => {
     // Create conversation for deal (non-blocking - deal still succeeds if this fails)
     setImmediate(async () => {
       try {
-        const Conversation = require('../models/Conversation');
         const conversation = new Conversation({
           conversation_id: buildConversationId(deal._id),
           type: 'deal',
@@ -987,41 +959,35 @@ exports.createDeal = catchAsync(async (req, res) => {
 
         // Send real-time notification
         const notificationService = require('../services/notificationService');
-        await notificationService.createNotification({
-          userId: creatorId,
-          type: 'deal_received',
-          title: 'New Deal Offer',
-          message: `${campaign.title} - Deal offer: $${budget}`,
-          data: {
+        await notificationService.createNotification(
+          creatorId,
+          'deal_received',
+          'New Deal Offer',
+          `${campaign.title} - Deal offer: $${budget}`,
+          {
             dealId: deal._id,
             campaignId: campaign._id,
             brandId: brandId,
             budget
           }
-        });
+        );
       } catch (notifError) {
         console.error('Failed to send notifications for deal:', notifError.message);
       }
     });
 
-    res.status(201).json({ 
-      success: true, 
+    res.status(201).json({
+      success: true,
       message: 'Deal offer sent successfully',
       deal: {
         ...deal.toObject(),
-        paymentId: payment._id,
         paymentStatus: 'pending'
-      },
-      payment: {
-        id: payment._id,
-        amount: payment.amount,
-        fee: payment.fee,
-        netAmount: payment.netAmount,
-        status: payment.status
       }
     });
   } catch (transactionError) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
     throw transactionError;
   }
@@ -1342,9 +1308,9 @@ exports.acceptDeal = catchAsync(async (req, res) => {
   const payment = await ensureEscrowForAcceptedDeal({ deal, acceptedByUserId: req.user._id });
 
   deal.status = 'accepted';
-  
+
   addTimelineEvent(deal, 'Deal Accepted', 'Creator accepted the deal', req.user._id);
-  
+
   await deal.save();
 
   // Notify brand
@@ -1677,6 +1643,16 @@ exports.startAiCounterDealing = catchAsync(async (req, res) => {
     referenceBudget: Number(deal?.budget || 0)
   });
 
+  // Check other party's global preference to see if we should auto-enable dual AI
+  let otherPartyAiEnabled = false;
+  if (actorRole === 'creator') {
+    const brand = await Brand.findById(deal.brandId).select('preferences').lean();
+    otherPartyAiEnabled = Boolean(brand?.preferences?.aiCounterEnabled);
+  } else if (actorRole === 'brand') {
+    const creator = await Creator.findById(deal.creatorId).select('preferences').lean();
+    otherPartyAiEnabled = Boolean(creator?.preferences?.aiCounterEnabled);
+  }
+
   deal.negotiationSettings = {
     ...(deal.negotiationSettings || {}),
     mode: 'ai',
@@ -1684,8 +1660,8 @@ exports.startAiCounterDealing = catchAsync(async (req, res) => {
     aiReferenceBudget: Number(deal?.budget || 0),
     aiEnabledAt: new Date(),
     aiEnabledBy: req.user._id,
-    aiEnabledByBrand: actorRole === 'brand' ? true : Boolean(deal?.negotiationSettings?.aiEnabledByBrand),
-    aiEnabledByCreator: actorRole === 'creator' ? true : Boolean(deal?.negotiationSettings?.aiEnabledByCreator)
+    aiEnabledByBrand: (actorRole === 'brand' || (actorRole === 'creator' && otherPartyAiEnabled)) ? true : Boolean(deal?.negotiationSettings?.aiEnabledByBrand),
+    aiEnabledByCreator: (actorRole === 'creator' || (actorRole === 'brand' && otherPartyAiEnabled)) ? true : Boolean(deal?.negotiationSettings?.aiEnabledByCreator)
   };
 
   deal.negotiation.push({
@@ -1729,7 +1705,7 @@ exports.startAiCounterDealing = catchAsync(async (req, res) => {
       creator,
       seededRole: actorRole,
       maxAttemptsPerSide: 5,
-      finalize: false
+      finalize: true
     });
 
     let pendingOffers = Array.isArray(deal.negotiation)
@@ -2293,7 +2269,7 @@ exports.submitDeliverables = catchAsync(async (req, res) => {
           else if (f.mimeType.startsWith('video/')) fileType = 'video';
           else if (f.mimeType === 'application/pdf') fileType = 'pdf';
         } else if (f.type && ['image', 'video', 'pdf', 'other'].includes(f.type)) {
-           fileType = f.type;
+          fileType = f.type;
         }
         return {
           url: f.url || f.secure_url,
@@ -2307,7 +2283,7 @@ exports.submitDeliverables = catchAsync(async (req, res) => {
     }
     if (links.length) deliverable.links.push(...links);
     if (notes) deliverable.notes = notes;
-    
+
     // Save metrics if and performance deal
     if (deal.paymentType !== 'fixed' && metrics) {
       if (!deliverable.performance) {
@@ -2320,14 +2296,14 @@ exports.submitDeliverables = catchAsync(async (req, res) => {
           clicks: 0
         };
       }
-      
+
       deliverable.performance.impressions = (deliverable.performance.impressions || 0) + (metrics.impressions || 0);
       deliverable.performance.likes = (deliverable.performance.likes || 0) + (metrics.likes || 0);
       deliverable.performance.comments = (deliverable.performance.comments || 0) + (metrics.comments || 0);
       deliverable.performance.shares = (deliverable.performance.shares || 0) + (metrics.shares || 0);
       deliverable.performance.conversions = (deliverable.performance.conversions || 0) + (metrics.conversions || 0);
       deliverable.performance.clicks = (deliverable.performance.clicks || 0) + (metrics.clicks || 0);
-      
+
       hasPerformanceMetrics = true;
     }
   }
@@ -2362,9 +2338,9 @@ exports.submitDeliverables = catchAsync(async (req, res) => {
     if (typeof deal.updatePerformanceMetrics === 'function') {
       await deal.updatePerformanceMetrics(totals);
     } else {
-       // Fallback if method doesn't exist for some reason
-       Object.assign(deal.metrics, totals);
-       deal.markModified('metrics');
+      // Fallback if method doesn't exist for some reason
+      Object.assign(deal.metrics, totals);
+      deal.markModified('metrics');
     }
   }
 
@@ -2372,8 +2348,8 @@ exports.submitDeliverables = catchAsync(async (req, res) => {
   if (deal.status === 'accepted' || deal.status === 'revision') {
     const oldStatus = deal.status;
     deal.status = 'in-progress';
-    const eventMsg = oldStatus === 'accepted' 
-      ? 'Creator submitted first deliverables' 
+    const eventMsg = oldStatus === 'accepted'
+      ? 'Creator submitted first deliverables'
       : 'Creator submitted revised deliverables';
     addTimelineEvent(deal, 'Work Started', eventMsg, req.user._id);
   }
@@ -2818,6 +2794,21 @@ exports.createPerformanceDeal = catchAsync(async (req, res) => {
     return res.status(400).json({ success: false, error: 'An active deal already exists with this creator for this campaign' });
   }
 
+  // Check brand balance for deal budget
+  const { getBrandFinancials } = require('./paymentController');
+  const brandFinancials = await getBrandFinancials(brandId);
+  const availableBalance = brandFinancials.available || 0;
+
+  if (availableBalance < budget) {
+    return res.status(400).json({
+      success: false,
+      error: `Insufficient balance for performance deal. Available: $${availableBalance.toFixed(2)}, Required: $${budget.toFixed(2)}`,
+      code: 'INSUFFICIENT_BALANCE',
+      availableBalance,
+      required: budget
+    });
+  }
+
   // Build performance metrics based on type
   const perfMetrics = {};
   if (performanceMetrics) {
@@ -2954,7 +2945,7 @@ exports.updateDeal = catchAsync(async (req, res) => {
 
   // Sanitize and validate update data
   const sanitizedUpdate = sanitizeDealUpdate(req);
-  
+
   if (Object.keys(sanitizedUpdate).length === 0) {
     return res.status(400).json({
       success: false,

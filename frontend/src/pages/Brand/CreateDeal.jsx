@@ -17,7 +17,7 @@ const CreateDeal = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { campaigns, fetchBrandCampaigns, loading: campaignsLoading } = useCampaign();
-  const { createDeal, loading: dealLoading } = useDeal();
+  const { createDeal, createPerformanceDeal, loading: dealLoading } = useDeal();
 
   const searchParams = new URLSearchParams(location.search);
   const creatorId = searchParams.get('creator');
@@ -46,6 +46,19 @@ const CreateDeal = () => {
   const [perfSubmitting, setPerfSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const getMinDeadlineDate = () => {
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 1);
+    return minDate.toISOString().split('T')[0];
+  };
+
+  const toEndOfDayIso = (dateValue) => {
+    if (!dateValue) return dateValue;
+    const deadlineDate = new Date(dateValue);
+    deadlineDate.setHours(23, 59, 59, 999);
+    return deadlineDate.toISOString();
+  };
+
   useEffect(() => {
     if (!creatorId) {
       toast.error('No creator selected');
@@ -58,6 +71,11 @@ const CreateDeal = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+  };
+
+  const handlePerfChange = (e) => {
+    const { name, value } = e.target;
+    setPerfMetrics(prev => ({ ...prev, [name]: value }));
   };
 
   const handleDeliverableChange = (index, field, value) => {
@@ -100,25 +118,80 @@ const CreateDeal = () => {
       return;
     }
 
-    const dealData = {
+    const commonData = {
       campaignId: formData.campaignId,
       creatorId,
-      budget: parseFloat(formData.budget),
-      deadline: formData.deadline,
+      deadline: toEndOfDayIso(formData.deadline),
       deliverables: formData.deliverables.map(d => ({
         ...d,
         description: d.description || `${d.quantity} ${d.type}(s) on ${d.platform}`
       })),
-      message: formData.message
+      terms: formData.message
     };
 
     if (dealType === 'performance') {
       setPerfSubmitting(true);
-      // Logic for building perfData payload remains identical to your original code
-      // ... (keeping your original calculation logic here)
+      
+      let performanceMetrics = {};
+      let calculatedBudget = 0;
+
+      if (paymentType === 'cpe') {
+        const target = parseInt(perfMetrics.targetEngagements) || 0;
+        const rate = parseFloat(perfMetrics.bonusRate) || 0;
+        const base = parseFloat(perfMetrics.baseRate) || 0;
+        calculatedBudget = base + (target * rate);
+
+        performanceMetrics = {
+          targetEngagements: target,
+          targetLikes: target,
+          baseRate: base,
+          bonusRate: rate
+        };
+      } else if (paymentType === 'cpa') {
+        const target = parseInt(perfMetrics.targetConversions) || 0;
+        const rate = parseFloat(perfMetrics.commissionRate) || 0;
+        const base = parseFloat(perfMetrics.baseRate) || 0;
+        calculatedBudget = base + (target * rate);
+
+        performanceMetrics = {
+          targetConversions: target,
+          commissionRate: rate,
+          baseRate: base
+        };
+      } else if (paymentType === 'cpm') {
+        const target = parseInt(perfMetrics.targetImpressions) || 0;
+        const rate = parseFloat(perfMetrics.ratePerThousand) || 0;
+        const base = parseFloat(perfMetrics.baseRate) || 0;
+        calculatedBudget = base + (target / 1000 * rate);
+
+        performanceMetrics = {
+          targetImpressions: target,
+          ratePerThousand: rate,
+          baseRate: base
+        };
+      }
+
+      // Ensure budget is at least $10
+      const finalBudget = Math.max(calculatedBudget, 10);
+
+      const result = await createPerformanceDeal({
+        ...commonData,
+        budget: finalBudget,
+        paymentType,
+        performanceMetrics: { [paymentType]: performanceMetrics }
+      });
+
+      if (result) {
+        toast.success('Performance offer sent');
+        navigate(`/brand/deals/${result._id}`);
+      }
       setPerfSubmitting(false);
     } else {
-      const result = await createDeal(dealData);
+      const result = await createDeal({
+        ...commonData,
+        budget: parseFloat(formData.budget),
+        paymentType: 'fixed'
+      });
       if (result) {
         toast.success('Offer sent');
         navigate(`/brand/deals/${result._id}`);
@@ -194,7 +267,14 @@ const CreateDeal = () => {
 
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Deadline</label>
-            <input type="date" name="deadline" value={formData.deadline} onChange={handleChange} className={inputClasses} />
+            <input
+              type="date"
+              name="deadline"
+              value={formData.deadline}
+              onChange={handleChange}
+              min={getMinDeadlineDate()}
+              className={inputClasses}
+            />
           </div>
         </div>
 
@@ -212,10 +292,58 @@ const CreateDeal = () => {
                 <option className="!bg-black text-white" value="cpa">CPA — Cost Per Acquisition</option>
                 <option className="!bg-black text-white" value="cpm">CPM — Cost Per Mille</option>
              </select>
-             {/* Fields remain functional, styled with inputClasses */}
-             <div className="grid grid-cols-2 gap-4">
-                <input type="number" placeholder="Target" className={inputClasses} />
-                <input type="number" placeholder="Rate ($)" className={inputClasses} />
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {paymentType === 'cpe' && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Target Engagements</label>
+                      <input type="number" name="targetEngagements" value={perfMetrics.targetEngagements} onChange={handlePerfChange} placeholder="1000" className={inputClasses} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Rate per Engagement ($)</label>
+                      <input type="number" name="bonusRate" value={perfMetrics.bonusRate} onChange={handlePerfChange} placeholder="0.50" step="0.01" className={inputClasses} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Base Guarantee ($ - Optional)</label>
+                      <input type="number" name="baseRate" value={perfMetrics.baseRate} onChange={handlePerfChange} placeholder="0" className={inputClasses} />
+                    </div>
+                  </>
+                )}
+
+                {paymentType === 'cpa' && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Target Conversions</label>
+                      <input type="number" name="targetConversions" value={perfMetrics.targetConversions} onChange={handlePerfChange} placeholder="50" className={inputClasses} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Rate per Conversion ($)</label>
+                      <input type="number" name="commissionRate" value={perfMetrics.commissionRate} onChange={handlePerfChange} placeholder="5.00" step="0.01" className={inputClasses} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Base Guarantee ($ - Optional)</label>
+                      <input type="number" name="baseRate" value={perfMetrics.baseRate} onChange={handlePerfChange} placeholder="0" className={inputClasses} />
+                    </div>
+                  </>
+                )}
+
+                {paymentType === 'cpm' && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Target Impressions</label>
+                      <input type="number" name="targetImpressions" value={perfMetrics.targetImpressions} onChange={handlePerfChange} placeholder="10000" className={inputClasses} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">CPM Rate ($ per 1k views)</label>
+                      <input type="number" name="ratePerThousand" value={perfMetrics.ratePerThousand} onChange={handlePerfChange} placeholder="15.00" step="0.01" className={inputClasses} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Base Guarantee ($ - Optional)</label>
+                      <input type="number" name="baseRate" value={perfMetrics.baseRate} onChange={handlePerfChange} placeholder="0" className={inputClasses} />
+                    </div>
+                  </>
+                )}
              </div>
           </div>
         )}

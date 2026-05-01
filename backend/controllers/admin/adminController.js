@@ -20,6 +20,7 @@ const { sendEmail } = require('../../services/emailService');
 const notificationService = require('../../services/notificationService');
 const TwoFactorService = require('../../services/twoFactorService');
 const settingsService = require('../../services/settingsService');
+const feeService = require('../../services/feeService');
 
 // ==================== ADMIN LOGIN WITH 2FA ====================
 
@@ -3150,19 +3151,8 @@ exports.updateSettings = async (req, res) => {
 
     // Clear cache to ensure new values are used immediately
     settingsService.clearCache();
+    feeService.clearCache();
     
-    // Emit real-time update event if socket is available
-    if (global.socketService) {
-      global.socketService.emitToAdmins('settings_updated', {
-        type: 'PLATFORM_CONFIG_UPDATED',
-        settings: {
-          platformName: updatedSettings.platform?.name,
-          supportEmail: updatedSettings.platform?.supportEmail,
-          supportPhone: updatedSettings.platform?.supportPhone
-        }
-      });
-      console.log('📡 Real-time update event emitted to admins');
-    }
 
     // Transform response back to flat structure for frontend compatibility
     console.log('\n📋 Preparing response for frontend...');
@@ -3337,6 +3327,16 @@ exports.updateSettings = async (req, res) => {
       message: 'Settings updated successfully',
       settings: responseSettings
     });
+
+    // Emit real-time update event after response is prepared
+    if (global.socketService) {
+      global.socketService.emitToAdmins('settingsUpdated', {
+        type: 'GLOBAL_SETTINGS_UPDATE',
+        timestamp: new Date().toISOString(),
+        settings: responseSettings
+      });
+      console.log('📡 Real-time update event (settingsUpdated) emitted to admins');
+    }
 
   } catch (error) {
     console.error('Update settings error:', error);

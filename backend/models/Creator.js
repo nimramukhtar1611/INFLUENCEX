@@ -35,9 +35,8 @@ const creatorSchema = new mongoose.Schema({
   },
   
   location: {
-    type: String,
-    maxlength: [100, 'Location cannot exceed 100 characters'],
-    default: ''
+    city: { type: String, trim: true, default: '' },
+    country: { type: String, trim: true, default: '' }
   },
   
   website: {
@@ -422,6 +421,16 @@ const creatorSchema = new mongoose.Schema({
       default: 5,
       min: 1,
       max: 20
+    }
+  },
+  
+  preferences: {
+    aiCounterEnabled: { type: Boolean, default: false },
+    notificationPreferences: {
+      newDeals: { type: Boolean, default: true },
+      dealUpdates: { type: Boolean, default: true },
+      paymentAlerts: { type: Boolean, default: true },
+      marketingEmails: { type: Boolean, default: false }
     }
   },
   

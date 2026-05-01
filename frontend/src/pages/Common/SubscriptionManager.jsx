@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useTheme } from '../../hooks/useTheme';
-import BrandLayout from '../../components/Brand/BrandLayout';
 
 const formatCurrency = (value, currency = 'usd') => {
   const numeric = Number(value || 0);
@@ -39,15 +38,15 @@ const normalizePlanId = (value) => {
 
 const ROLE_PLAN_COPY = {
   brand: {
-    starter: { description: 'For early-stage brands launching creator campaigns', features: ['Campaign launch workflows', 'Advanced creator search', 'Basic collaboration', 'Performance visibility'] },
+    starter:      { description: 'For early-stage brands launching creator campaigns',    features: ['Campaign launch workflows', 'Advanced creator search', 'Basic collaboration', 'Performance visibility'] },
     professional: { description: 'For scaling brand teams running performance campaigns', features: ['AI Creator Matching Engine', 'Priority support', 'Higher collaboration limits', 'Advanced ROI intelligence'] },
-    enterprise: { description: 'For enterprise brands and agencies', features: ['AI Counter Dealing', 'High-volume workflow support', 'Advanced account controls', 'Custom integrations'] }
+    enterprise:   { description: 'For enterprise brands and agencies',                    features: ['AI Counter Dealing', 'High-volume workflow support', 'Advanced account controls', 'Custom integrations'] }
   },
   creator: {
-    free: { description: 'Perfect for getting started', features: ['2 completed deals total', 'Basic visibility', 'Core collaboration tools', 'Standard support'] },
-    starter: { description: 'For creators building paid-collab momentum', features: ['10 completed deals total', 'More active deals capacity', 'Improved discoverability', 'Performance tracking'] },
-    professional: { description: 'For creators focused on premium growth', features: ['30 completed deals total', 'Creator Growth OS access', 'Deeper performance insights', 'Priority support'] },
-    enterprise: { description: 'For top creators running at scale', features: ['Infinite deals', 'AI Counter Dealing', 'Maximum workflow headroom', 'Enterprise support'] }
+    free:         { description: 'Perfect for getting started',              features: ['2 completed deals total', 'Basic visibility', 'Core collaboration tools', 'Standard support'] },
+    starter:      { description: 'For creators building paid-collab momentum', features: ['10 completed deals total', 'More active deals capacity', 'Improved discoverability', 'Performance tracking'] },
+    professional: { description: 'For creators focused on premium growth',    features: ['30 completed deals total', 'Creator Growth OS access', 'Deeper performance insights', 'Priority support'] },
+    enterprise:   { description: 'For top creators running at scale',         features: ['Infinite deals', 'AI Counter Dealing', 'Maximum workflow headroom', 'Enterprise support'] }
   }
 };
 
@@ -66,123 +65,126 @@ const SubscriptionManager = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
   const {
-    plans, currentSubscription, invoices, upcomingInvoice, limits, usage,
-    loading, busy, isSubscriptionUser, refreshAll, startCheckout,
-    startPlanChange, openBillingPortal, downloadInvoice
+    plans, currentSubscription, invoices, limits, usage,
+    loading, busy, isSubscriptionUser, refreshAll,
+    startCheckout, startPlanChange, openBillingPortal, downloadInvoice
   } = useSubscription();
 
-  const [interval, setInterval] = useState('month');
-  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [billingInterval, setBillingInterval] = useState('month');
+  const [selectedPlanId, setSelectedPlanId]   = useState('');
 
-  const tabs = [
-    { id: 'plans', label: 'Plans', icon: ShieldCheck },
-    { id: 'billing', label: 'Billing', icon: CreditCard },
-    { id: 'usage', label: 'Usage', icon: Activity }
-  ];
-
-  const [activeTab, setActiveTab] = useState('plans');
-
-  const actionButton = (
-    <button
-      onClick={refreshAll}
-      disabled={loading}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-        isDark 
-          ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' 
-          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-      }`}
-    >
-      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-    </button>
-  );
-
+  // ── URL param handling ─────────────────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('plan')) setSelectedPlanId(params.get('plan'));
-    if (['year', 'month'].includes(params.get('interval'))) setInterval(params.get('interval'));
+    const iv = params.get('interval');
+    if (['year', 'month'].includes(iv)) setBillingInterval(iv);
     if (params.get('checkout') === 'success') {
       toast.success('Subscription updated successfully.');
       refreshAll();
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [location.search, refreshAll, setInterval]);
+  }, [location.search, refreshAll]);
 
+  // ── Derived state ──────────────────────────────────────────────────────────
   const activePlanId = useMemo(() => {
     if (!currentSubscription) return null;
     return normalizePlanId(currentSubscription.planDetails?.planId || currentSubscription.planId);
   }, [currentSubscription]);
 
-  const selectedPlanIdNormalized = normalizePlanId(selectedPlanId);
-  const isSelectedPlanFree = selectedPlanIdNormalized === 'free';
-  const hasActiveStripeSubscription = Boolean(currentSubscription?.stripeSubscriptionId) && ['active', 'trialing', 'past_due'].includes(currentSubscription?.status);
+  const selectedPlanIdNormalized  = normalizePlanId(selectedPlanId);
+  const isSelectedPlanFree        = selectedPlanIdNormalized === 'free';
+  const hasActiveStripeSubscription =
+    Boolean(currentSubscription?.stripeSubscriptionId) &&
+    ['active', 'trialing', 'past_due'].includes(currentSubscription?.status);
 
+  // ── Subscribe / change handler ─────────────────────────────────────────────
   const handleSubscribeOrChange = async () => {
     const selectedPlan = plans.find(p => normalizePlanId(p.id) === selectedPlanIdNormalized);
     if (!selectedPlan || isSelectedPlanFree) return;
 
     if (hasActiveStripeSubscription) {
       if (normalizePlanId(selectedPlan.id) !== activePlanId) {
-        await startPlanChange({ planId: selectedPlan.id, interval });
+        await startPlanChange({ planId: selectedPlan.id, interval: billingInterval });
       } else {
         await openBillingPortal();
       }
     } else {
-      await startCheckout({ planId: selectedPlan.id, interval });
+      await startCheckout({ planId: selectedPlan.id, interval: billingInterval });
     }
   };
 
+  // ── Access guard ───────────────────────────────────────────────────────────
   if (!isSubscriptionUser) {
     return (
       <div className={`p-12 text-center rounded-3xl border-2 border-dashed ${isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-zinc-100 bg-white'}`}>
-        <div className="relative z-10">
-          <h1 className="text-2xl font-bold tracking-tight">Access Restricted</h1>
-          <p className="mt-2 text-zinc-500">Subscription management is for Brands and Creators only.</p>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight">Access Restricted</h1>
+        <p className="mt-2 text-zinc-500">Subscription management is for Brands and Creators only.</p>
       </div>
     );
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen">
-      <div className="relative z-10">
-        <BrandLayout
-          title="Subscription"
-          subtitle="Manage your billing, invoices and premium features."
-          actionButton={actionButton}
-          tabs={tabs}
-          onTabChange={setActiveTab}
-          activeTab={activeTab}
-        >
-          <div className="p-6">
-          {/* Top Status Bar */}
-          <div className="flex flex-wrap items-center gap-2 mb-6">
-            <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Current</span>
-              <span className="text-xs font-bold">{currentSubscription?.planDetails?.name || 'Free Tier'}</span>
-            </div>
-            <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Status</span>
-              <span className="text-xs font-bold uppercase text-emerald-500">{currentSubscription?.status || 'Active'}</span>
-            </div>
-            <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Renewal</span>
-              <span className="text-xs font-bold">{formatDate(currentSubscription?.billingPeriod?.end)}</span>
-            </div>
+    <div className={`max-w-7xl mx-auto space-y-8 px-6 pt-8 ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+
+      {/* ── Page Header ── */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-light tracking-tight font-semibold">
+            {user?.userType === 'creator' ? 'Creator' : 'Brand'}{' '}
+            <span className="font-bold">Subscription</span>
+          </h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            Manage your billing, invoices and premium features.
+          </p>
         </div>
-        
-      {/* Plan Selection Grid */}
+        <button
+          onClick={refreshAll}
+          disabled={loading}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            isDark
+              ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+          }`}
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      {/* ── Status Pills ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Current</span>
+          <span className="text-xs font-bold">{currentSubscription?.planDetails?.name || 'Free Tier'}</span>
+        </div>
+        <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Status</span>
+          <span className="text-xs font-bold uppercase text-emerald-500">
+            {currentSubscription?.status || 'Active'}
+          </span>
+        </div>
+        <div className={`flex items-center px-4 py-2 rounded-full border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-3">Renewal</span>
+          <span className="text-xs font-bold">{formatDate(currentSubscription?.billingPeriod?.end)}</span>
+        </div>
+      </div>
+
+      {/* ── Plan Grid ── */}
       <div className="space-y-6">
+        {/* Interval toggle */}
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500">Available Plans</h2>
           <div className={`flex p-1 rounded-xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-100 border-zinc-200'}`}>
             {['month', 'year'].map((i) => (
               <button
                 key={i}
-                onClick={() => setInterval(i)}
+                onClick={() => setBillingInterval(i)}
                 className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                  interval === i 
-                    ? (isDark ? 'bg-white text-white' : 'bg-black text-white shadow-lg') 
+                  billingInterval === i
+                    ? (isDark ? 'bg-white text-black' : 'bg-black text-white shadow-lg')
                     : 'text-zinc-500 hover:text-zinc-400'
                 }`}
               >
@@ -192,21 +194,27 @@ const SubscriptionManager = () => {
           </div>
         </div>
 
+        {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {plans.map((plan) => {
-            const planId = normalizePlanId(plan.id);
-            const isActive = activePlanId === planId;
+            const planId     = normalizePlanId(plan.id);
+            const isActive   = activePlanId === planId;
             const isSelected = selectedPlanIdNormalized === planId;
-            const isFree = planId === 'free';
-            const copy = getRoleSpecificPlanCopy({ userType: user?.userType, planId, fallbackDescription: plan.description, fallbackFeatures: plan.features });
+            const isFree     = planId === 'free';
+            const copy       = getRoleSpecificPlanCopy({
+              userType: user?.userType,
+              planId,
+              fallbackDescription: plan.description,
+              fallbackFeatures:    plan.features
+            });
 
             return (
               <div
                 key={plan.id}
                 onClick={() => !isFree && setSelectedPlanId(plan.id)}
                 className={`group relative p-6 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between min-h-[320px] ${
-                  isActive 
-                    ? (isDark ? 'bg-white border-white text-white' : 'bg-black border-black text-white shadow-2xl scale-[1.02]')
+                  isActive
+                    ? (isDark ? 'bg-white border-white text-black' : 'bg-black border-black text-white shadow-2xl scale-[1.02]')
                     : isSelected
                       ? (isDark ? 'bg-zinc-800 border-zinc-600' : 'bg-white border-zinc-900 shadow-xl scale-[1.02]')
                       : (isDark ? 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700' : 'bg-white border-zinc-100 hover:border-zinc-300')
@@ -215,26 +223,31 @@ const SubscriptionManager = () => {
                 <div>
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-lg font-bold tracking-tight">{plan.name}</h3>
-                    {isActive && <CheckCircle className={`w-5 h-5 ${isDark && isActive ? 'text-white' : 'text-emerald-500'}`} />}
+                    {isActive && <CheckCircle className={`w-5 h-5 ${isDark && isActive ? 'text-black' : 'text-emerald-500'}`} />}
                   </div>
                   <div className="mb-6">
                     <span className="text-3xl font-bold tracking-tighter">
-                      {formatCurrency(interval === 'year' ? plan.price * 12 : plan.price, plan.currency)}
+                      {formatCurrency(billingInterval === 'year' ? plan.price * 12 : plan.price, plan.currency)}
                     </span>
-                    <span className={`text-xs ml-1 ${isActive ? (isDark ? 'text-white' : 'text-zinc-400') : 'text-zinc-500'}`}>/{interval}</span>
+                    <span className={`text-xs ml-1 ${isActive ? (isDark ? 'text-zinc-600' : 'text-zinc-400') : 'text-zinc-500'}`}>
+                      /{billingInterval}
+                    </span>
                   </div>
                   <ul className="space-y-3 mb-8">
                     {copy.features.slice(0, 4).map((f, idx) => (
                       <li key={idx} className="flex items-start text-xs font-medium">
-                        <ShieldCheck className={`w-3.5 h-3.5 mr-2 mt-0.5 shrink-0 ${isActive ? (isDark ? 'text-zinc-400' : 'text-zinc-500') : 'text-indigo-500'}`} />
+                        <ShieldCheck className={`w-3.5 h-3.5 mr-2 mt-0.5 shrink-0 ${isActive ? (isDark ? 'text-zinc-600' : 'text-zinc-500') : 'text-indigo-500'}`} />
                         <span className="opacity-80 leading-relaxed">{typeof f === 'string' ? f : f.name}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
+
                 {!isFree && !isActive && (
                   <div className={`mt-auto text-center py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border ${
-                    isSelected ? (isDark ? 'bg-white text-white border-white' : 'bg-black text-white border-black') : 'border-zinc-700 text-zinc-500 group-hover:border-zinc-500'
+                    isSelected
+                      ? (isDark ? 'bg-white text-black border-white' : 'bg-black text-white border-black')
+                      : 'border-zinc-700 text-zinc-500 group-hover:border-zinc-500'
                   }`}>
                     {isSelected ? 'Ready to Upgrade' : 'Select Plan'}
                   </div>
@@ -244,7 +257,7 @@ const SubscriptionManager = () => {
           })}
         </div>
 
-        {/* Action Button */}
+        {/* CTA strip */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-6 rounded-3xl bg-zinc-900 text-white border border-zinc-800">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-zinc-800 rounded-2xl">
@@ -266,32 +279,34 @@ const SubscriptionManager = () => {
         </div>
       </div>
 
-      {/* Grid for Usage and Invoices */}
-      <div className="grid grid-cols-1 mt-4 lg:grid-cols-2 gap-8">
-        {/* Usage Section */}
+      {/* ── Usage + Invoices ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+        {/* Usage */}
         <div className={`p-8 rounded-3xl border ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 flex items-center">
-              <Activity className="w-4 h-4 mr-2" /> Plan Usage
-            </h2>
-          </div>
+          <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 flex items-center mb-8">
+            <Activity className="w-4 h-4 mr-2" /> Plan Usage
+          </h2>
           <div className="space-y-6">
-            {(user?.userType === 'brand' ? [
-              { label: 'Campaigns', used: usage?.campaignsUsed, total: limits?.campaigns },
-              { label: 'Deals', used: usage?.activeDealsUsed, total: limits?.activeDeals }
-            ] : [
-              { label: 'Active Deals', used: usage?.activeDealsUsed, total: limits?.activeDeals },
-              { label: 'Completed', used: usage?.completedDealsUsed, total: limits?.completedDeals }
-            ]).map((item, idx) => (
+            {(user?.userType === 'brand'
+              ? [
+                  { label: 'Campaigns', used: usage?.campaignsUsed,   total: limits?.campaigns  },
+                  { label: 'Deals',     used: usage?.activeDealsUsed,  total: limits?.activeDeals }
+                ]
+              : [
+                  { label: 'Active Deals', used: usage?.activeDealsUsed,    total: limits?.activeDeals    },
+                  { label: 'Completed',    used: usage?.completedDealsUsed, total: limits?.completedDeals }
+                ]
+            ).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
                   <span className={isDark ? 'text-zinc-400' : 'text-zinc-500'}>{item.label}</span>
                   <span>{item.used ?? 0} / {formatLimitValue(item.total)}</span>
                 </div>
                 <div className={`h-1.5 w-full rounded-full ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
-                  <div 
-                    className="h-full rounded-full bg-zinc-400" 
-                    style={{ width: `${Math.min(((item.used || 0) / (item.total === -1 ? 100 : item.total || 1)) * 100, 100)}%` }} 
+                  <div
+                    className="h-full rounded-full bg-indigo-500"
+                    style={{ width: `${Math.min(((item.used || 0) / (item.total === -1 ? 100 : item.total || 1)) * 100, 100)}%` }}
                   />
                 </div>
               </div>
@@ -299,26 +314,33 @@ const SubscriptionManager = () => {
           </div>
         </div>
 
-        {/* Invoices Section */}
+        {/* Invoices */}
         <div className={`p-8 rounded-3xl border ${isDark ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-100'}`}>
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 flex items-center">
-              <History className="w-4 h-4 mr-2" /> Billing History
-            </h2>
-          </div>
+          <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 flex items-center mb-8">
+            <History className="w-4 h-4 mr-2" /> Billing History
+          </h2>
           <div className="space-y-3">
             {invoices.length === 0 ? (
               <p className="text-center py-10 text-xs text-zinc-500 italic">No transaction records found.</p>
             ) : (
               invoices.map((inv) => (
-                <div key={inv.id || inv._id} className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${isDark ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-600' : 'bg-gray-50 border-transparent hover:border-zinc-200'}`}>
+                <div
+                  key={inv.id || inv._id}
+                  className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                    isDark
+                      ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-600'
+                      : 'bg-gray-50 border-transparent hover:border-zinc-200'
+                  }`}
+                >
                   <div>
                     <p className="text-xs font-bold tracking-tight">{inv.number || 'Invoice ID'}</p>
-                    <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">{formatDate(inv.date || inv.createdAt)}</p>
+                    <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
+                      {formatDate(inv.date || inv.createdAt)}
+                    </p>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-xs font-bold">{formatCurrency(inv.amount, inv.currency)}</span>
-                    <button 
+                    <button
                       onClick={() => downloadInvoice(inv.id || inv._id)}
                       className="p-2 rounded-full hover:bg-zinc-800 transition-colors"
                     >
@@ -330,16 +352,15 @@ const SubscriptionManager = () => {
             )}
           </div>
         </div>
-        </div>
-
-        <div className="pt-6 text-center border-t border-zinc-800/10">
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">
-            Securely logged in as <span className="text-zinc-400">{user?.email}</span>
-          </p>
-        </div>
-        </div>
-        </BrandLayout>
       </div>
+
+      {/* ── Footer ── */}
+      <div className="pt-6 text-center border-t border-zinc-800/10">
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">
+          Securely logged in as <span className="text-zinc-400">{user?.email}</span>
+        </p>
+      </div>
+
     </div>
   );
 };

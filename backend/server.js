@@ -355,9 +355,20 @@ app.use(
 // Cookie parsing middleware
 app.use(cookieParser());
 
-// Normal JSON parsing for all other routes
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Normal JSON parsing for all other routes (skip Stripe webhook raw body)
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    return next();
+  }
+  return express.json({ limit: '50mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    return next();
+  }
+  return express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);
+});
 
 app.use(morgan(isTestEnv ? 'silent' : 'dev'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -372,7 +383,7 @@ app.use((req, res, next) => {
 // Rate limiting to prevent infinite loops and server crashes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 500 : 2000, // Production: 500, Dev: 2000 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 2000 : 10000, // Production: 2000, Dev: 10000 requests per windowMs
   message: {
     success: false,
     error: 'Too many requests from this IP, please try again later.',
@@ -389,7 +400,7 @@ const limiter = rateLimit({
 // Stricter rate limiting for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 300, // Production: 100, Dev: 300 auth requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 1000 : 5000, // Production: 1000, Dev: 5000 auth requests per windowMs
   message: {
     success: false,
     error: 'Too many authentication attempts, please try again later.',
@@ -498,13 +509,37 @@ app.use('/api/auth/reset-password', communicationLimiter);
 app.use('/api/auth/send-verification', communicationLimiter);
 app.use('/api/auth/verify-phone', communicationLimiter);
 
-// Input Sanitization Middleware
+// Input Sanitization Middleware (skip Stripe webhook raw body)
 const { sanitizeInput } = require('./middleware/inputSanitization');
-app.use('/api', sanitizeInput);
+app.use('/api', (req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    return next();
+  }
+  return sanitizeInput(req, res, next);
+});
 
-// Security Enforcement Middleware
+// Security Enforcement Middleware (skip Stripe webhook raw body)
 const SecurityEnforcement = require('./middleware/securityEnforcement');
-app.use('/api', SecurityEnforcement.applyAll());
+const securityMiddleware = SecurityEnforcement.applyAll();
+app.use('/api', (req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    return next();
+  }
+
+  let index = 0;
+  const run = (err) => {
+    if (err) {
+      return next(err);
+    }
+    const middleware = securityMiddleware[index++];
+    if (!middleware) {
+      return next();
+    }
+    return middleware(req, res, run);
+  };
+
+  return run();
+});
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
 
@@ -697,6 +732,16 @@ async function startServer() {
         console.warn('⚠️ Redis connection failed:', err.message);
         console.log('🔄 Continuing without Redis (caching and sessions will be limited)');
       }
+    }
+
+    // Initialize/sync subscription plan documents with Stripe price IDs from .env
+    console.log('🔍 STEP 2b: Syncing subscription plans...');
+    try {
+      const Plan = require('./models/Plan');
+      await Plan.initializeDefaults();
+      console.log('✅ Subscription plans synced');
+    } catch (err) {
+      console.warn('⚠️ Plan sync error (non-fatal):', err.message);
     }
 
     // Email

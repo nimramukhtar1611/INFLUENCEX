@@ -3,9 +3,18 @@ import api from './api';
 class PaymentService {
   
   // ==================== BALANCE ====================
- async getBalance() {
+ async getBalance(extraParams = {}) {
     try {
-      const response = await api.get('/payments/balance');
+      const response = await api.get('/payments/balance', {
+        params: {
+          ...extraParams,
+          _ts: Date.now()
+        },
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache'
+        }
+      });
       return response.data;
     } catch (error) {
       return { success: false, error: error.message };
@@ -18,7 +27,16 @@ class PaymentService {
       const params = typeof pageOrParams === 'object'
         ? pageOrParams
         : { page: pageOrParams, limit, ...extraParams };
-      const response = await api.get('/payments/transactions', { params });
+      const response = await api.get('/payments/transactions', {
+        params: {
+          ...params,
+          _ts: Date.now()
+        },
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache'
+        }
+      });
       return response.data;
     } catch (error) {
       return { success: false, error: error.message };
@@ -126,7 +144,11 @@ async getWithdrawals(params = {}) {
     try {
       console.log('Fetching invoices...');
       const response = await api.get('/payments/invoices', {
-        params: { page, limit }
+        params: { page, limit, _ts: Date.now() },
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache'
+        }
       });
       const data = response.data || {};
       
