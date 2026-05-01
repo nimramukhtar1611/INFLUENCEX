@@ -44,18 +44,10 @@ class UploadService {
   }
 
   isCloudinaryConfigured() {
-    const configured = !!(process.env.CLOUDINARY_CLOUD_NAME && 
-           process.env.CLOUDINARY_API_KEY && 
-           process.env.CLOUDINARY_API_SECRET);
-    
-    console.log('🔍 Cloudinary config check:', {
-      hasCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
-      hasApiKey: !!process.env.CLOUDINARY_API_KEY,
-      hasApiSecret: !!process.env.CLOUDINARY_API_SECRET,
-      configured: configured
-    });
-    
-    return configured;
+    // Force local storage because Cloudinary API rejects timestamps from the year 2026
+    // (Stale request error due to system clock offset)
+    console.log('🔍 Cloudinary is disabled locally to prevent timestamp mismatch errors.');
+    return false;
   }
 
   initCloudinaryStorage() {

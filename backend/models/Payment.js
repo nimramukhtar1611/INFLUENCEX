@@ -11,7 +11,7 @@ const paymentSchema = new mongoose.Schema({
   
   type: {
     type: String,
-    enum: ['escrow', 'withdrawal', 'refund', 'fee', 'payment', 'bonus', 'penalty', 'performance'],
+    enum: ['escrow', 'withdrawal', 'refund', 'fee', 'payment', 'bonus', 'penalty', 'performance', 'campaign_budget'],
     required: true,
     index: true
   },

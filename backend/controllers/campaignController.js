@@ -1,4 +1,5 @@
 // controllers/campaignController.js - FIXED VERSION
+const mongoose = require('mongoose');
 const Campaign = require('../models/Campaign');
 const Brand = require('../models/Brand');
 const Deal = require('../models/Deal');
@@ -99,30 +100,7 @@ exports.createCampaign = async (req, res) => {
       });
     }
 
-    // Check brand balance for campaign budget
-    const brand = await Brand.findById(brandId);
-    if (!brand) {
-      return res.status(404).json({
-        success: false,
-        error: 'Brand not found'
-      });
-    }
-
-    // Get brand's available balance
-    const brandFinancials = await getBrandFinancials(brandId);
-    const availableBalance = brandFinancials.availableBalance || 0;
-
-    if (availableBalance < campaignData.budget) {
-      return res.status(400).json({
-        success: false,
-        error: `Insufficient balance. Available: $${availableBalance.toFixed(2)}, Required: $${campaignData.budget.toFixed(2)}`,
-        code: 'INSUFFICIENT_BALANCE',
-        availableBalance,
-        required: campaignData.budget
-      });
-    }
-
-    // Start transaction for campaign creation and payment processing
+    // Start transaction for campaign creation
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -131,40 +109,10 @@ exports.createCampaign = async (req, res) => {
       const campaign = new Campaign(campaignData);
       await campaign.save({ session });
 
-      // Calculate platform fees
-      const PaymentCalculator = require('../services/paymentCalculator');
-      const fees = await PaymentCalculator.calculateFees(campaignData.budget, 'campaign');
-      
-      // Create escrow payment for campaign budget
-      const payment = new Payment({
-        transactionId: `CAMPAIGN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        type: 'campaign_budget',
-        status: 'in-escrow',
-        amount: campaignData.budget,
-        fee: fees.platform,
-        netAmount: campaignData.budget - fees.platform,
-        from: { userId: brandId, accountType: 'brand' },
-        to: { userId: 'admin', accountType: 'admin' }, // Platform fee goes to admin
-        campaignId: campaign._id,
-        description: `Campaign budget for ${campaign.title}`,
-        metadata: { 
-          fees, 
-          source: 'campaign_creation',
-          createdBy: req.user._id
-        }
-      });
-      await payment.save({ session });
-
-      // Update campaign with payment reference
-      campaign.paymentId = payment._id;
-      campaign.paymentStatus = 'in-escrow';
-      await campaign.save({ session });
-
-      // Update brand stats
+      // Update brand stats (increment campaigns but don't add to spent yet)
       await Brand.findByIdAndUpdate(brandId, {
         $inc: { 
-          'stats.totalCampaigns': 1,
-          'stats.totalSpent': campaignData.budget
+          'stats.totalCampaigns': 1
         }
       }, { session });
 
@@ -189,7 +137,7 @@ exports.createCampaign = async (req, res) => {
 
       // Send real-time notification to brand
       const notificationService = require('../services/notificationService');
-      await notificationService.createNotification({
+      await notificationService.sendNotification({
         userId: brandId,
         type: 'campaign_created',
         title: 'Campaign Created Successfully',
@@ -202,22 +150,13 @@ exports.createCampaign = async (req, res) => {
 
       res.status(201).json({
         success: true,
-        message: 'Campaign created successfully and budget allocated',
-        campaign: {
-          ...campaign.toObject(),
-          paymentId: payment._id,
-          paymentStatus: 'in-escrow'
-        },
-        payment: {
-          id: payment._id,
-          amount: payment.amount,
-          fee: payment.fee,
-          netAmount: payment.netAmount,
-          status: payment.status
-        }
+        message: 'Campaign created successfully',
+        campaign: campaign.toObject()
       });
     } catch (transactionError) {
-      await session.abortTransaction();
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
       session.endSession();
       throw transactionError;
     }

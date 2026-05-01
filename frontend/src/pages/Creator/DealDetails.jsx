@@ -1083,7 +1083,7 @@ const DealDetails = () => {
               </button>
             )}
 
-            {['accepted', 'in-progress'].includes(deal.status) && (
+            {['accepted', 'in-progress', 'revision'].includes(deal.status) && (
               <Button variant="outline" fullWidth icon={Upload} onClick={() => navigate(`/creator/deliverables/${deal._id}`)} className="rounded-xl h-12">
                 Submit Asset
               </Button>
@@ -1226,6 +1226,21 @@ const DealDetails = () => {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Action Button for Creator */}
+              {del.status === 'revision' && (
+                <div className="mt-4 pt-4 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+                  <Button 
+                    variant="primary" 
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => navigate(`/creator/deliverables/${deal._id}`)}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Submit Revised Asset
+                  </Button>
+                </div>
+              )}
             </div>
           </motion.div>
         ))}

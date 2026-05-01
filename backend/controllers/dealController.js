@@ -1,8 +1,10 @@
 // controllers/dealController.js - COMPLETE PRODUCTION-READY VERSION
 const mongoose = require('mongoose');
 const Deal = require('../models/Deal');
+const Payment = require('../models/Payment');
 const Campaign = require('../models/Campaign');
 const Creator = require('../models/Creator');
+const Notification = require('../models/Notification');
 const Brand = require('../models/Brand');
 const Message = require('../models/Message');
 const { protect } = require('../middleware/auth');
@@ -658,6 +660,34 @@ const ensureEscrowForAcceptedDeal = async ({ deal, acceptedByUserId }) => {
   }).sort('-createdAt');
 
   if (existingEscrow) {
+    // Update amount if it changed during negotiation
+    const commission = await feeService.calculateCommission(deal.budget);
+    const platformFee = commission.commissionAmount;
+    const totalAmount = deal.budget + platformFee;
+    
+    if (existingEscrow.amount !== totalAmount) {
+      const fees = await PaymentCalculator.calculateFees(totalAmount, 'brand');
+      existingEscrow.amount = totalAmount;
+      existingEscrow.fee = fees.total;
+      existingEscrow.netAmount = totalAmount - fees.total;
+      existingEscrow.metadata = {
+        ...(existingEscrow.metadata || {}),
+        platformFee,
+        budgetAmount: deal.budget,
+        totalChargedAmount: totalAmount,
+        updatedDuringNegotiation: true
+      };
+    }
+
+    if (existingEscrow.status === 'pending') {
+      existingEscrow.status = 'in-escrow';
+      await existingEscrow.save();
+    } else {
+      await existingEscrow.save();
+    }
+
+    deal.platformFee = platformFee;
+    deal.commissionRate = commission.commissionRate;
     deal.paymentId = existingEscrow._id;
     deal.paymentStatus = existingEscrow.status === 'completed' ? 'released' : 'in-escrow';
     return existingEscrow;
@@ -818,7 +848,7 @@ exports.createDeal = catchAsync(async (req, res) => {
 
   // Check brand balance for deal budget
   const brandFinancials = await getBrandFinancials(brandId);
-  const availableBalance = brandFinancials.availableBalance || 0;
+  const availableBalance = brandFinancials.available || 0;
 
   if (availableBalance < budget) {
     return res.status(400).json({
@@ -1344,6 +1374,14 @@ exports.rejectDeal = catchAsync(async (req, res) => {
   addTimelineEvent(deal, 'Deal Declined', reason || 'Creator declined the deal', req.user._id, { reason });
   await deal.save();
 
+  // Cancel associated pending payment to release reserved funds
+  if (deal.paymentId) {
+    await Payment.findByIdAndUpdate(deal.paymentId, {
+      status: 'cancelled',
+      metadata: { ...((await Payment.findById(deal.paymentId))?.metadata || {}), cancelReason: reason || 'Deal declined by creator' }
+    });
+  }
+
   // Notify brand
   await Notification.create({
     userId: deal.brandId,
@@ -1453,12 +1491,19 @@ exports.cancelDeal = catchAsync(async (req, res) => {
   addTimelineEvent(deal, 'Deal Cancelled', reason || 'Deal cancelled', req.user._id, { reason });
   await deal.save();
 
-  // Refund if payment in escrow
-  if (deal.paymentStatus === 'in-escrow') {
-    await Payment.findOneAndUpdate(
-      { dealId: deal._id },
-      { $set: { status: 'refunded', refundedAt: new Date(), refundReason: reason } }
-    );
+  // Refund or cancel payment if funds are reserved
+  if (deal.paymentId) {
+    const payment = await Payment.findById(deal.paymentId);
+    if (payment) {
+      if (payment.status === 'in-escrow') {
+        payment.status = 'refunded';
+        payment.refundedAt = new Date();
+        payment.refundReason = reason || 'Deal cancelled';
+      } else if (['pending', 'processing'].includes(payment.status)) {
+        payment.status = 'cancelled';
+      }
+      await payment.save();
+    }
   }
 
   // Notify other party
@@ -2240,7 +2285,26 @@ exports.submitDeliverables = catchAsync(async (req, res) => {
 
     deliverable.status = 'submitted';
     deliverable.submittedAt = new Date();
-    if (files.length) deliverable.files.push(...files);
+    if (files.length) {
+      const mappedFiles = files.map(f => {
+        let fileType = 'other';
+        if (f.mimeType) {
+          if (f.mimeType.startsWith('image/')) fileType = 'image';
+          else if (f.mimeType.startsWith('video/')) fileType = 'video';
+          else if (f.mimeType === 'application/pdf') fileType = 'pdf';
+        } else if (f.type && ['image', 'video', 'pdf', 'other'].includes(f.type)) {
+           fileType = f.type;
+        }
+        return {
+          url: f.url || f.secure_url,
+          type: fileType,
+          size: f.size,
+          filename: f.originalName || f.filename || 'uploaded_file',
+          uploadedAt: f.uploadedAt || new Date()
+        };
+      });
+      deliverable.files.push(...mappedFiles);
+    }
     if (links.length) deliverable.links.push(...links);
     if (notes) deliverable.notes = notes;
     

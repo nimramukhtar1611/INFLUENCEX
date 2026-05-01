@@ -86,6 +86,7 @@ router.get('/settings', globalLimiter, async (req, res) => {
       
       // Feature flags
       features: {
+        campaigns: settings.features?.campaigns?.enabled ?? true,
         chat: settings.features?.chat?.enabled ?? true,
         reviews: settings.features?.reviews?.enabled ?? true,
         disputes: settings.features?.disputes?.enabled ?? true,

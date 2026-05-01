@@ -95,14 +95,20 @@ const CreateDeal = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validate()) {
+      toast.error('Please fill in all required fields correctly');
+      return;
+    }
 
     const dealData = {
       campaignId: formData.campaignId,
       creatorId,
       budget: parseFloat(formData.budget),
       deadline: formData.deadline,
-      deliverables: formData.deliverables,
+      deliverables: formData.deliverables.map(d => ({
+        ...d,
+        description: d.description || `${d.quantity} ${d.type}(s) on ${d.platform}`
+      })),
       message: formData.message
     };
 
@@ -170,24 +176,25 @@ const CreateDeal = () => {
         </section>
 
         {/* Core Details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Campaign</label>
-            <select name="campaignId" value={formData.campaignId} onChange={handleChange}className={`${inputClasses} ${isDark ? 'bg-black' : 'bg-white'}`}>
-              <option   className="!bg-black text-white" value="">Select Campaign</option>
+            <select name="campaignId" value={formData.campaignId} onChange={handleChange} className={`${inputClasses} ${isDark ? 'bg-black' : 'bg-white'}`}>
+              <option className="!bg-black text-white" value="">Select Campaign</option>
               {campaigns.map(c => <option className="!bg-black text-white" key={c._id} value={c._id}>{c.title}</option>)}
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">
-              {dealType === 'fixed' ? 'Budget ($)' : 'Deadline'}
-            </label>
-            {dealType === 'fixed' ? (
+          {dealType === 'fixed' && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Budget ($)</label>
               <input type="number" name="budget" value={formData.budget} onChange={handleChange} placeholder="500" className={inputClasses} />
-            ) : (
-              <input type="date" name="deadline" value={formData.deadline} onChange={handleChange} className={inputClasses} />
-            )}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Deadline</label>
+            <input type="date" name="deadline" value={formData.deadline} onChange={handleChange} className={inputClasses} />
           </div>
         </div>
 
@@ -241,6 +248,13 @@ const CreateDeal = () => {
                   </select>
                   <input type="number" value={del.quantity} className={`${inputClasses} ${isDark ? 'bg-black' : 'bg-white'}`}onChange={(e) => handleDeliverableChange(idx, 'quantity', e.target.value)} />
                 </div>
+                <input 
+                  type="text" 
+                  placeholder="Description (e.g. 15s video mentioning the new sale)" 
+                  value={del.description} 
+                  className={`${inputClasses} mt-4 ${isDark ? 'bg-black' : 'bg-white'}`}
+                  onChange={(e) => handleDeliverableChange(idx, 'description', e.target.value)} 
+                />
               </div>
             ))}
           </div>
@@ -278,7 +292,7 @@ const CreateDeal = () => {
       relative px-8 py-3 rounded-full text-xs font-bold uppercase tracking-[0.2em] 
       transition-all duration-300 shadow-xl overflow-hidden
       ${dealLoading || perfSubmitting ? 'opacity-70 cursor-not-allowed scale-95' : 'hover:scale-105 active:scale-95 hover:shadow-2xl'}
-      ${isDark ? 'bg-white text-white border border-white' : 'bg-black text-white border border-black'}
+      ${isDark ? 'bg-white text-black border border-white' : 'bg-black text-white border border-black'}
     `}
   >
     <span className="flex items-center justify-center gap-2">

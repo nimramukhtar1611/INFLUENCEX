@@ -41,7 +41,8 @@ import {
   Copy,
   Trash2,
   Smile,
-  ChevronRight
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react';
 import { formatNumber, formatCurrency, formatDate, timeAgo } from '../../utils/helpers';
 import { getStatusColor } from '../../utils/colorScheme';
@@ -1130,6 +1131,36 @@ const DealDetails = () => {
                       </a>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Action Buttons for Brand */}
+              {isBrand && del.status === 'submitted' && (
+                <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+                  <Button 
+                    variant="primary" 
+                    size="sm"
+                    className="flex-1 sm:flex-none"
+                    onClick={() => {
+                      setSelectedDeliverable(del._id);
+                      setShowApproveModal(true);
+                    }}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Approve
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="flex-1 sm:flex-none border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-900/50 dark:text-orange-400 dark:hover:bg-orange-500/10"
+                    onClick={() => {
+                      setSelectedDeliverable(del._id);
+                      setShowRevisionModal(true);
+                    }}
+                  >
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    Request Changes
+                  </Button>
                 </div>
               )}
             </div>
