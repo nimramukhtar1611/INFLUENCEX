@@ -150,21 +150,29 @@ const ALLOWED_ORIGINS = Array.from(new Set([
   ...parseOrigins(process.env.ALLOWED_ORIGINS),
   'http://localhost:5173',
   'http://127.0.0.1:5173'
-]));
+])).map(origin => origin.replace(/\/$/, '')); // Remove trailing slashes
+
+console.log('🛡️  CORS: Allowed Origins:', ALLOWED_ORIGINS);
 
 const validateCorsOrigin = (origin, callback) => {
+  // Allow requests with no origin (like mobile apps or curl)
   if (!origin) {
     return callback(null, true);
   }
 
+  // In non-production, allow all
   if (!isProductionEnv) {
     return callback(null, true);
   }
 
-  if (ALLOWED_ORIGINS.includes(origin)) {
+  // Normalize incoming origin for comparison
+  const normalizedOrigin = origin.replace(/\/$/, '');
+
+  if (ALLOWED_ORIGINS.includes(normalizedOrigin)) {
     return callback(null, true);
   }
 
+  console.error(`❌ CORS Error: Origin "${origin}" not in allowed list:`, ALLOWED_ORIGINS);
   return callback(new Error(`Origin not allowed by CORS: ${origin}`));
 };
 
