@@ -36,7 +36,7 @@ const resolveStripePriceId = (plan, interval) => {
   return plan.stripePriceId?.month || plan.stripePriceId?.year || null;
 };
 
-const getFrontendBaseUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+const getFrontendBaseUrl = () => process.env.FRONTEND_URL || 'http://13.61.13.2:5173';
 
 const getSubscriptionPathByUserType = (userType) => {
   if (userType === 'brand') return '/brand/subscription';
