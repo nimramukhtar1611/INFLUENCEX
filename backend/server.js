@@ -148,22 +148,13 @@ const parseOrigins = (value) => String(value || '')
 const ALLOWED_ORIGINS = Array.from(new Set([
   ...parseOrigins(process.env.FRONTEND_URL),
   ...parseOrigins(process.env.ALLOWED_ORIGINS),
-  'http://13.61.13.2:5173', // Explicit fallback for EC2
   'http://localhost:5173',
   'http://127.0.0.1:5173'
 ])).map(origin => origin.replace(/\/$/, '')); // Remove trailing slashes
 
-console.log('🔍 DEBUG: FRONTEND_URL value:', process.env.FRONTEND_URL || 'UNDEFINED');
-console.log('🛡️  CORS: Allowed Origins:', ALLOWED_ORIGINS);
-
 const validateCorsOrigin = (origin, callback) => {
   // Allow requests with no origin (like mobile apps or curl)
   if (!origin) {
-    return callback(null, true);
-  }
-
-  // In non-production, allow all
-  if (!isProductionEnv) {
     return callback(null, true);
   }
 
