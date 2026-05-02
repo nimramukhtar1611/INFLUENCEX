@@ -16,7 +16,10 @@ const { isValidObjectId, isValidBudget } = require('../utils/validators');
 const CREATOR_WITHDRAWAL_STATUSES = ['pending', 'processing', 'completed'];
 const CREATOR_EXCLUDED_EARNING_TYPES = ['withdrawal', 'refund', 'fee', 'penalty'];
 
-const getFrontendBaseUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+const getFrontendBaseUrl = () => {
+  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/$/, '');
+  return 'http://13.61.13.2:5173'; // Fallback for EC2 production
+};
 
 const getEffectiveBrandId = (req) => req.brandId || req.user?._id;
 
