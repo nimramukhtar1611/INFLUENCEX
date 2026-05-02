@@ -6,6 +6,7 @@ const Deal = require('../models/Deal');
 const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
 const Plan = require('../models/Plan');
+const { cache } = require('../config/redis');
 
 class StripeService {
   async findPlanByStripePriceId(priceId) {
@@ -226,6 +227,18 @@ class StripeService {
     await this.cancelDuplicateSubscriptions(stripeSubscription.customer, stripeSubscription.id);
     
     console.log(`🎉 [WEBHOOK] Subscription upsert completed successfully!`);
+    
+    // ✅ CACHE INVALIDATION: Clear balance cache for this user
+    try {
+      if (cache) {
+        const cacheKey = `balance:${user._id.toString()}`;
+        await cache.del(cacheKey);
+        console.log(`🧹 [WEBHOOK] Cleared balance cache for user: ${user._id}`);
+      }
+    } catch (cacheError) {
+      console.warn(`⚠️ [WEBHOOK] Failed to clear balance cache:`, cacheError.message);
+    }
+
     return subscriptionDoc;
   }
 
@@ -679,6 +692,17 @@ class StripeService {
               }
             });
             console.log(`✅ [WEBHOOK] Payment record created successfully`);
+
+            // ✅ CACHE INVALIDATION: Clear balance cache for this user
+            try {
+              if (cache) {
+                const cacheKey = `balance:${user._id.toString()}`;
+                await cache.del(cacheKey);
+                console.log(`🧹 [WEBHOOK] Cleared balance cache for user: ${user._id}`);
+              }
+            } catch (cacheError) {
+              console.warn(`⚠️ [WEBHOOK] Failed to clear balance cache:`, cacheError.message);
+            }
           } else {
             console.log(`ℹ️ [WEBHOOK] Payment already exists for session: ${session.id}`);
           }
