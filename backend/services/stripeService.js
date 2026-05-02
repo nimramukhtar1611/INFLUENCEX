@@ -643,8 +643,10 @@ class StripeService {
         }
       }
 
+      console.log(`🔍 [WEBHOOK] Checkout Session Completed: mode=${session.mode}, purpose=${session.metadata?.purpose || 'none'}`);
+
       if (session.mode === 'payment' && session.metadata?.purpose === 'wallet_topup') {
-        console.log(`💰 [WEBHOOK] Processing wallet top-up`);
+        console.log(`💰 [WEBHOOK] Processing wallet top-up for user: ${session.metadata?.userId}`);
         const user = await this.resolveUserFromStripeContext(session.customer, session.metadata);
         console.log(`🔍 [WEBHOOK] Resolved user for top-up:`, user ? {
           id: user._id,
