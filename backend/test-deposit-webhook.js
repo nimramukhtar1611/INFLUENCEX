@@ -1,6 +1,9 @@
 // INFLUENCEX/backend/test-deposit-webhook.js
 const mongoose = require('mongoose');
 const path = require('path');
+const dns = require('node:dns');
+dns.setDefaultResultOrder('ipv4first');
+require('node:dns/promises').setServers(['8.8.8.8', '8.8.4.4']);
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const stripeService = require('./services/stripeService');
