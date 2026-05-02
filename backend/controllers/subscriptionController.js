@@ -375,14 +375,29 @@ const getCurrentSubscription = asyncHandler(async (req, res) => {
         // Price-based resolution can map to a lower-tier plan when stripePriceId
         // in the DB is stale or misconfigured. Metadata-based resolution (fixed in
         // stripeService) handles most cases, but this is an extra safety net.
+        // Resolve tiers for comparison to prevent accidental downgrades via stale Stripe data.
+        // We use the slug (e.g., 'starter') for the lookup.
         const PLAN_TIERS = { free: 0, starter: 1, professional: 2, enterprise: 3 };
-        const currentTier = PLAN_TIERS[String(subscription.planId || 'free').toLowerCase()] ?? 0;
-        const syncedTier  = PLAN_TIERS[String(synced.planId    || 'free').toLowerCase()] ?? 0;
+        
+        // Ensure we get the string slug even if planId was somehow populated
+        const currentPlanSlug = typeof subscription.planId === 'object' 
+          ? (subscription.planId.planId || 'free') 
+          : (subscription.planId || 'free');
+          
+        const syncedPlanSlug = typeof synced.planId === 'object'
+          ? (synced.planId.planId || 'free')
+          : (synced.planId || 'free');
+
+        const currentTier = PLAN_TIERS[String(currentPlanSlug).toLowerCase()] ?? 0;
+        const syncedTier  = PLAN_TIERS[String(syncedPlanSlug).toLowerCase()] ?? 0;
+        
+        console.log(`⚖️ [getCurrentSubscription] Comparing tiers: Current=${currentPlanSlug}(${currentTier}), Synced=${syncedPlanSlug}(${syncedTier})`);
+
         if (syncedTier >= currentTier) {
-          const refreshed = await Subscription.findById(synced._id).populate('planId');
+          const refreshed = await Subscription.findById(synced._id);
           if (refreshed) subscription = refreshed;
         } else {
-          console.warn(`⚠️ [getCurrentSubscription] Skipping sync: would downgrade from '${subscription.planId}' (tier ${currentTier}) to '${synced.planId}' (tier ${syncedTier})`);
+          console.warn(`⚠️ [getCurrentSubscription] Skipping sync: would downgrade from '${currentPlanSlug}' (tier ${currentTier}) to '${syncedPlanSlug}' (tier ${syncedTier})`);
         }
       }
 

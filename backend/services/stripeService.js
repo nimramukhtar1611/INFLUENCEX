@@ -214,7 +214,9 @@ class StripeService {
     console.log(`👤 [WEBHOOK] Updating user document with subscription info...`);
     await User.findByIdAndUpdate(user._id, {
       stripeCustomerId: stripeSubscription.customer,
+      'subscription.planId': planId,
       'subscription.status': stripeSubscription.status,
+      'subscription.plan': plan.name, // Keep for backward compatibility if used
       'subscription.currentPeriodStart': billingStart,
       'subscription.currentPeriodEnd': billingEnd,
       'subscription.cancelAtPeriodEnd': Boolean(stripeSubscription.cancel_at_period_end)
