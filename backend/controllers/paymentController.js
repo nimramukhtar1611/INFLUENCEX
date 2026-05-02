@@ -17,8 +17,7 @@ const CREATOR_WITHDRAWAL_STATUSES = ['pending', 'processing', 'completed'];
 const CREATOR_EXCLUDED_EARNING_TYPES = ['withdrawal', 'refund', 'fee', 'penalty'];
 
 const getFrontendBaseUrl = () => {
-  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/$/, '');
-  return 'http://13.61.13.2:5173'; // Fallback for EC2 production
+  return 'http://13.61.13.2:5173'; 
 };
 
 const getEffectiveBrandId = (req) => req.brandId || req.user?._id;
@@ -273,7 +272,12 @@ exports.getBalance = catchAsync(async (req, res) => {
     });
   }
 
-  const response = { success: true, balance, pending, available };
+  const response = { 
+    success: true, 
+    balance: Math.round(balance * 100) / 100, 
+    pending: Math.round(pending * 100) / 100, 
+    available: Math.round(available * 100) / 100 
+  };
   console.log(`💰 [API] Returning balance:`, response);
   res.json(response);
 });
