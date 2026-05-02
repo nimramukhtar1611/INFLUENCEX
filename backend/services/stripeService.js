@@ -109,22 +109,21 @@ class StripeService {
     const stripeInterval = stripeSubscription?.items?.data?.[0]?.price?.recurring?.interval;
     console.log(`⏰ [WEBHOOK] Stripe interval: ${stripeInterval}`);
 
-    // Resolve planId: prefer metadata (explicitly set at checkout) over price-based lookup.
-    // Price-based lookup can silently resolve to the wrong plan if the same price ID is
-    // stored under multiple plans or the DB has stale stripePriceId values.
     const resolvedByPrice = planByPrice?.planId || null;
     const resolvedByMeta  = metadata.planId     || null;
     const resolvedByExisting = existingLocalSubscription?.planId || null;
 
+    // Resolve planId: trust the Price ID (what they are paying for) over metadata (which might be stale from a previous plan).
     let planId;
-    if (resolvedByMeta && resolvedByMeta !== 'free') {
-      // Metadata is the most reliable source — set explicitly at checkout session creation
-      planId = resolvedByMeta;
-      if (resolvedByPrice && resolvedByPrice !== resolvedByMeta) {
-        console.warn(`⚠️ [WEBHOOK] Plan mismatch: metadata says '${resolvedByMeta}' but price lookup says '${resolvedByPrice}'. Preferring metadata.`);
+    if (resolvedByPrice) {
+      planId = resolvedByPrice;
+      if (resolvedByMeta && resolvedByMeta !== resolvedByPrice) {
+        console.log(`ℹ️ [WEBHOOK] Plan update detected: price points to '${resolvedByPrice}', metadata was '${resolvedByMeta}'. Updating to match price.`);
       }
+    } else if (resolvedByMeta && resolvedByMeta !== 'free') {
+      planId = resolvedByMeta;
     } else {
-      planId = resolvedByPrice || resolvedByExisting || 'free';
+      planId = resolvedByExisting || 'free';
     }
 
     const interval = stripeInterval || planByPrice?.interval || metadata.interval || existingLocalSubscription?.planDetails?.interval || 'month';
