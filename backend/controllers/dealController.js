@@ -8,6 +8,7 @@ const Notification = require('../models/Notification');
 const Brand = require('../models/Brand');
 const Message = require('../models/Message');
 const { Conversation } = require('../models/Conversation');
+const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { catchAsync } = require('../utils/catchAsync');
 const { isValidObjectId } = require('../utils/validation');
@@ -2509,16 +2510,46 @@ exports.rateDeal = catchAsync(async (req, res) => {
   addTimelineEvent(deal, 'Deal Rated', `Rated ${score}/5${review ? `: ${review}` : ''}`, req.user._id);
   await deal.save();
 
-  // Update rated user's average rating
+  // Update rated user's average rating and total reviews
   const actorRole = getActorRoleOnDeal(deal, req);
   const ratedUserId = actorRole === 'brand' ? deal.creatorId : deal.brandId;
-  const allRatings = await Deal.find({
-    $or: [{ brandId: ratedUserId }, { creatorId: ratedUserId }],
-    'rating.score': { $exists: true },
-  });
-  const avgRating = allRatings.reduce((sum, d) => sum + d.rating.score, 0) / allRatings.length;
-
-  await User.findByIdAndUpdate(ratedUserId, { 'stats.averageRating': avgRating, 'stats.totalReviews': allRatings.length });
+  
+  // Use transaction for data consistency
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    // Get all ratings for the rated user from completed deals
+    const allRatings = await Deal.find({
+      $or: [
+        { brandId: ratedUserId, 'rating.score': { $exists: true } },
+        { creatorId: ratedUserId, 'rating.score': { $exists: true } }
+      ],
+      status: 'completed'
+    }).session(session);
+    
+    const totalReviews = allRatings.length;
+    const avgRating = totalReviews > 0 
+      ? allRatings.reduce((sum, d) => sum + d.rating.score, 0) / totalReviews 
+      : 0;
+    
+    // Update User stats with correct field paths
+    await User.findByIdAndUpdate(
+      ratedUserId, 
+      { 
+        'stats.averageRating': avgRating,
+        'stats.totalReviews': totalReviews
+      },
+      { session }
+    );
+    
+    await session.commitTransaction();
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 
   res.json({ success: true, message: 'Rating submitted' });
 });

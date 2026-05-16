@@ -88,7 +88,7 @@ class UploadService {
       this.upload = multer({
         storage: storage,
         limits: {
-          fileSize: 10 * 1024 * 1024, // 10MB limit
+          fileSize: 100 * 1024 * 1024, // 100MB limit
           files: 5 // Max 5 files at once
         },
         fileFilter: this.fileFilter.bind(this)
@@ -135,7 +135,7 @@ class UploadService {
     this.upload = multer({
       storage: storage,
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit
+        fileSize: 100 * 1024 * 1024, // 100MB limit
         files: 5 // Max 5 files at once
       },
       fileFilter: this.fileFilter.bind(this)
@@ -228,10 +228,10 @@ class UploadService {
     }
 
     // Security Check 5: File size validation (early check)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 100 * 1024 * 1024; // 100MB
     if (file.size > maxSize) {
       console.warn(`🚨 Security: File too large: ${file.size} bytes`);
-      return cb(new Error(`File size ${Math.round(file.size / 1024 / 1024)}MB exceeds maximum allowed size of 10MB.`));
+      return cb(new Error(`File size ${Math.round(file.size / 1024 / 1024)}MB exceeds maximum allowed size of 100MB.`));
     }
 
     console.log(`✅ Security: File passed validation: ${file.originalname} (${file.mimetype}, ${Math.round(file.size / 1024)}KB)`);

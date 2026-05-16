@@ -62,6 +62,7 @@ import CreatorSettings from './pages/Creator/Settings';
 import CreatorInbox from './pages/Creator/Inbox';
 import CreatorGrowthOS from './pages/Creator/GrowthOS';
 import BrandProfileView from './pages/Creator/BrandProfileView';
+import CreatorDisputes from './pages/Creator/Disputes';
 
 // Admin Pages
 import AdminDashboard from './pages/Admin/Dashboard';
@@ -79,6 +80,7 @@ import AdminLogin from './pages/Admin/AdminLogin';
 // Common Pages
 import Notifications from './components/Common/Notifications';
 import Disputes from './components/Common/Disputes';
+import BrandDisputes from './pages/Brand/Disputes';
 import Contracts from './pages/Brand/Contracts';
 import FAQs from './pages/FAQs';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -172,7 +174,7 @@ function App() {
                                  <Route path="campaigns/:id/edit" element={<BrandCampaignEdit />} />
                                 <Route path="inbox" element={<BrandInbox />} />
                                 <Route path="notifications" element={<Notifications />} />
-                                <Route path="disputes" element={<Disputes />} />
+                                <Route path="disputes" element={<BrandDisputes />} />
                               </Route>
 
                               {/* Creator Routes */}
@@ -196,7 +198,7 @@ function App() {
                                 <Route path="subscription" element={<SubscriptionManager />} />
                                 <Route path="inbox" element={<CreatorInbox />} />
                                 <Route path="notifications" element={<Notifications />} />
-                                <Route path="disputes" element={<Disputes />} />
+                                <Route path="disputes" element={<CreatorDisputes />} />
                               </Route>
 
                               {/* Admin Routes */}

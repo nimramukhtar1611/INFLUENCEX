@@ -245,14 +245,14 @@ const Deals = () => {
             <button 
               onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))} 
               disabled={pagination.page === 1}
-              className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-zinc-400 transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <button 
               onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))} 
               disabled={pagination.page === pagination.pages}
-              className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-30 hover:bg-zinc-100  dark:hover:bg-zinc-400 transition-colors"
             >
               <ChevronRight className="w-5 h-5" />
             </button>

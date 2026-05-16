@@ -123,11 +123,7 @@ const BrandLayout = ({
       )}
 
       {/* Content */}
-      <div className={`rounded-2xl border transition-all ${
-        isDark 
-          ? 'bg-zinc-900/50 border-zinc-800' 
-          : 'bg-white border-zinc-100 hover:shadow-xl shadow-zinc-200/50'
-      }`}>
+      <div className={`rounded-2xl  transition-all `}>
         {children}
       </div>
     </div>

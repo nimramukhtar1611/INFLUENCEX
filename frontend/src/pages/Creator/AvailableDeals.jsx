@@ -337,6 +337,13 @@ const AvailableDeals = () => {
           <p className={`text-[11px] font-mono mt-1 opacity-60 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
             REF: {selectedCampaign.title}
           </p>
+          {selectedCampaign.description && (
+            <div className={`mt-3 p-3 rounded-xl ${isDark ? 'bg-zinc-800/50' : 'bg-zinc-100/50'}`}>
+              <p className={`text-xs leading-relaxed ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                {selectedCampaign.description}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

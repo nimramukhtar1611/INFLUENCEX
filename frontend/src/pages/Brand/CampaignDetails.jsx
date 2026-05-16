@@ -764,24 +764,24 @@ const CampaignDetails = () => {
                 </div>
 
                 {/* Profile Section */}
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex items-center gap-3 mb-4">
                   <div className="relative">
                     {creator.creatorId?.profilePicture ? (
                       <img
                         src={creator.creatorId.profilePicture}
                         alt={creator.creatorId.displayName}
-                        className="w-14 h-14 rounded-2xl object-cover ring-2 ring-offset-2 ring-offset-transparent ring-blue-500/20 group-hover:scale-110 transition-transform duration-500"
+                        className="w-10 h-10 rounded-xl object-cover group-hover:scale-110 transition-transform duration-500"
                       />
                     ) : (
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 border-dashed ${
-                        isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-100 border-zinc-200'
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 border-dashed ${
+                        isDark ? 'border-zinc-700' : 'border-zinc-200'
                       }`}>
-                        <Users className={`w-6 h-6 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
+                        <Users className={`w-5 h-5 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
                       </div>
                     )}
                   </div>
                   <div>
-                    <h3 className={`font-bold text-base leading-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                    <h3 className={`font-bold text-sm leading-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
                       {creator.creatorId?.displayName || 'Creator'}
                     </h3>
                     <p className={`text-xs font-medium mt-0.5 ${isDark ? 'text-blue-400/80' : 'text-blue-600'}`}>
@@ -877,29 +877,31 @@ const CampaignDetails = () => {
                 >
                   <div className="flex flex-col lg:flex-row gap-6">
                     {/* Left Side: Creator Profile & Metrics */}
-                    <div className="flex lg:flex-col items-start gap-4 min-w-[200px]">
+                    <div className="flex lg:flex-col items-start gap-3 min-w-[180px]">
                       <div className="relative">
                         {creator?.profilePicture ? (
                           <img
                             src={creator.profilePicture}
                             alt={creator.displayName}
-                            className="w-14 h-14 rounded-2xl object-cover ring-2 ring-zinc-800/50 group-hover:ring-blue-500/50 transition-all"
+                            className="w-10 h-10 rounded-xl object-cover group-hover:scale-110 transition-all"
                           />
                         ) : (
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
-                            <Users className="w-6 h-6 text-zinc-500" />
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 border-dashed ${
+                            isDark ? 'border-zinc-700' : 'border-zinc-200'
+                          }`}>
+                            <Users className={`w-5 h-5 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
                           </div>
                         )}
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-blue-500 border-2 border-zinc-900 flex items-center justify-center">
-                           <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                        <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-zinc-900 flex items-center justify-center">
+                           <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
                         </div>
                       </div>
 
                       <div>
-                        <h3 className={`font-bold text-sm ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                        <h3 className={`font-bold text-sm leading-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
                           {creator?.displayName || 'Creator'}
                         </h3>
-                        <p className={`text-xs font-medium ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                        <p className={`text-xs font-medium mt-0.5 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
                           @{creator?.handle}
                         </p>
                         <div className="flex items-center gap-2 mt-2">
@@ -1214,64 +1216,136 @@ const CampaignDetails = () => {
         title="Review Application"
       >
         {selectedApplication && (
-          <div className="space-y-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center gap-3 mb-2">
+          <div className="space-y-6">
+            {/* Creator Profile Section */}
+            <div className={`p-6 rounded-2xl border transition-all duration-300 ${
+              isDark 
+                ? 'bg-zinc-900/50 border-zinc-800' 
+                : 'bg-zinc-50 border-zinc-200'
+            }`}>
+              <div className="flex items-center gap-4">
                 {selectedApplication.creatorId?.profilePicture ? (
                   <img
                     src={selectedApplication.creatorId.profilePicture}
                     alt={selectedApplication.creatorId.displayName}
-                    className="w-10 h-10 rounded-full"
+                    className="w-16 h-16 rounded-2xl object-cover ring-2 ring-offset-2 ring-offset-transparent ring-blue-500/20"
                   />
                 ) : (
-                  <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                    <Users className="w-5 h-5 text-indigo-600" />
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border-2 border-dashed ${
+                    isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-100 border-zinc-200'
+                  }`}>
+                    <Users className={`w-8 h-8 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
                   </div>
                 )}
-                <div>
-                  <h3 className="font-semibold text-gray-900">
+                <div className="flex-1">
+                  <h3 className={`text-lg font-bold tracking-tight ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
                     {selectedApplication.creatorId?.displayName || 'Creator'}
                   </h3>
-                  <p className="text-xs text-gray-500">@{selectedApplication.creatorId?.handle}</p>
+                  <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                    @{selectedApplication.creatorId?.handle}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`px-2.5 py-1 text-[10px] rounded-full font-black uppercase tracking-tighter ${
+                      getStatusColor(selectedApplication.status || 'pending', 'status', isDark)
+                    }`}>
+                      {selectedApplication.status || 'pending'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Proposal</h4>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-gray-700">{selectedApplication.proposal}</p>
+            {/* Proposal Section */}
+            <section className="space-y-3">
+              <h4 className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                Proposal
+              </h4>
+              <div className={`p-5 rounded-2xl border transition-all duration-300 ${
+                isDark 
+                  ? 'bg-zinc-900/30 border-zinc-800' 
+                  : 'bg-white border-zinc-100'
+              }`}>
+                <p className={`text-sm leading-relaxed ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                  {selectedApplication.proposal}
+                </p>
               </div>
-            </div>
+            </section>
 
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Rate</h4>
-              <p className="text-lg font-bold text-indigo-600">{formatCurrency(selectedApplication.rate || 0)}</p>
-            </div>
+            {/* Rate Section */}
+            <section className="space-y-3">
+              <h4 className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                Proposed Rate
+              </h4>
+              <div className={`p-5 rounded-2xl border transition-all duration-300 ${
+                isDark 
+                  ? 'bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-blue-800/30' 
+                  : 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                    Per Campaign
+                  </span>
+                  <span className={`text-2xl font-black tabular-nums ${
+                    isDark ? 'text-blue-400' : 'text-blue-600'
+                  }`}>
+                    {formatCurrency(selectedApplication.rate || 0)}
+                  </span>
+                </div>
+              </div>
+            </section>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Feedback (Optional)</label>
+            {/* Feedback Section */}
+            <section className="space-y-3">
+              <label className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                Feedback (Optional)
+              </label>
               <textarea
-                rows="3"
+                rows="4"
                 value={applicationFeedback}
                 onChange={(e) => setApplicationFeedback(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-4 py-3 text-sm rounded-2xl border focus:outline-none transition-all resize-none ${
+                  isDark 
+                    ? 'bg-zinc-900 border-zinc-800 focus:border-zinc-500 text-white placeholder-zinc-600' 
+                    : 'bg-white border-zinc-200 focus:border-black text-black placeholder-zinc-400'
+                }`}
                 placeholder="Add feedback for the creator..."
               />
-            </div>
+            </section>
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowApplicationModal(false)}>
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-zinc-800/10">
+          <button 
+            onClick={() => setShowApplicationModal(false)}
+            className={`px-6 py-3 rounded-full text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 active:scale-95 ${
+              isDark 
+                ? 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700' 
+                : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200 hover:border-zinc-300'
+            }`}
+          >
             Cancel
-          </Button>
-          <Button variant="danger" onClick={() => handleReviewApplication(selectedApplication?._id, 'rejected')}>
+          </button>
+          <button 
+            onClick={() => handleReviewApplication(selectedApplication?._id, 'rejected')}
+            className={`px-6 py-3 rounded-full text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 active:scale-95 ${
+              isDark 
+                ? 'bg-red-900/20 text-red-400 hover:bg-red-900/30 border border-red-800/50 hover:border-red-700' 
+                : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 hover:border-red-300'
+            }`}
+          >
             Reject
-          </Button>
-          <Button variant="success" onClick={() => handleReviewApplication(selectedApplication?._id, 'accepted')}>
+          </button>
+          <button 
+            onClick={() => handleReviewApplication(selectedApplication?._id, 'accepted')}
+            className={`px-6 py-3 rounded-full text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 active:scale-95 shadow-lg hover:shadow-xl ${
+              isDark 
+                ? 'bg-emerald-600 text-white hover:bg-emerald-500 border border-emerald-600' 
+                : 'bg-emerald-600 text-white hover:bg-emerald-500 border border-emerald-600'
+            }`}
+          >
             Accept
-          </Button>
+          </button>
         </div>
       </Modal>
 

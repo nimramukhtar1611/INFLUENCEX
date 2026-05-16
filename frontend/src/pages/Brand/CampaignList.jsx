@@ -238,22 +238,22 @@ active: { label: 'Active', bg: 'bg-emerald-500/10', text: 'text-emerald-500' }, 
 
       {/* Modern Pagination */}
       {pagination.pages > 1 && (
-        <div className="flex items-center justify-between pt-8 border-t border-zinc-800/10 dark:border-zinc-200/10">
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-[0.2em]">
+        <div className="flex items-center justify-between m-2 pt-8 border-t border-zinc-800/10 dark:border-zinc-200/10">
+          <p className="text-xs font-bold text-zinc-500  uppercase tracking-[0.2em]">
             Page {pagination.page} <span className="mx-2 opacity-30">/</span> {pagination.pages}
           </p>
           <div className="flex gap-2">
             <button 
               onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))} 
               disabled={pagination.page === 1}
-              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-20 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-2.5 rounded-xl border border-zinc-200 bg-black dark:text-white dark:border-zinc-400 disabled:opacity-20 hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <button 
               onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))} 
               disabled={pagination.page === pagination.pages}
-              className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 disabled:opacity-20 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-2.5 rounded-xl border border-zinc-200 bg-black dark:text-white dark:border-zinc-400 disabled:opacity-20 hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <ChevronRight className="w-5 h-5" />
             </button>

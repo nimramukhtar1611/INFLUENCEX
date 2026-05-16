@@ -324,7 +324,7 @@ const SearchCreators = () => {
         <div className="col-span-2 mt-4 md:mt-0">
           {creator.aiMatch ? (
             <div className="flex flex-col">
-              <span className="text-sm font-black bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent italic">
+              <span className="text-sm text-white font-black bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent italic">
                 {creator.aiMatch.score}% MATCH
               </span>
               <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest opacity-40">Predictive Fit</span>

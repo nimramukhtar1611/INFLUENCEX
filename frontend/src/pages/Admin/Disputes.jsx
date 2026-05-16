@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Eye, RefreshCw, CheckCircle, AlertCircle, Download, XCircle, Search, AlertTriangle, ArrowUpRight, Scale } from 'lucide-react';
+import { Eye, RefreshCw, CheckCircle, AlertCircle, Download, XCircle, Search, AlertTriangle, ArrowUpRight, Scale, User, Building2, Target, Handshake, Calendar, DollarSign, FileText, Clock, TrendingUp, Award, MessageSquare, Shield, Star, ChevronRight, Zap, Users, Briefcase, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
@@ -102,7 +102,7 @@ const AdminDisputes = () => {
         `"${dispute.raised_by?.user_id?.fullName || dispute.raised_by?.user_id?.email || ''}"`,
         `"${dispute.raised_against?.user_id?.fullName || dispute.raised_against?.user_id?.email || ''}"`,
         dispute.amount || 0,
-        dispute.createdAt ? new Date(dispute.createdAt).toISOString().split('T')[0] : ''
+        dispute.created_at ? new Date(dispute.created_at).toISOString().split('T')[0] : ''
       ].join(','))
     ].join('\n');
 
@@ -116,16 +116,16 @@ const AdminDisputes = () => {
     toast.success('Disputes data exported successfully');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 animate-spin border-2 border-zinc-300 border-t-zinc-500 rounded-full mx-auto mb-4"></div>
-          <p className="text-zinc-500 text-xs font-medium">Loading disputes...</p>
+   if (loading && disputes.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader className="w-8 h-8 animate-spin text-zinc-500 mx-auto mb-4" />
+            <p className="text-zinc-500 text-xs font-medium">Loading disputes...</p>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
   const openCount = filteredDisputes.filter((d) => d.status === 'open').length;
   const investigatingCount = filteredDisputes.filter((d) => d.status === 'investigating').length;
@@ -503,80 +503,166 @@ const AdminDisputes = () => {
   )}
 </div>
 
+      {/* Dispute Details Modal - Enhanced with Beautiful UI */}
       <Modal
         isOpen={showDetailsModal}
         onClose={() => {
           setShowDetailsModal(false);
           setSelectedDispute(null);
         }}
-        title="Dispute Details"
-        size="lg"
-        className="modal-scrollable"
+        title=""
+        size="xl"
       >
         {selectedDispute && (
-          <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
-            <div>
-              <h3 className={`text-xl font-semibold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedDispute.title || 'Untitled Dispute'}</h3>
-              <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mt-1`}>
-                Dispute ID: {selectedDispute.dispute_id || selectedDispute._id?.slice(-8)} • Status: {selectedDispute.status}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Type</p>
-                <p className={`text-sm font-medium capitalize ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{(selectedDispute.dispute_type || 'unknown').replace(/_/g, ' ')}</p>
-              </div>
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Priority</p>
-                <p className={`text-sm font-medium capitalize ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedDispute.priority || 'normal'}</p>
-              </div>
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Raised By</p>
-                <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedDispute.raised_by?.user_id?.fullName || selectedDispute.raised_by?.user_id?.email || 'Unknown'}</p>
-              </div>
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-1`}>Against</p>
-                <p className={`text-sm font-medium ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{selectedDispute.raised_against?.user_id?.fullName || selectedDispute.raised_against?.user_id?.email || 'Unknown'}</p>
+          <div className={`space-y-6 ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+            
+            {/* Header: Compact & Clean */}
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-zinc-800/50">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDark ? 'bg-zinc-800 border border-zinc-700' : 'bg-zinc-100 border border-zinc-200'}`}>
+                  <Scale className={`w-5 h-5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold leading-none mb-1">
+                    {selectedDispute.title || 'Admin Dispute Case'}
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-zinc-500">#{selectedDispute.dispute_id || selectedDispute._id?.slice(-8)}</span>
+                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${getStatusColor(selectedDispute.status, 'status', isDark)}`}>
+                      {selectedDispute.status}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-              <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-2`}>Description</p>
-              <p className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'} whitespace-pre-wrap`}>{selectedDispute.description || 'No description provided.'}</p>
+            {/* Info Grid: Minimalist 4-column */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {[
+                { label: 'Campaign', val: selectedDispute.campaign_id?._id || selectedDispute.deal_id?.campaignId?._id || selectedDispute.campaign_id || 'N/A', icon: Target },
+                { label: 'Dispute Type', val: (selectedDispute.dispute_type || 'unknown').replace(/_/g, ' '), icon: FileText },
+                { label: 'Priority', val: selectedDispute.priority || 'normal', icon: AlertCircle },
+                { label: 'Amount', val: selectedDispute.deal_id?.budget ? formatCurrency(selectedDispute.deal_id.budget) : 'N/A', icon: DollarSign }
+              ].map((item, i) => (
+                <div key={i} className={`p-2.5 rounded-lg border ${isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="flex items-center gap-1.5 mb-1 opacity-60">
+                    {item.icon && <item.icon className="w-3 h-3" />}
+                    <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
+                  </div>
+                  <p className="text-[11px] font-medium break-all leading-tight">{item.val}</p>
+                </div>
+              ))}
             </div>
 
-            {selectedDispute.amount && (
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-2`}>Amount</p>
-                <p className={`text-lg sm:text-xl font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{formatCurrency(selectedDispute.amount)}</p>
-              </div>
-            )}
+            {/* Content Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Description & Details */}
+              <div className="md:col-span-2 space-y-6">
+                <section>
+                  <h3 className="text-[10px] font-bold uppercase text-zinc-500 mb-2">Description</h3>
+                  <p className={`text-xs leading-relaxed p-3 rounded-lg border max-h-32 overflow-y-auto overflow-x-hidden scrollbar-hover break-words ${isDark ? 'bg-zinc-900/20 border-zinc-800 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-600'}`}>
+                    {selectedDispute.description || 'No description provided.'}
+                  </p>
+                </section>
 
-            <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-              <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-2`}>Created Date</p>
-              <p className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{formatDate(selectedDispute.createdAt)}</p>
-            </div>
+                <section>
+                  <h3 className="text-[10px] font-bold uppercase text-zinc-500 mb-2">Parties Involved</h3>
+                  <div className="space-y-2">
+                    <div className={`p-3 rounded-lg border ${isDark ? 'bg-zinc-900/20 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <User className="w-3 h-3 text-blue-500" />
+                        <span className="text-[9px] font-bold uppercase">Raised By</span>
+                      </div>
+                      <p className="text-xs font-medium">
+                        {selectedDispute.raised_by?.user_id?.fullName || selectedDispute.raised_by?.user_id?.email || 'Unknown User'}
+                      </p>
+                    </div>
+                    <div className={`p-3 rounded-lg border ${isDark ? 'bg-zinc-900/20 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Building2 className="w-3 h-3 text-orange-500" />
+                        <span className="text-[9px] font-bold uppercase">Against</span>
+                      </div>
+                      <p className="text-xs font-medium">
+                        {selectedDispute.raised_against?.user_id?.fullName || selectedDispute.raised_against?.user_id?.email || 'Unknown User'}
+                      </p>
+                    </div>
+                  </div>
+                </section>
 
-            {selectedDispute.updatedAt && (
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'} mb-2`}>Last Updated</p>
-                <p className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{formatDate(selectedDispute.updatedAt)}</p>
-              </div>
-            )}
-
-            {selectedDispute.resolution && (
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-green-900/30 border border-green-700/30' : 'bg-green-50 border border-green-200'}`}>
-                <p className={`text-sm font-semibold mb-1 ${isDark ? 'text-green-300' : 'text-green-700'}`}>Resolution</p>
-                <p className={`text-sm ${isDark ? 'text-green-400' : 'text-green-700'} capitalize`}>Type: {(selectedDispute.resolution.type || 'n/a').replace(/_/g, ' ')}</p>
-                {selectedDispute.resolution.amount > 0 && (
-                  <p className={`text-sm ${isDark ? 'text-green-400' : 'text-green-700'}`}>Amount: ${selectedDispute.resolution.amount}</p>
+                {/* Resolution Status */}
+                {selectedDispute.resolution && (
+                  <section>
+                    <h3 className="text-[10px] font-bold uppercase text-zinc-500 mb-2">Resolution</h3>
+                    <div className={`p-3 rounded-lg border ${isDark ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-200'}`}>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-[9px] font-bold uppercase">Type</span>
+                          <span className="text-xs font-medium">{(selectedDispute.resolution.type || 'n/a').replace(/_/g, ' ')}</span>
+                        </div>
+                        {selectedDispute.resolution.amount > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-[9px] font-bold uppercase">Amount</span>
+                            <span className="text-xs font-medium">${selectedDispute.resolution.amount}</span>
+                          </div>
+                        )}
+                        {selectedDispute.resolution.details && (
+                          <div>
+                            <span className="text-[9px] font-bold uppercase block mb-1">Details</span>
+                            <p className="text-xs">{selectedDispute.resolution.details}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </section>
                 )}
-                {selectedDispute.resolution.details && (
-                  <p className={`text-sm ${isDark ? 'text-green-400' : 'text-green-700'}`}>Details: {selectedDispute.resolution.details}</p>
+              </div>
+
+              {/* Sidebar: Metadata & Actions */}
+              <div className="space-y-4">
+                <div className={`p-3 rounded-xl border ${isDark ? 'bg-zinc-900/80 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-zinc-500">Created</span>
+                      <span className="font-medium">{timeAgo(selectedDispute.created_at)}</span>
+                    </div>
+                    {selectedDispute.updatedAt && (
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-zinc-500">Updated</span>
+                        <span className="font-medium">{timeAgo(selectedDispute.updatedAt)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Admin Actions */}
+                {selectedDispute.status !== 'resolved' && (
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      openResolve(selectedDispute);
+                    }}
+                    className={`w-full py-2.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all
+                      ${isDark 
+                        ? 'bg-green-600 text-white hover:bg-green-500' 
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                  >
+                    Resolve Dispute
+                  </button>
                 )}
               </div>
-            )}
+            </div>
+
+            {/* Footer: Simple & Fixed */}
+            <div className="flex items-center justify-between pt-4 mt-4 border-t border-zinc-800/50">
+              <button onClick={() => setShowDetailsModal(false)} className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-gray-800">
+                Close Case
+              </button>
+              <span className="text-[9px] text-zinc-500">
+                Admin View • Case Management
+              </span>
+            </div>
           </div>
         )}
       </Modal>

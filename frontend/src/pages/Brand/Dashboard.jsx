@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  TrendingUp, Users, DollarSign, Clock, Plus, ChevronRight, Calendar, Activity, Briefcase, CheckCircle,
-  User, Wallet, BarChart3, Loader, AlertCircle, Eye, Heart, MessageSquare, Share2, PieChart, Zap, RefreshCw,
-  Target, Award, Megaphone, Handshake, Bell, Settings, Search
+  TrendingUp, Users, DollarSign, Clock, Plus, ChevronRight, Calendar, Activity, Briefcase, CheckCircle,
+  User, Wallet, BarChart3, Loader, AlertCircle, PieChart, Zap, RefreshCw,
+  Target, Award, Megaphone, Handshake, Bell, Settings, Search
 } from 'lucide-react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart as RePieChart, Pie, Cell, BarChart, Bar
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart as RePieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
@@ -19,6 +19,7 @@ import { formatCurrency, formatNumber, timeAgo } from '../../utils/helpers';
 import StatsCard from '../../components/Common/StatsCard';
 import ChartCard from '../../components/Common/ChartCard';
 import Button from '../../components/UI/Button';
+import NotificationIcon from '../../components/Common/NotificationIcon';
 import toast from 'react-hot-toast';
 
 const BrandDashboard = () => {
@@ -26,8 +27,7 @@ const BrandDashboard = () => {
   const { theme, isDark } = useTheme();
     const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [error, setError] = useState(null);
+   const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [deals, setDeals] = useState([]);
@@ -194,28 +194,23 @@ const BrandDashboard = () => {
     followers: creator.creator?.followers || 0
   })) || [];
 
-  const engagementMetrics = [
-    { label: 'Impressions', value: formatNumber(analytics?.engagement?.impressions || 0), icon: Eye },
-    { label: 'Likes', value: formatNumber(analytics?.engagement?.likes || 0), icon: Heart },
-    { label: 'Comments', value: formatNumber(analytics?.engagement?.comments || 0), icon: MessageSquare },
-    { label: 'Shares', value: formatNumber(analytics?.engagement?.shares || 0), icon: Share2 },
-  ];
+  const engagementMetrics = [];
 
-  const summaryMetrics = [
-    { title: 'Total Campaigns', value: stats?.totalCampaigns || 0, icon: Megaphone },
-    { title: 'Active Campaigns', value: stats?.activeCampaigns || 0, icon: Target },
-    { title: 'Total Spent', value: formatCurrency(stats?.totalSpent || 0), icon: DollarSign },
-    { title: 'Avg ROI', value: `${(stats?.avgROI || 0).toFixed(1)}x`, icon: TrendingUp },
-    { title: 'Total Deals', value: stats?.totalDeals || 0, icon: Handshake },
-    { title: 'Completed Deals', value: stats?.completedDeals || 0, icon: Award },
-  ];
+  const summaryMetrics = [
+    { title: 'Total Campaigns', value: stats?.totalCampaigns || 0, icon: Megaphone },
+    { title: 'Active Campaigns', value: stats?.activeCampaigns || 0, icon: Target },
+    { title: 'Total Spent', value: formatCurrency(stats?.totalSpent || 0), icon: DollarSign },
+    { title: 'Avg ROI', value: `${(stats?.avgROI || 0).toFixed(1)}x`, icon: TrendingUp },
+    { title: 'Total Deals', value: stats?.totalDeals || 0, icon: Handshake },
+    { title: 'Completed Deals', value: stats?.completedDeals || 0, icon: Award },
+  ];
 
-  const metrics = [
-    { title: 'Total Campaigns', value: stats.totalCampaigns.toString(), change: `${stats.activeCampaigns} active`, icon: Megaphone },
-    { title: 'Active Deals', value: activeDealsList.length.toString(), change: `${completedDealsList.length} completed`, icon: Handshake },
-    { title: 'Total Spent', value: formatCurrency(stats.totalSpent), change: `Avg ROI: ${stats.avgROI.toFixed(1)}x`, icon: DollarSign },
-    { title: 'Available Balance', value: formatCurrency(balance), change: `${formatCurrency(pendingBalance)} pending`, icon: Wallet }
-  ];
+  const metrics = [
+    { title: 'Total Campaigns', value: stats.totalCampaigns.toString(), change: `${stats.activeCampaigns} active`, icon: Megaphone },
+    { title: 'Active Deals', value: activeDealsList.length.toString(), change: `${completedDealsList.length} completed`, icon: Handshake },
+    { title: 'Total Spent', value: formatCurrency(stats.totalSpent), change: `Avg ROI: ${stats.avgROI.toFixed(1)}x`, icon: DollarSign },
+    { title: 'Available Balance', value: formatCurrency(balance), change: `${formatCurrency(pendingBalance)} pending`, icon: Wallet }
+  ];
 
   if (loading && !refreshing) {
     return (
@@ -231,55 +226,37 @@ const BrandDashboard = () => {
   return (
     <div className={`min-h-screen`}>
       <div className="relative z-10 max-w-7xl mx-auto px-6 pt-8">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className={`text-3xl font-semibold tracking-tight ${isDark ? 'text-white' : 'text-black'}`}>
-              Brand <span className=" font-bold">Dashboard</span>
-            </h1>
-            <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-              Manage creator partnerships and track performance.
-            </p>
-          </div>
-          
-       <button
-  onClick={handleRefresh}
-  disabled={refreshing}
-  className={`p-2 rounded-lg border transition-all duration-300 ease-in-out active:scale-95 disabled:opacity-50 ${
-    isDark 
-      ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800' 
-      : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
-  }`}
->
-  <RefreshCw 
-    className={`w-4 h-4 transition-transform duration-500 ${
-      refreshing ? 'animate-spin' : 'group-hover:rotate-180'
-    }`} 
-  />
-</button>
-        </div>
+        <div className="flex justify-between items-center mb-6">
+         <div>
+           <h1 className={`text-3xl font-semibold tracking-tight ${isDark ? 'text-white' : 'text-black'}`}>
+             Brand <span className=" font-bold">Dashboard</span>
+           </h1>
+           <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+             Manage creator partnerships and track performance.
+           </p>
+         </div>
+         <div className="flex items-center gap-3">
+           <NotificationIcon />
+           <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className={`p-2 rounded-lg border transition-all duration-300 ease-in-out active:scale-95 disabled:opacity-50 ${
+              isDark 
+                ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800' 
+                : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
+            }`}
+          >
+            <RefreshCw 
+              className={`w-4 h-4 transition-transform duration-500 ${
+                refreshing ? 'animate-spin' : 'group-hover:rotate-180'
+              }`} 
+            />
+          </button>
+         </div>
+       </div>
 
-        {/* Tab Navigation - Smaller height */}
-        <div className="flex gap-1 mb-8 p-1 bg-zinc-100 dark:bg-zinc-900 w-fit rounded-lg">
-          {['overview', 'analytics'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
-                activeTab === tab
-                  ? 'bg-white dark:bg-black text-black dark:text-white shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
-              }`}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-6">
-          {activeTab === 'overview' && (
-            <>
-              
-              {/* Stats Cards - Compact Version */}
+        <div className="space-y-6">
+          {/* Stats Cards - Compact Version */}
            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
   {metrics.map((metric, idx) => (
     <div 
@@ -532,190 +509,6 @@ const BrandDashboard = () => {
     </div>
   </div>
 )}
-            </>
-          )}
-
-          {activeTab === 'analytics' && (
-            <div className="space-y-6 animate-in fade-in duration-500">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                {summaryMetrics.map((metric, idx) => (
-                 <div 
-  key={idx} 
-  className={`
-    group relative p-4 rounded-2xl border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
-    cursor-default hover:scale-[1.05]
-    ${isDark 
-      ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-500 hover:shadow-[0_15px_30px_rgba(0,0,0,0.4)]' 
-      : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_15px_30px_rgba(0,0,0,0.04)]'}
-  `}
->
-  {/* The Metric Title - Higher Tracking for "Monitor" vibe */}
-  <p className={`
-    text-[9px] font-black uppercase tracking-[0.2em] mb-1 transition-colors duration-500
-    ${isDark ? 'text-zinc-600 group-hover:text-zinc-400' : 'text-zinc-400 group-hover:text-zinc-600'}
-  `}>
-    {metric.title}
-  </p>
-  
-  {/* The Value - Mono font for precision */}
-  <p className={`
-    text-lg font-mono font-bold tracking-tighter transition-all duration-500
-    ${isDark ? 'text-white' : 'text-black'}
-  `}>
-    {metric.value}
-  </p>
-
-  {/* Hidden Interaction Indicator (A small dot that appears on hover) */}
-  <div className={`
-    absolute top-3 right-3 w-1 h-1 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500
-    ${isDark ? 'bg-white shadow-[0_0_8px_white]' : 'bg-black shadow-[0_0_8px_black]'}
-  `} />
-</div>
-                ))}
-              </div>
-
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-       {/* Engagement Breakdown Card */}
-     <div className={`
-  group relative p-8 rounded-[2.5rem] border transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
-  ${isDark 
-    ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-700 hover:shadow-[0_30px_60px_rgba(0,0,0,0.5)]' 
-    : 'bg-white border-zinc-100 hover:border-zinc-200 hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)]'}
-`}>
-  {/* Header with Meta Info */}
-  <div className="flex justify-between items-start mb-8">
-    <h3 className={`
-      text-[11px] font-black uppercase tracking-[0.2em] transition-colors
-      ${isDark ? 'text-zinc-500 group-hover:text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-900'}
-    `}>
-      Engagement Breakdown
-    </h3>
-    <div className={`
-      px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity duration-500
-      ${isDark ? 'bg-white text-black' : 'bg-black text-white'}
-    `}>
-      Live Metrics
-    </div>
-  </div>
-
-  <div className="h-[240px] w-full group-hover:translate-x-1 transition-transform duration-700">
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart 
-        data={engagementMetrics} 
-        layout="vertical"
-        margin={{ left: -20, right: 20 }}
-      >
-        <XAxis type="number" hide />
-        <YAxis 
-          dataKey="label" 
-          type="category" 
-          axisLine={false} 
-          tickLine={false} 
-          width={100} 
-          tick={{
-            fill: isDark ? '#52525b' : '#a1a1aa', 
-            fontSize: 9, 
-            fontWeight: 800,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em'
-          }} 
-        />
-        <Tooltip 
-          cursor={{fill: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'}} 
-          contentStyle={{ 
-            backgroundColor: isDark ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)', 
-            border: isDark ? '1px solid rgba(63, 63, 70, 0.4)' : '1px solid rgba(228, 228, 231, 0.4)',
-            borderRadius: '12px',
-            fontSize: '10px',
-            fontWeight: '900',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            backdropFilter: 'blur(12px)',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
-            padding: '10px 14px'
-          }}
-          itemStyle={{ color: isDark ? '#fff' : '#000' }}
-        />
-        <Bar 
-          dataKey="value" 
-          fill={isDark ? "#ffffff" : "#000000"} 
-          radius={[0, 10, 10, 0]} 
-          barSize={12}
-          animationBegin={200}
-          animationDuration={1200}
-          animationEasing="ease-out"
-        >
-          {/* Subtle Glow effect on bars for Dark Mode */}
-          {isDark && engagementMetrics.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill="url(#barGradient)" />
-          ))}
-        </Bar>
-        
-        {/* SVG Definition for Gradient (Optional but adds depth) */}
-        <defs>
-          <linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#71717a" />
-            <stop offset="100%" stopColor="#ffffff" />
-          </linearGradient>
-        </defs>
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-  
-  {/* Footer Detail */}
-  <div className={`mt-4 pt-4 border-t border-inherit flex items-center justify-between opacity-40`}>
-    <span className="text-[9px] font-black uppercase tracking-widest">Aggregate Score</span>
-    <span className="text-[12px] font-mono font-bold">8.42</span>
-  </div>
-</div>
-       
-       {/* Small Metric Grid */}
-<div className="grid grid-cols-2 gap-4">
-  {engagementMetrics.map((metric, idx) => (
-    <div 
-      key={idx} 
-      className={`
-        group relative p-6 rounded-[2rem] border transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
-        cursor-default hover:scale-[1.03]
-        ${isDark 
-          ? 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-900 hover:border-zinc-500 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)]' 
-          : 'bg-white border-zinc-100 hover:border-zinc-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)]'}
-      `}
-    >
-      {/* Icon with Floating Animation */}
-      <div className={`
-        mb-4 transition-all duration-500 transform group-hover:-translate-y-1
-        ${isDark ? 'text-zinc-500 group-hover:text-white' : 'text-zinc-400 group-hover:text-black'}
-      `}>
-        <metric.icon className="w-5 h-5 stroke-[1.5px]" />
-      </div>
-
-      <div className="relative z-10">
-        <p className={`
-          text-2xl font-mono font-bold tracking-tighter transition-all duration-500
-          ${isDark ? 'text-white' : 'text-black'}
-        `}>
-          {metric.value}
-        </p>
-        
-        <p className={`
-          text-[10px] font-black uppercase tracking-[0.15em] mt-1 transition-colors duration-500
-          ${isDark ? 'text-zinc-600 group-hover:text-zinc-400' : 'text-zinc-400 group-hover:text-zinc-600'}
-        `}>
-          {metric.label}
-        </p>
-      </div>
-
-      {/* Background Glow (Dark Mode Only) */}
-      {isDark && (
-        <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-white/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-      )}
-    </div>
-  ))}
-</div>
-    </div>
-            </div>
-          )}
         </div>
         
         {/* Floating Alert - Smaller */}

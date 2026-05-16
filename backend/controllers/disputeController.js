@@ -18,7 +18,8 @@ const createDispute = asyncHandler(async (req, res) => {
     title,
     reason,
     description,
-    evidence
+    evidence,
+    priority
   } = req.body;
 
   const normalizedDealId = dealId || deal_id;
@@ -94,7 +95,7 @@ const createDispute = asyncHandler(async (req, res) => {
     description,
     evidence: processedEvidence,
     status: 'open',
-    priority: 'medium',
+    priority: priority || 'medium',
     timeline: [{
       action: 'created',
       description: 'Dispute created',
@@ -174,8 +175,8 @@ const uploadEvidence = asyncHandler(async (req, res) => {
   }
 
   // Check if user is part of the dispute
-  if (dispute.raisedBy.userId.toString() !== req.user._id.toString() &&
-      dispute.against.userId.toString() !== req.user._id.toString() &&
+  if (dispute.raised_by.user_id.toString() !== req.user._id.toString() &&
+      dispute.raised_against.user_id.toString() !== req.user._id.toString() &&
       req.user.userType !== 'admin') {
     res.status(403);
     throw new Error('Not authorized');
@@ -228,11 +229,28 @@ const getDisputes = asyncHandler(async (req, res) => {
 
   const [disputes, total] = await Promise.all([
     Dispute.find(query)
-      .populate('raisedBy.userId', 'fullName email userType')
-      .populate('against.userId', 'fullName email userType')
-      .populate('dealId')
-      .populate('assignedTo', 'fullName email')
-      .sort({ createdAt: -1 })
+      .populate('raised_by.user_id', 'fullName email userType')
+      .populate('raised_against.user_id', 'fullName email userType')
+      .populate({
+        path: 'deal_id',
+        populate: [
+          {
+            path: 'campaignId',
+            select: 'title'
+          },
+          {
+            path: 'brandId',
+            select: 'brandName logo fullName'
+          },
+          {
+            path: 'creatorId',
+            select: 'displayName handle profilePicture fullName'
+          }
+        ]
+      })
+      .populate('campaign_id', 'title')
+      .populate('assigned_admin', 'fullName email')
+      .sort({ created_at: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .lean(),
@@ -254,14 +272,31 @@ const getDisputes = asyncHandler(async (req, res) => {
 const getUserDisputes = asyncHandler(async (req, res) => {
   const disputes = await Dispute.find({
     $or: [
-      { 'raisedBy.userId': req.user._id },
-      { 'against.userId': req.user._id }
+      { 'raised_by.user_id': req.user._id },
+      { 'raised_against.user_id': req.user._id }
     ]
   })
-    .populate('raisedBy.userId', 'fullName')
-    .populate('against.userId', 'fullName')
-    .populate('dealId')
-    .sort({ createdAt: -1 });
+    .populate('raised_by.user_id', 'fullName email userType')
+    .populate('raised_against.user_id', 'fullName email userType')
+    .populate({
+      path: 'deal_id',
+      populate: [
+        {
+          path: 'campaignId',
+          select: 'title'
+        },
+        {
+          path: 'brandId',
+          select: 'brandName logo fullName'
+        },
+        {
+          path: 'creatorId',
+          select: 'displayName handle profilePicture fullName'
+        }
+      ]
+    })
+    .populate('campaign_id', 'title')
+    .sort({ created_at: -1 });
 
   res.json({
     success: true,
@@ -274,11 +309,27 @@ const getUserDisputes = asyncHandler(async (req, res) => {
 // @access  Private
 const getDispute = asyncHandler(async (req, res) => {
   const dispute = await Dispute.findById(req.params.id)
-    .populate('raisedBy.userId', 'fullName email profilePicture userType')
-    .populate('against.userId', 'fullName email profilePicture userType')
-    .populate('dealId')
-    .populate('assignedTo', 'fullName email')
-    .populate('messages.from', 'fullName profilePicture');
+    .populate('raised_by.user_id', 'fullName email profilePicture userType')
+    .populate('raised_against.user_id', 'fullName email profilePicture userType')
+    .populate({
+      path: 'deal_id',
+      populate: [
+        {
+          path: 'campaignId',
+          select: 'title'
+        },
+        {
+          path: 'brandId',
+          select: 'brandName logo fullName'
+        },
+        {
+          path: 'creatorId',
+          select: 'displayName handle profilePicture fullName'
+        }
+      ]
+    })
+    .populate('assigned_admin', 'fullName email')
+    .populate('messages.sender_id', 'fullName profilePicture');
 
   if (!dispute) {
     res.status(404);
@@ -286,8 +337,8 @@ const getDispute = asyncHandler(async (req, res) => {
   }
 
   // Check authorization
-  if (dispute.raisedBy.userId._id.toString() !== req.user._id.toString() &&
-      dispute.against.userId._id.toString() !== req.user._id.toString() &&
+  if (dispute.raised_by.user_id._id.toString() !== req.user._id.toString() &&
+      dispute.raised_against.user_id._id.toString() !== req.user._id.toString() &&
       req.user.userType !== 'admin') {
     res.status(403);
     throw new Error('Not authorized');
@@ -318,8 +369,8 @@ const addMessage = asyncHandler(async (req, res) => {
   }
 
   // Check authorization
-  if (dispute.raisedBy.userId.toString() !== req.user._id.toString() &&
-      dispute.against.userId.toString() !== req.user._id.toString() &&
+  if (dispute.raised_by.user_id.toString() !== req.user._id.toString() &&
+      dispute.raised_against.user_id.toString() !== req.user._id.toString() &&
       req.user.userType !== 'admin') {
     res.status(403);
     throw new Error('Not authorized');
@@ -341,20 +392,21 @@ const addMessage = asyncHandler(async (req, res) => {
   }
 
   dispute.messages.push({
-    from: req.user._id,
-    content,
+    sender_id: req.user._id,
+    sender_type: req.user.userType,
+    message: content,
     attachments: processedAttachments,
     isInternal: isInternal || false,
-    createdAt: new Date()
+    created_at: new Date()
   });
 
   await dispute.save();
 
   // Notify other party (if not internal)
   if (!isInternal) {
-    const notifyUserId = req.user._id.toString() === dispute.raisedBy.userId.toString()
-      ? dispute.against.userId
-      : dispute.raisedBy.userId;
+    const notifyUserId = req.user._id.toString() === dispute.raised_by.user_id.toString()
+      ? dispute.raised_against.user_id
+      : dispute.raised_by.user_id;
 
     await Notification.create({
       userId: notifyUserId,
@@ -384,7 +436,7 @@ const addMessage = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: 'Message added',
+    message: dispute.messages[dispute.messages.length - 1], // Return the newly added message
     dispute
   });
 });
@@ -412,10 +464,11 @@ const updateStatus = asyncHandler(async (req, res) => {
   
   if (notes) {
     dispute.messages.push({
-      from: req.user._id,
-      content: notes,
+      sender_id: req.user._id,
+      sender_type: req.user.userType,
+      message: notes,
       isInternal: false,
-      createdAt: new Date()
+      created_at: new Date()
     });
   }
 
@@ -427,7 +480,7 @@ const updateStatus = asyncHandler(async (req, res) => {
   await dispute.save();
 
   // Notify both parties
-  const parties = [dispute.raisedBy.userId, dispute.against.userId];
+  const parties = [dispute.raised_by.user_id, dispute.raised_against.user_id];
   for (const userId of parties) {
     await Notification.create({
       userId,
@@ -479,7 +532,7 @@ const proposeResolution = asyncHandler(async (req, res) => {
   await dispute.save();
 
   // Notify both parties
-  const parties = [dispute.raisedBy.userId, dispute.against.userId];
+  const parties = [dispute.raised_by.user_id, dispute.raised_against.user_id];
   for (const userId of parties) {
     await Notification.create({
       userId,
@@ -518,8 +571,8 @@ const acceptResolution = asyncHandler(async (req, res) => {
   }
 
   // Check if user is part of dispute
-  if (dispute.raisedBy.userId.toString() !== req.user._id.toString() &&
-      dispute.against.userId.toString() !== req.user._id.toString()) {
+  if (dispute.raised_by.user_id.toString() !== req.user._id.toString() &&
+      dispute.raised_against.user_id.toString() !== req.user._id.toString()) {
     res.status(403);
     throw new Error('Not authorized');
   }
@@ -534,8 +587,8 @@ const acceptResolution = asyncHandler(async (req, res) => {
 
   // Check if both parties accepted
   const bothAccepted = 
-    dispute.proposedResolution.acceptedBy.includes(dispute.raisedBy.userId) &&
-    dispute.proposedResolution.acceptedBy.includes(dispute.against.userId);
+    dispute.proposedResolution.acceptedBy.includes(dispute.raised_by.user_id) &&
+    dispute.proposedResolution.acceptedBy.includes(dispute.raised_against.user_id);
 
   if (bothAccepted) {
     dispute.status = 'resolved';
@@ -590,8 +643,8 @@ const rejectResolution = asyncHandler(async (req, res) => {
   }
 
   // Check if user is part of dispute
-  if (dispute.raisedBy.userId.toString() !== req.user._id.toString() &&
-      dispute.against.userId.toString() !== req.user._id.toString()) {
+  if (dispute.raised_by.user_id.toString() !== req.user._id.toString() &&
+      dispute.raised_against.user_id.toString() !== req.user._id.toString()) {
     res.status(403);
     throw new Error('Not authorized');
   }
@@ -600,10 +653,11 @@ const rejectResolution = asyncHandler(async (req, res) => {
   
   // Add message about rejection
   dispute.messages.push({
-    from: req.user._id,
-    content: reason || 'Resolution rejected',
+    sender_id: req.user._id,
+    sender_type: req.user.userType,
+    message: reason || 'Resolution rejected',
     isInternal: false,
-    createdAt: new Date()
+    created_at: new Date()
   });
 
   await dispute.save();

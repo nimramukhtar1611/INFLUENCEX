@@ -445,6 +445,7 @@ const fetchDeal = useCallback(async (id) => {
     loading,
     deals,
     currentDeal,
+    setCurrentDeal,
     pagination,
     counts,
     validTransitions,

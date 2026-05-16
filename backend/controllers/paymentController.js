@@ -17,7 +17,7 @@ const CREATOR_WITHDRAWAL_STATUSES = ['pending', 'processing', 'completed'];
 const CREATOR_EXCLUDED_EARNING_TYPES = ['withdrawal', 'refund', 'fee', 'penalty'];
 
 const getFrontendBaseUrl = () => {
-  return 'http://13.61.13.2:5173'; 
+  return process.env.FRONTEND_URL || 'http://localhost:5173'; 
 };
 
 const getEffectiveBrandId = (req) => req.brandId || req.user?._id;
@@ -931,8 +931,11 @@ exports.createPayoutOnboardingLink = catchAsync(async (req, res) => {
     : getCreatorWithdrawalsPath();
 
   const frontendBaseUrl = getFrontendBaseUrl();
-  const returnUrl = `${frontendBaseUrl}${returnPath}?stripe_connect=return`;
-  const refreshUrl = `${frontendBaseUrl}${returnPath}?stripe_connect=refresh`;
+  // Ensure no double slashes in URL construction
+  const baseUrl = frontendBaseUrl.endsWith('/') ? frontendBaseUrl.slice(0, -1) : frontendBaseUrl;
+  const cleanReturnPath = returnPath.startsWith('/') ? returnPath : '/' + returnPath;
+  const returnUrl = `${baseUrl}${cleanReturnPath}?stripe_connect=return`;
+  const refreshUrl = `${baseUrl}${cleanReturnPath}?stripe_connect=refresh`;
 
   const accountLink = await stripe.accountLinks.create({
     account: stripeAccountId,
@@ -1195,8 +1198,11 @@ exports.createDepositCheckoutSession = catchAsync(async (req, res) => {
 
   const frontendBaseUrl = getFrontendBaseUrl();
   const paymentsPath = getPaymentsPathByUserType(req.user.userType);
-  const successUrl = `${frontendBaseUrl}${paymentsPath}?deposit=success&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${frontendBaseUrl}${paymentsPath}?deposit=cancel`;
+  // Ensure no double slashes in URL construction
+  const baseUrl = frontendBaseUrl.endsWith('/') ? frontendBaseUrl.slice(0, -1) : frontendBaseUrl;
+  const cleanPath = paymentsPath.startsWith('/') ? paymentsPath : '/' + paymentsPath;
+  const successUrl = `${baseUrl}${cleanPath}?deposit=success&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${baseUrl}${cleanPath}?deposit=cancel`;
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',

@@ -23,6 +23,7 @@ import {
   Loader,
   RefreshCw,
   XCircle,
+  X,
   Activity,
   Image as ImageIcon,
   Video,
@@ -44,6 +45,7 @@ import Modal from '../../components/Common/Modal';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
+import { useDeal } from '../../hooks/useDeal';
 import { useSocket } from '../../context/SocketContext';
 import EmojiPicker from 'emoji-picker-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,6 +58,15 @@ const normalizeConversationId = (value) => {
     if (typeof value.id === 'string') return value.id;
   }
   return String(value);
+};
+
+// Helper function to construct proper asset URLs
+const getAssetUrl = (path) => {
+  if (!path) return '';
+  const baseUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+  // Remove leading slash from path if present to avoid double slash
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  return `${baseUrl}/${cleanPath}`;
 };
 
 const getMessageConversationId = (message) => normalizeConversationId(message?.conversationId);
@@ -74,6 +85,18 @@ const DealDetails = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const { socket, joinConversation, leaveConversation, sendMessage: sendSocketMessage, markAsRead, addReaction, deleteMessage } = useSocket();
+  const {
+    loading: dealLoading,
+    fetchDeal,
+    updateDealStatus,
+    counterOffer,
+    requestRevision,
+    approveDeliverable,
+    rateDeal,
+    submitDeliverables,
+    getDealMessages,
+    sendMessage
+  } = useDeal();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -108,9 +131,11 @@ const DealDetails = () => {
   const [acceptingDeal, setAcceptingDeal] = useState(false);
   const [rejectingDeal, setRejectingDeal] = useState(false);
   const [cancellingDeal, setCancellingDeal] = useState(false);
+  const [showAssetPreview, setShowAssetPreview] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
 
   useEffect(() => {
-    fetchDeal();
+    loadDealData();
   }, [id]);
 
   useEffect(() => {
@@ -237,7 +262,7 @@ const DealDetails = () => {
     };
   }, [socket, conversationId, user]);
 
-  const fetchDeal = async (showToast = false) => {
+  const loadDealData = async (showToast = false) => {
     try {
       if (showToast) setRefreshing(true);
       else setLoading(true);
@@ -308,7 +333,7 @@ const DealDetails = () => {
 
   const fetchMessages = async () => {
     try {
-      const response = await dealService.getDealMessages(id);
+      const response = await getDealMessages(id);
       if (response?.success) {
         setMessages(response.messages || []);
       }
@@ -365,7 +390,7 @@ const DealDetails = () => {
       });
 
       if (!socketSent) {
-        const sentMessage = await dealService.sendMessage(id, content, uploadedAttachments);
+        const sentMessage = await sendMessage(id, content, uploadedAttachments);
         if (!sentMessage) {
           throw new Error('Failed to send message');
         }
@@ -377,7 +402,7 @@ const DealDetails = () => {
           return [...prev, sentMessage];
         });
 
-        await fetchDeal();
+        await loadDealData();
       }
 
       setMessageInput('');
@@ -455,7 +480,7 @@ const DealDetails = () => {
           }
         setShowCounterModal(false);
         setCounterData({ budget: '', deadline: '', message: '' });
-        await fetchDeal();
+        await loadDealData();
       } else {
         toast.error(response?.error || 'Failed to send counter offer');
       }
@@ -478,7 +503,7 @@ const DealDetails = () => {
           toast.success(response?.message || 'AI Counter Dealing started and counter sent');
         }
         setShowCounterModal(false);
-        await fetchDeal();
+        await loadDealData();
       } else {
         toast.error(response?.error || 'Failed to start AI counter dealing');
       }
@@ -489,13 +514,28 @@ const DealDetails = () => {
     }
   };
 
+  const handleAssetPreview = (file) => {
+    setSelectedAsset(file);
+    setShowAssetPreview(true);
+  };
+
+  const handleAssetDownload = (file) => {
+    const link = document.createElement('a');
+    link.href = getAssetUrl(file.url);
+    link.download = file.filename || 'download';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleAccept = async () => {
     try {
       setAcceptingDeal(true);
       const response = await dealService.acceptDeal(id);
       if (response?.success) {
         toast.success('Deal accepted successfully! You can now start working on deliverables.');
-        await fetchDeal();
+        await loadDealData();
       } else {
         const errorMsg = response?.error || 'Failed to accept deal';
         toast.error(errorMsg);
@@ -517,7 +557,7 @@ const DealDetails = () => {
       const response = await dealService.cancelDeal(id, 'Cancelled by creator');
       if (response?.success) {
         toast.success('Deal cancelled successfully');
-        await fetchDeal();
+        await loadDealData();
       } else {
         const errorMsg = response?.error || 'Failed to cancel deal';
         toast.error(`Unable to cancel deal: ${errorMsg}`);
@@ -539,7 +579,7 @@ const DealDetails = () => {
       const response = await dealService.updateDealStatus(id, 'rejected', reason);
       if (response?.success) {
         toast.success('Deal rejected successfully');
-        await fetchDeal();
+        await loadDealData();
       } else {
         const errorMsg = response?.error || 'Failed to reject deal';
         toast.error(`Unable to reject deal: ${errorMsg}`);
@@ -559,7 +599,7 @@ const DealDetails = () => {
       const response = await dealService.updateDealStatus(id, 'accepted', 'Counter offer accepted');
       if (response?.success) {
         toast.success('Counter offer accepted successfully');
-        await fetchDeal();
+        await loadDealData();
       } else {
         const errorMsg = response?.error || 'Failed to accept counter offer';
         toast.error(`Unable to accept counter offer: ${errorMsg}`);
@@ -653,7 +693,7 @@ const DealDetails = () => {
     }
   };
 
-  if (loading) {
+  if (dealLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -1314,7 +1354,7 @@ const DealDetails = () => {
                     {del.files?.slice(0, 3).map((file, i) => (
                       <div key={i} className={`h-8 w-8 rounded-lg border-2 ${isDark ? 'border-zinc-900 bg-zinc-800' : 'border-white bg-zinc-100'} overflow-hidden`}>
                         {file.type === 'image' ? (
-                          <img src={file.url} className="h-full w-full object-cover" />
+                          <img src={getAssetUrl(file.url)} className="h-full w-full object-cover" />
                         ) : (
                           <div className="h-full w-full flex items-center justify-center"><FileText className="w-3 h-3 text-zinc-500" /></div>
                         )}
@@ -1361,10 +1401,13 @@ const DealDetails = () => {
               {del.status === 'revision' && (
                 <div className="mt-4 pt-4 border-t border-dashed border-zinc-200 dark:border-zinc-800">
                   <Button 
-                    variant="primary" 
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => navigate(`/creator/deliverables/${deal._id}`)}
+variant='secondry'                    size="sm"
+className="px-6 py-2.5 text-sm font-semibold text-white transition-all duration-300 
+               bg-black border-2 border-black rounded-lg shadow-sm
+                hover:shadow-xl hover:-translate-y-1
+               active:scale-95 active:translate-y-0
+               focus:ring-2 focus:ring-black focus:ring-offset-2"
+                                   onClick={() => navigate(`/creator/deliverables/${deal._id}`)}
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     Submit Revised Asset
@@ -1445,21 +1488,29 @@ const DealDetails = () => {
                     </div>
                   )}
 
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap message-content">{msg.content}</p>
 
                   {/* Attachments */}
                   {msg.attachments?.length > 0 && (
                     <div className="mt-3 space-y-1">
                       {msg.attachments.map((file, i) => (
-                        <a key={i} href={file.url} target="_blank" rel="noopener noreferrer"
-                          className={`flex items-center gap-2 p-2 rounded-lg text-xs transition-colors ${
+                        <div
+                          key={i}
+                          onClick={() => file.type === 'image' || file.type === 'video' ? handleAssetPreview(file) : handleAssetDownload(file)}
+                          className={`flex items-center gap-2 p-2 rounded-lg text-xs transition-colors cursor-pointer ${
                             isOwn ? 'bg-white/10 hover:bg-white/20' : 'bg-zinc-100 hover:bg-zinc-200'
                           }`}
                         >
-                          <FileText className="w-3.5 h-3.5 text-black " />
+                          {file.type === 'image' ? (
+                            <ImageIcon className="w-3.5 h-3.5 text-black" />
+                          ) : file.type === 'video' ? (
+                            <Video className="w-3.5 h-3.5 text-black" />
+                          ) : (
+                            <FileText className="w-3.5 h-3.5 text-black" />
+                          )}
                           <span className="flex-1 truncate text-black">{file.filename}</span>
                           <Download className="w-3.5 h-3.5 text-black" />
-                        </a>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1494,6 +1545,24 @@ const DealDetails = () => {
             <button onClick={() => setReplyingTo(null)} className="text-[#667eea]"><X className="w-3 h-3" /></button>
           </div>
         )}
+        
+        {attachments.length > 0 && (
+          <div className="mx-2 mb-2 flex flex-wrap gap-2">
+            {attachments.map((f, i) => (
+              <div key={i} className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-700'
+              }`}>
+                <FileText className="w-3 h-3" />
+                <span className="truncate max-w-[100px]">{f.name}</span>
+                <button onClick={() => removeAttachment(i)} className={`flex-shrink-0 ${
+                  isDark ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-700'
+                }`}>
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <textarea
           rows="1"
@@ -1509,16 +1578,7 @@ const DealDetails = () => {
           }}
         />
 
-        <div className="flex items-center justify-between px-2 pt-1 border-t border-zinc-800/50 mt-1">
-          <div className="flex items-center gap-1">
-            <label className="p-2 hover:bg-zinc-800 rounded-lg cursor-pointer transition-colors group">
-              <input type="file" multiple onChange={handleFileUpload} className="hidden" />
-              <Paperclip className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300" />
-            </label>
-            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors group">
-              <Smile className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300" />
-            </button>
-          </div>
+        <div className="flex items-center justify-end px-2 pt-1 border-t border-zinc-800/50 mt-1">
 
           <button
             onClick={handleSendMessage}
@@ -1531,6 +1591,11 @@ const DealDetails = () => {
         </div>
       </div>
     </div>
+    {showEmojiPicker && (
+      <div className="absolute bottom-20 right-4 z-50">
+        <EmojiPicker onEmojiClick={(e) => { setMessageInput(prev => prev + e.emoji); setShowEmojiPicker(false); }} />
+      </div>
+    )}
   </div>
 )}
 
@@ -1801,6 +1866,62 @@ const DealDetails = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Asset Preview Modal */}
+      <Modal 
+        isOpen={showAssetPreview} 
+        onClose={() => setShowAssetPreview(false)} 
+        size="full"
+        showCloseButton={true}
+        className="p-0"
+        contentClassName="overflow-hidden"
+      >
+        {selectedAsset && (
+          <div className="relative w-full h-full flex items-center justify-center bg-black">
+            {selectedAsset.type === 'image' ? (
+              <img 
+                src={getAssetUrl(selectedAsset.url)} 
+                alt={selectedAsset.filename || 'Asset preview'} 
+                className="max-w-full max-h-full object-contain"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM6Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyNkMxOC4yIDI2IDE2LjggMjQuNiAxNi44IDIyLjhDMTYuOCAyMSAyMiAyMSAyMiAyMUMyMiAyMSAyMS4yIDIxIDIxLjIgMjIuOEMyMS4yIDI0LjYgMTkuOCAyNiAyMCAyNloiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iMyIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
+                }}
+              />
+            ) : selectedAsset.type === 'video' ? (
+              <video 
+                src={getAssetUrl(selectedAsset.url)} 
+                controls 
+                autoPlay
+                className="max-w-full max-h-full object-contain"
+              >
+                Your browser does not support video tag.
+              </video>
+            ) : null}
+            
+            {/* Asset Info Overlay */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-semibold text-lg truncate">
+                    {selectedAsset.filename || 'Asset'}
+                  </h3>
+                  <p className="text-gray-300 text-sm">
+                    {selectedAsset.type} • {selectedAsset.size ? `${(selectedAsset.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleAssetDownload(selectedAsset)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

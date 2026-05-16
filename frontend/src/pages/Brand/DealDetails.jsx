@@ -6,16 +6,17 @@ import { useTheme } from '../../hooks/useTheme';
 import { useDeal } from '../../hooks/useDeal';
 import { useSocket } from '../../context/SocketContext';
 import { useFees } from '../../context/FeeContext';
+import { motion } from "framer-motion";
 import brandService from '../../services/brandService';
 import dealService from '../../services/dealService';
 import {
   ArrowLeft,
   User,
   Calendar,
+  CheckCircle,
   DollarSign,
   FileText,
   MessageSquare,
-  CheckCircle,
   Clock,
   AlertCircle,
   Download,
@@ -61,6 +62,15 @@ const normalizeConversationId = (value) => {
   return String(value);
 };
 
+// Helper function to construct proper asset URLs
+const getAssetUrl = (path) => {
+  if (!path) return '';
+  const baseUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+  // Remove leading slash from path if present to avoid double slash
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  return `${baseUrl}/${cleanPath}`;
+};
+
 const getMessageConversationId = (message) => normalizeConversationId(message?.conversationId);
 
 const DealDetails = () => {
@@ -81,6 +91,7 @@ const DealDetails = () => {
   const { socket, joinConversation, leaveConversation, sendMessage: sendSocketMessage, markAsRead, addReaction, deleteMessage } = useSocket();
   const {
     currentDeal: deal,
+    setCurrentDeal,
     loading,
     fetchDeal,
     updateDealStatus,
@@ -107,6 +118,8 @@ const DealDetails = () => {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [showCounterModal, setShowCounterModal] = useState(false);
   const [selectedDeliverable, setSelectedDeliverable] = useState(null);
+  const [showAssetPreview, setShowAssetPreview] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
   const [revisionNotes, setRevisionNotes] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [counterData, setCounterData] = useState({ budget: '', deadline: '', message: '' });
@@ -418,6 +431,21 @@ const DealDetails = () => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleAssetPreview = (file) => {
+    setSelectedAsset(file);
+    setShowAssetPreview(true);
+  };
+
+  const handleAssetDownload = (file) => {
+    const link = document.createElement('a');
+    link.href = getAssetUrl(file.url);
+    link.download = file.filename || 'download';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleApproveDeliverable = async () => {
     try {
       if (selectedDeliverable) {
@@ -558,16 +586,44 @@ const DealDetails = () => {
 
   const handleRateDeal = async () => {
     try {
-      const result = await rateDeal(id, ratingScore, ratingReview);
+      // Optimistic UI update - update deal immediately
+      setCurrentDeal(prev => ({
+        ...prev,
+        rating: {
+          score: ratingScore,
+          review: ratingReview,
+          from: user._id,
+          createdAt: new Date()
+        }
+      }));
+
+      // Show success toast immediately
+      toast.success('Rating submitted successfully!');
+
+      // Close modal
+      setShowRatingModal(false);
+
+      // Call API in background
+      const result = await rateDeal(id, ratingScore, ratingReview, {});
+      
       if (!result?.success) {
-        toast.error(result?.error || 'Failed to rate deal');
+        // Revert optimistic update on failure
+        setCurrentDeal(prev => ({
+          ...prev,
+          rating: null
+        }));
+        toast.error(result?.error || 'Failed to save rating');
         return;
       }
 
-      toast.success('Deal rated');
-      setShowRatingModal(false);
-      loadDeal();
+      // Refresh deal data to get the latest state
+      await loadDeal();
     } catch (error) {
+      // Revert optimistic update on error
+      setCurrentDeal(prev => ({
+        ...prev,
+        rating: null
+      }));
       toast.error('Failed to rate deal');
     }
   };
@@ -1084,10 +1140,7 @@ const DealDetails = () => {
             </div>
             <div className="min-w-0">
               <h3 className={`font-bold text-sm truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{isBrand ? otherParty?.displayName : otherParty?.brandName}</h3>
-              <div className="flex items-center gap-2">
-                <Star className="w-3 h-3 text-amber-400 fill-current" />
-                <span className="text-[11px] font-bold text-zinc-500">{otherParty?.stats?.averageRating?.toFixed(1) ?? '0'}</span>
-              </div>
+              
             </div>
           </div>
           <Link 
@@ -1136,6 +1189,29 @@ const DealDetails = () => {
             >
               Accept Counter Offer
             </Button>
+          )}
+
+          {/* Rating Button - Only shows for completed deals */}
+          {deal.status === 'completed' && !deal.rating?.from && (
+            <Button 
+              variant="primary" 
+              fullWidth 
+              icon={Star} 
+              onClick={() => setShowRatingModal(true)}
+              disabled={loading}
+              className="rounded-xl h-10 text-[10px] font-black uppercase tracking-widest mb-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-none"
+            >
+              Rate Creator
+            </Button>
+          )}
+
+          {/* Show existing rating if already rated */}
+          {deal.status === 'completed' && deal.rating?.from && (
+            <div className={`mb-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${
+              isDark ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300' : 'border-yellow-200 bg-yellow-50 text-yellow-700'
+            }`}>
+              Rated: {deal.rating.score}/5 ⭐
+            </div>
           )}
           
           {/* Example Action Button */}
@@ -1262,17 +1338,30 @@ const DealDetails = () => {
                   <h4 className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-400'} mb-3`}>Assets</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {del.files.map((file, index) => (
-                      <a
+                      <div
                         key={index}
-                        href={file.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`group/file relative aspect-video rounded-xl border overflow-hidden transition-all ${
+                        className={`group/file relative aspect-video rounded-xl border overflow-hidden transition-all cursor-pointer ${
                           isDark ? 'bg-zinc-950 border-zinc-800 hover:border-zinc-600' : 'bg-zinc-50 border-zinc-200 hover:border-zinc-300'
                         }`}
+                        onClick={() => file.type === 'image' || file.type === 'video' ? handleAssetPreview(file) : handleAssetDownload(file)}
                       >
                         {file.type === 'image' ? (
-                          <img src={file.url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover/file:scale-110" />
+                          <img 
+                            src={getAssetUrl(file.url)} 
+                            alt="" 
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover/file:scale-110" 
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyNkMxOC4yIDI2IDE2LjggMjQuNiAxNi44IDIyLjhDMTYuOCAyMSAyMiAyMSAyMiAyMUMyMiAyMSAyMS4yIDIxIDIxLjIgMjIuOEMyMS4yIDI0LjYgMTkuOCAyNiAyMCAyNloiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iMyIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
+                            }}
+                          />
+                        ) : file.type === 'video' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                            <Video className={`w-8 h-8 ${isDark ? 'text-zinc-600' : 'text-zinc-400'}`} />
+                            <p className={`text-[10px] font-medium px-2 truncate w-full text-center ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                              {file.filename}
+                            </p>
+                          </div>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                             <FileText className={`w-5 h-5 ${isDark ? 'text-zinc-700' : 'text-zinc-300'}`} />
@@ -1282,10 +1371,19 @@ const DealDetails = () => {
                           </div>
                         )}
                         <div className="absolute inset-0 bg-zinc-950/60 opacity-0 group-hover/file:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                          <Eye className="w-4 h-4 text-white" />
-                          <Download className="w-4 h-4 text-white" />
+                          {(file.type === 'image' || file.type === 'video') ? (
+                            <>
+                              <Eye className="w-4 h-4 text-white" />
+                              <Download className="w-4 h-4 text-white" onClick={(e) => {
+                                e.stopPropagation();
+                                handleAssetDownload(file);
+                              }} />
+                            </>
+                          ) : (
+                            <Download className="w-4 h-4 text-white" />
+                          )}
                         </div>
-                      </a>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1317,30 +1415,46 @@ const DealDetails = () => {
               {/* Action Buttons for Brand */}
               {isBrand && del.status === 'submitted' && (
                 <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-                  <Button 
-                    variant="primary" 
-                    size="sm"
-                    className="flex-1 sm:flex-none"
-                    onClick={() => {
-                      setSelectedDeliverable(del._id);
-                      setShowApproveModal(true);
-                    }}
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Approve
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="flex-1 sm:flex-none border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-900/50 dark:text-orange-400 dark:hover:bg-orange-500/10"
-                    onClick={() => {
-                      setSelectedDeliverable(del._id);
-                      setShowRevisionModal(true);
-                    }}
-                  >
-                    <AlertCircle className="w-4 h-4 mr-2" />
-                    Request Changes
-                  </Button>
+               <motion.button
+  whileHover={{ scale: 1.05 }}
+  whileTap={{ scale: 0.95 }}
+  onClick={() => {
+    setSelectedDeliverable(del._id);
+    setShowApproveModal(true);
+  }}
+  className="
+    /* Width & Padding: Isse button slim ho jayega */
+    w-fit px-4 py-1.5 
+    
+    /* Layout */
+    flex items-center justify-center gap-2
+    
+    /* Styling */
+    text-xs font-semibold tracking-wide
+    rounded-full border border-green-200
+    bg-green-50 text-green-600
+    
+    /* Transitions */
+    transition-all duration-300 ease-out
+    hover:bg-green-600 hover:text-white hover:shadow-lg hover:shadow-green-200
+    group
+  "
+>
+  <CheckCircle className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+  <span>Approve</span>
+</motion.button>
+            <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="flex-1 sm:flex-none border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-900/50 dark:text-orange-400 dark:hover:bg-orange-500/10"
+                    onClick={() => {
+                      setSelectedDeliverable(del._id);
+                      setShowRevisionModal(true);
+                    }}
+                  >
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    Request Changes
+                  </Button> 
                 </div>
               )}
             </div>
@@ -1444,7 +1558,7 @@ const DealDetails = () => {
                         <p className="truncate">{msg.replyTo.content}</p>
                       </div>
                     )}
-                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                    <p className="text-sm whitespace-pre-wrap break-words message-content">{msg.content}</p>
                     {msg.attachments?.length > 0 && (
                       <div className="mt-2 space-y-2">
                         {msg.attachments.map((file, i) => (
@@ -1455,7 +1569,7 @@ const DealDetails = () => {
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 bg-white bg-opacity-20 rounded p-2 text-sm"
                           >
-                            <FileText className="w-4 h-4" />
+                            <FileText className="w-4 text-red-200 h-4" />
                             <span className="flex-1 truncate">{file.filename}</span>
                             <Download className="w-4 h-4" />
                           </a>
@@ -1522,19 +1636,7 @@ const DealDetails = () => {
                   className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-sm"
                   style={{ minHeight: '48px' }}
                 />
-                <div className="absolute right-2 bottom-2 flex items-center gap-1">
-                  <label className="cursor-pointer p-1.5 hover:bg-gray-100 rounded-lg">
-                    <input type="file" multiple onChange={handleFileUpload} className="hidden" />
-                    <Paperclip className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
-                  </label>
-                  <button
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="p-1.5 hover:bg-gray-100 rounded-lg"
-                  >
-                    <Smile className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
-                  </button>
-                </div>
-              </div>
+                              </div>
               <button
                 onClick={handleSendMessage}
                 disabled={(!messageInput.trim() && attachments.length === 0) || sendingMessage || uploading}
@@ -1552,69 +1654,7 @@ const DealDetails = () => {
         </div>
       )}
 
-      {activeTab === 'timeline' && (
-        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
-          {deal.timeline?.length > 0 ? (
-            <div className="relative">
-              {deal.timeline.map((item, index) => (
-                <div key={index} className="flex gap-3 sm:gap-4 mb-4 last:mb-0">
-                  <div className="relative flex-shrink-0">
-                    <div className={`w-3 h-3 rounded-full mt-1.5 ${
-                      item.type === 'create' ? 'bg-blue-600' :
-                      item.type === 'accept' ? 'bg-green-600' :
-                      item.type === 'submit' ? 'bg-purple-600' :
-                      item.type === 'message' ? 'bg-orange-600' :
-                      'bg-gray-600'
-                    }`} />
-                    {index < deal.timeline.length - 1 && (
-                      <div className="absolute top-4 left-1.5 w-0.5 h-12 bg-gray-200" />
-                    )}
-                  </div>
-                  <div className="flex-1 pb-4 min-w-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <p className="font-medium text-gray-900 truncate">{item.event}</p>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(item.createdAt)}</span>
-                    </div>
-                    {item.description && (
-                      <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                    )}
-                    {item.userId && (
-                      <p className="text-xs text-gray-500 mt-1">by {item.userId?.fullName || 'User'}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {deal.requirements?.length > 0 && (
-                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm mt-4 sm:mt-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Requirements</h2>
-                  <ul className="space-y-2">
-                    {deal.requirements.map((req, index) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-gray-600">{req}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {deal.terms && (
-                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm mt-4 sm:mt-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Terms</h2>
-                  <p className="text-sm text-gray-600 whitespace-pre-line">{deal.terms}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-6 sm:py-8">
-              <Activity className="w-8 h-8 sm:w-10 sm:h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm sm:text-base">No timeline events yet</p>
-            </div>
-          )}
-        </div>
-      )}
-
+      
       {/* Modals */}
       <Modal isOpen={showApproveModal} onClose={() => setShowApproveModal(false)} title="Approve Deliverable">
         <p className="text-gray-600 mb-4">
@@ -1646,8 +1686,30 @@ const DealDetails = () => {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setShowRevisionModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleRequestRevision}>Request Revision</Button>
+        <div className="flex items-center gap-4">
+  {/* Cancel Button: Subtle & Ghost style */}
+  <button
+    onClick={() => setShowRevisionModal(false)}
+    className="px-6 py-2.5 text-sm font-semibold text-gray-600 transition-all duration-200 
+               bg-transparent border border-gray-200 rounded-lg 
+               hover:bg-gray-50 hover:border-black hover:text-black 
+               active:scale-95 focus:outline-none"
+  >
+    Cancel
+  </button>
+
+  {/* Request Revision Button: Bold, Black & Animated */}
+  <button
+    onClick={handleRequestRevision}
+    className="px-6 py-2.5 text-sm font-semibold text-white transition-all duration-300 
+               bg-black border-2 border-black rounded-lg shadow-sm
+               hover:bg-white hover:text-black hover:shadow-xl hover:-translate-y-1
+               active:scale-95 active:translate-y-0
+               focus:ring-2 focus:ring-black focus:ring-offset-2"
+  >
+    Request Revision
+  </button>
+</div>
         </div>
       </Modal>
 
@@ -1743,7 +1805,11 @@ const DealDetails = () => {
         </div>
         <div className="flex justify-end gap-3 mt-6">
           <Button variant="secondary" onClick={() => setShowCounterModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleCounterOffer} disabled={manualCounterDisabled}>Send Counter Offer</Button>
+          <Button className="px-6 py-2.5 text-sm font-semibold text-white transition-all duration-300 
+               bg-black border-2 border-black rounded-lg shadow-sm
+               hover:bg-white hover:text-black hover:shadow-xl hover:-translate-y-1
+               active:scale-95 active:translate-y-0
+               focus:ring-2 focus:ring-black focus:ring-offset-2" onClick={handleCounterOffer} disabled={manualCounterDisabled}>Send Counter Offer</Button>
         </div>
       </Modal>
 
@@ -1778,8 +1844,68 @@ const DealDetails = () => {
         </div>
         <div className="flex justify-end gap-3 mt-6">
           <Button variant="secondary" onClick={() => setShowRatingModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleRateDeal}>Submit Rating</Button>
+          <Button className="px-6 py-2.5 text-sm font-semibold text-white transition-all duration-300 
+               bg-black border-2 border-black rounded-lg shadow-sm
+             hover:shadow-xl hover:-translate-y-1
+               active:scale-95 active:translate-y-0
+               focus:ring-2 focus:ring-black focus:ring-offset-2" variant='secondry' onClick={handleRateDeal}>Submit Rating</Button>
         </div>
+      </Modal>
+
+      {/* Asset Preview Modal */}
+      <Modal 
+        isOpen={showAssetPreview} 
+        onClose={() => setShowAssetPreview(false)} 
+        size="full"
+        showCloseButton={true}
+        className="p-0"
+        contentClassName="overflow-hidden"
+      >
+        {selectedAsset && (
+          <div className="relative w-full h-full flex items-center justify-center bg-black">
+            {selectedAsset.type === 'image' ? (
+              <img 
+                src={getAssetUrl(selectedAsset.url)} 
+                alt={selectedAsset.filename || 'Asset preview'} 
+                className="max-w-full max-h-full object-contain"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM6Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyNkMxOC4yIDI2IDE2LjggMjQuNiAxNi44IDIyLjhDMTYuOCAyMSAyMiAyMSAyMiAyMUMyMiAyMSAyMS4yIDIxIDIxLjIgMjIuOEMyMS4yIDI0LjYgMTkuOCAyNiAyMCAyNloiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iMjAiIGN5PSIxNSIgcj0iMyIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
+                }}
+              />
+            ) : selectedAsset.type === 'video' ? (
+              <video 
+                src={getAssetUrl(selectedAsset.url)} 
+                controls 
+                autoPlay
+                className="max-w-full max-h-full object-contain"
+              >
+                Your browser does not support the video tag.
+              </video>
+            ) : null}
+            
+            {/* Asset Info Overlay */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-semibold text-lg truncate">
+                    {selectedAsset.filename || 'Asset'}
+                  </h3>
+                  <p className="text-gray-300 text-sm">
+                    {selectedAsset.type} • {selectedAsset.size ? `${(selectedAsset.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
+                  </p>
+                </div>
+              <button
+  onClick={() => handleAssetDownload(selectedAsset)}
+  className="bg-zinc-900 hover:bg-zinc-800 text-zinc-100 px-5 py-2.5 rounded-xl flex items-center gap-3 transition-colors shadow-lg shadow-black/10"
+>
+  <Download className="w-5 h-5 text-white" />
+  <span className="uppercase text-xs font-bold tracking-widest">Download Asset</span>
+</button>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

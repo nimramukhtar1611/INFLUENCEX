@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { useTheme } from '../../hooks/useTheme';
 
 const ChartCard = ({
@@ -142,26 +142,46 @@ const ChartCard = ({
   };
 
   // ==================== EXPORT AS EXCEL ====================
-  const exportAsExcel = () => {
-    if (!data || !data.length) {
-      console.warn('No data to export as Excel');
-      setShowMenu(false);
-      return;
-    }
+  const exportAsExcel = async () => {
+  if (!data || !data.length) {
+    console.warn('No data to export as Excel');
+    setShowMenu(false);
+    return;
+  }
 
-    setExporting(true);
-    try {
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Data');
-      XLSX.writeFile(wb, `${title.toLowerCase().replace(/\s+/g, '-')}-data.xlsx`);
-    } catch (error) {
-      console.error('Error exporting Excel:', error);
-    } finally {
-      setExporting(false);
-      setShowMenu(false);
-    }
-  };
+  setExporting(true);
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Data');
+
+    // Add headers
+    const headers = Object.keys(data[0]);
+    worksheet.addRow(headers);
+
+    // Add rows
+    data.forEach(row => {
+      worksheet.addRow(headers.map(h => row[h]));
+    });
+
+    // Create file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${title.toLowerCase().replace(/\s+/g, '-')}-data.xlsx`;
+    link.click();
+
+    URL.revokeObjectURL(link.href);
+  } catch (error) {
+    console.error('Error exporting Excel:', error);
+  } finally {
+    setExporting(false);
+    setShowMenu(false);
+  }
+};
 
   // ==================== COPY AS JSON ====================
   const copyAsJSON = () => {

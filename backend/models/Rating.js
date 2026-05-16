@@ -10,8 +10,7 @@ const ratingSchema = new mongoose.Schema({
   deal_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Deal',
-    required: true,
-    unique: true // One rating per deal per direction
+    required: true
   },
   from_user: {
     user_id: {
@@ -251,25 +250,17 @@ ratingSchema.methods.addResponse = function(text, userId) {
 
 // Static methods
 ratingSchema.statics.getUserRatings = function(userId, userType) {
-  const match = userType === 'creator' 
-    ? { 'to_user.user_id': userId, 'to_user.user_type': 'creator' }
-    : { 'to_user.user_id': userId, 'to_user.user_type': 'brand' };
-  
+  let match;
+  if (userType === 'creator') {
+    match = { 'to_user.user_id': new mongoose.Types.ObjectId(userId), 'to_user.user_type': 'creator' };
+  } else if (userType === 'brand') {
+    match = { 'to_user.user_id': new mongoose.Types.ObjectId(userId), 'to_user.user_type': 'brand' };
+  } else {
+    match = { 'to_user.user_id': new mongoose.Types.ObjectId(userId) };
+  }
   return this.aggregate([
     { $match: { ...match, status: 'published' } },
-    {
-      $group: {
-        _id: null,
-        average_rating: { $avg: '$scores.overall' },
-        total_ratings: { $sum: 1 },
-        rating_distribution: {
-          $push: '$scores.overall'
-        },
-        criteria_averages: {
-          $push: '$scores.criteria'
-        }
-      }
-    }
+    { $group: { _id: null, average_rating: { $avg: '$scores.overall' }, total_ratings: { $sum: 1 }, rating_distribution: { $push: '$scores.overall' } } }
   ]);
 };
 
@@ -288,7 +279,7 @@ ratingSchema.statics.getRecentRatings = function(userId, limit = 10) {
 };
 
 // Indexes
-ratingSchema.index({ deal_id: 1 }, { unique: true });
+ratingSchema.index({ deal_id: 1, rating_type: 1 }, { unique: true });
 ratingSchema.index({ 'to_user.user_id': 1, status: 1 });
 ratingSchema.index({ 'from_user.user_id': 1 });
 ratingSchema.index({ rating_type: 1 });

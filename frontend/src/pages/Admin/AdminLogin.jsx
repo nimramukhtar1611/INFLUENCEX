@@ -248,10 +248,8 @@ const AdminLogin = () => {
                   padding: '14px 20px',
                   borderRadius: 12,
                   border: '1.5px solid #333333',
-                  background: (loading || authLoading)
-                    ? '#1a1a1a'
-                    : '#333333',
-                  color: '#ffffff',
+                  color: '#000000',
+                  background: '#ffffff',
                   fontSize: 15,
                   fontWeight: 700,
                   cursor: (loading || authLoading) ? 'not-allowed' : 'pointer',
@@ -259,8 +257,6 @@ const AdminLogin = () => {
                   transition: 'all 0.2s ease',
                   letterSpacing: '0.01em',
                 }}
-                onMouseEnter={(e) => { if (!loading && !authLoading) e.target.style.background = '#404040'; e.target.style.borderColor = '#ffffff'; }}
-                onMouseLeave={(e) => { e.target.style.background = '#333333'; e.target.style.borderColor = '#333333'; }}
               >
                 {loading || authLoading ? (
                   <div

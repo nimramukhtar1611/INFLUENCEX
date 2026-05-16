@@ -66,6 +66,7 @@ import StatsCard from '../../components/Common/StatsCard';
 import ChartCard from '../../components/Common/ChartCard';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/Common/Modal';
+import NotificationIcon from '../../components/Common/NotificationIcon';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
@@ -284,7 +285,11 @@ const AdminDashboard = () => {
             </p>
           </div>
           
-    <button
+          <div className="flex items-center gap-3">
+            {/* Admin Notification Icon */}
+            <NotificationIcon />
+            
+            <button
   onClick={handleRefresh}
   disabled={refreshing}
   className={`
@@ -318,6 +323,7 @@ const AdminDashboard = () => {
     isDark ? 'bg-gradient-to-r from-transparent via-zinc-500 to-transparent' : 'bg-gradient-to-r from-transparent via-zinc-300 to-transparent'
   }`} />
 </button>
+          </div>
         </div>
 
         <div className="space-y-6">

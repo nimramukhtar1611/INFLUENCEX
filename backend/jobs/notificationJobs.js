@@ -15,36 +15,85 @@ cron.schedule('0 * * * *', async () => {
     const upcomingDeals = await Deal.find({
       deadline: { $lte: tomorrow, $gt: new Date() },
       status: { $in: ['accepted', 'in-progress'] }
-    }).populate('creatorId brandId');
+    }).populate('creatorId brandId campaignId');
 
     for (const deal of upcomingDeals) {
       // Notify creator
       await Notification.create({
         userId: deal.creatorId._id,
-        type: 'reminder',
-        title: 'Deadline Approaching',
-        message: `Your deal deadline is approaching (${deal.deadline.toLocaleDateString()})`,
-        data: { dealId: deal._id }
+        type: 'deal',
+        title: 'Deal Deadline Reminder',
+        message: `Your deal "${deal.campaignId?.title || 'Untitled Deal'}" deadline is approaching (${deal.deadline.toLocaleDateString()})`,
+        data: { 
+          dealId: deal._id,
+          campaignId: deal.campaignId?._id,
+          brandId: deal.brandId._id,
+          url: `/creator/deals/${deal._id}`
+        }
       });
 
       // Send email
       await sendEmail({
         email: deal.creatorId.email,
-        subject: 'Deadline Reminder - InfluenceX',
-        html: `<p>Your deal deadline for campaign is approaching. Please submit your deliverables soon.</p>`
+        subject: 'Deal Deadline Reminder - InfluenceX',
+        html: `<p>Your deal "${deal.campaignId?.title || 'Untitled Deal'}" deadline is approaching on ${deal.deadline.toLocaleDateString()}. Please submit your deliverables soon.</p>`
       });
 
       // Notify brand
       await Notification.create({
         userId: deal.brandId._id,
-        type: 'reminder',
-        title: 'Deadline Approaching',
-        message: `A deal deadline is approaching`,
-        data: { dealId: deal._id }
+        type: 'deal',
+        title: 'Deal Deadline Reminder',
+        message: `Deal "${deal.campaignId?.title || 'Untitled Deal'}" deadline is approaching`,
+        data: { 
+          dealId: deal._id,
+          campaignId: deal.campaignId?._id,
+          creatorId: deal.creatorId._id,
+          url: `/brand/deals/${deal._id}`
+        }
       });
     }
 
-    console.log(`Sent ${upcomingDeals.length * 2} deadline reminders`);
+    // Create hourly deal activity notifications
+    const oneHourAgo = new Date();
+    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+
+    const recentDeals = await Deal.find({
+      updatedAt: { $gte: oneHourAgo },
+      status: { $in: ['accepted', 'in-progress', 'negotiating'] }
+    }).populate('creatorId brandId campaignId');
+
+    for (const deal of recentDeals) {
+      // Notify creator about deal updates
+      await Notification.create({
+        userId: deal.creatorId._id,
+        type: 'deal',
+        title: 'Deal Activity Update',
+        message: `There's new activity on your deal "${deal.campaignId?.title || 'Untitled Deal'}"`,
+        data: { 
+          dealId: deal._id,
+          campaignId: deal.campaignId?._id,
+          brandId: deal.brandId._id,
+          url: `/creator/deals/${deal._id}`
+        }
+      });
+
+      // Notify brand about deal updates
+      await Notification.create({
+        userId: deal.brandId._id,
+        type: 'deal',
+        title: 'Deal Activity Update',
+        message: `There's new activity on deal "${deal.campaignId?.title || 'Untitled Deal'}"`,
+        data: { 
+          dealId: deal._id,
+          campaignId: deal.campaignId?._id,
+          creatorId: deal.creatorId._id,
+          url: `/brand/deals/${deal._id}`
+        }
+      });
+    }
+
+    console.log(`Sent ${upcomingDeals.length * 2} deadline reminders and ${recentDeals.length * 2} deal activity notifications`);
   } catch (error) {
     console.error('Error in notification jobs:', error);
   }

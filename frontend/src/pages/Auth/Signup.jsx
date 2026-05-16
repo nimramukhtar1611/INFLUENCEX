@@ -392,26 +392,7 @@ const Signup = () => {
           className="relative z-10"
           style={{ maxWidth: '480px', width: '100%', margin: '0 24px' }}
         >
-        {/* mobile logo */}
-        <div className="flex lg:hidden items-center gap-2 mb-8">
-          <div
-            style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: '#1a1a1a',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Shield className="text-white" size={18} />
-          </div>
-          <span
-            style={{
-              fontSize: 18, fontWeight: 700,
-              color: '#111827',
-            }}
-          >
-            {getPlatformName()}
-          </span>
-        </div>
+      
 
         {/* heading */}
         <div className="mb-8">

@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: ['13.61.13.2.nip.io', '.nip.io', 'localhost'],
+    allowedHosts: ['13.61.13.2.nip.io', '.nip.io', 'localhost','13.61.13.2','13.61.13.2:5173'],
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

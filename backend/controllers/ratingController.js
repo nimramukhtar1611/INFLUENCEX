@@ -2,6 +2,7 @@
 const Rating = require('../models/Rating');
 const Deal = require('../models/Deal');
 const User = require('../models/User');
+const Creator = require('../models/Creator');
 const { validationResult } = require('express-validator');
 
 // @desc    Create Rating
@@ -82,7 +83,7 @@ exports.createRating = async (req, res) => {
       pros,
       cons,
       tags,
-      status: 'pending' // Needs moderation
+      status: 'published' // Published directly
     });
 
     await rating.save();
@@ -515,14 +516,11 @@ exports.moderateRating = async (req, res) => {
 
 // Helper Functions
 async function updateUserRating(userId) {
-  const stats = await Rating.getUserRatings(userId);
-  
+  const stats = await Rating.getUserRatings(userId, 'creator');
   if (stats.length > 0) {
-    const averageRating = stats[0].average_rating;
-    
-    await User.findByIdAndUpdate(userId, {
-      'creator_profile.average_rating': averageRating,
-      'creator_profile.total_ratings': stats[0].total_ratings
+    await Creator.findByIdAndUpdate(userId, {
+      'stats.averageRating': stats[0].average_rating,
+      'stats.totalReviews': stats[0].total_ratings
     });
   }
 }

@@ -24,6 +24,8 @@ import { useTheme } from '../../hooks/useTheme';
 
 import { useSubscription } from '../../context/SubscriptionContext';
 
+import NotificationIcon from '../Common/NotificationIcon';
+
 
 
 const normalizePlanId = (value) => {
@@ -96,6 +98,8 @@ useEffect(() => {
 
       { to: '/brand/deals', icon: Handshake, label: 'Deals' },
 
+      { to: '/brand/disputes', icon: AlertCircle, label: 'Disputes' },
+
       { to: '/brand/payments', icon: Wallet, label: 'Payments' },
 
       { to: '/brand/subscription', icon: DollarSign, label: 'Subscription' },
@@ -115,6 +119,8 @@ useEffect(() => {
       { to: '/creator/available-deals', icon: Search, label: 'Find Deals' },
 
       { to: '/creator/deals', icon: Handshake, label: 'My Deals' },
+
+      { to: '/creator/disputes', icon: AlertCircle, label: 'Disputes' },
 
       ...(canAccessGrowthOS ? [{ to: '/creator/growth-os', icon: Lightbulb, label: 'Growth OS' }] : []),
 
@@ -334,20 +340,7 @@ useEffect(() => {
 
      
 
-              <Link to="/privacy"  className="px-4 py-3 flex items-center gap-3 text-sm font-medium  " style={{ color: textColor }}>
-
-                <Shield className="w-4 h-4" /> Privacy Policy
-
-              </Link>
-
-              
-
-              <Link to="/terms" className="px-4 py-3 flex items-center gap-3 text-sm font-medium" style={{ color: textColor }}>
-
-                <FileText className="w-4 h-4" /> Terms
-
-              </Link>
-
+            
 
 
               <button onClick={() => logout()}

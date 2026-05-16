@@ -299,7 +299,22 @@ const Notifications = () => {
             </p>
 
             <div className="flex items-center justify-between">
-             
+              {/* View Deal Button for deal notifications */}
+              {notification.type === 'deal' && notification.data?.dealId && (
+                <Link
+                  to={notification.data.url || `/${user?.userType === 'brand' ? 'brand' : 'creator'}/deals/${notification.data.dealId}`}
+                  onClick={() => markAsRead(notification._id)}
+                  className={`
+                    px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
+                    ${isDark 
+                      ? 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20' 
+                      : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200'
+                    }
+                  `}
+                >
+                  View Deal
+                </Link>
+              )}
 
               {/* Row Actions */}
               <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">

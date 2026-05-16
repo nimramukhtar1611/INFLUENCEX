@@ -11,7 +11,7 @@ const asyncHandler = require('express-async-handler');
 // @route   POST /api/deliverables
 // @access  Private (Creator)
 const submitDeliverable = asyncHandler(async (req, res) => {
-  const { dealId, type, platform, description, files, links, notes, metrics } = req.body;
+  const { dealId, type, platform, description, links, notes, metrics } = req.body;
 
   // Check if deal exists and belongs to creator
   const deal = await Deal.findById(dealId);
@@ -30,6 +30,15 @@ const submitDeliverable = asyncHandler(async (req, res) => {
     throw new Error('Cannot submit deliverables at this stage');
   }
 
+  // Process uploaded files from req.fileInfo (created by upload middleware)
+  const processedFiles = req.fileInfo ? req.fileInfo.map(file => ({
+    url: file.url,
+    type: file.category,
+    size: file.size,
+    filename: file.originalname,
+    uploadedAt: new Date()
+  })) : [];
+
   const deliverable = await Deliverable.create({
     dealId,
     creatorId: req.user._id,
@@ -37,8 +46,8 @@ const submitDeliverable = asyncHandler(async (req, res) => {
     type,
     platform,
     description,
-    files,
-    links,
+    files: processedFiles,
+    links: links || [],
     notes,
     metrics: metrics || {}, // Store metrics on submission
     status: 'submitted',
