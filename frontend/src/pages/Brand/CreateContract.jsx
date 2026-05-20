@@ -8,6 +8,7 @@ import Button from '../../components/UI/Button';
 import Input from '../../components/UI/Input';
 import { DollarSign, FileText, Plus, X, ArrowLeft, Briefcase, Calendar, User, Building } from 'lucide-react';
 import contractService from '../../services/contractService';
+import creatorService from '../../services/creatorService';
 import toast from 'react-hot-toast';
 
 const CreateContract = () => {
@@ -57,15 +58,32 @@ const CreateContract = () => {
   const [errors, setErrors] = useState({});
   const [addingClause, setAddingClause] = useState(false);
   const [newClause, setNewClause] = useState({ title: '', content: '' });
+  const [creators, setCreators] = useState([]);
+  const [creatorsLoading, setCreatorsLoading] = useState(false);
 
   useEffect(() => {
     fetchBrandCampaigns('all', 1, 100);
+    fetchCreators();
     
     // If dealId is provided, load deal data and pre-fill form
     if (dealId) {
       loadDealData(dealId);
     }
   }, [dealId]);
+
+  const fetchCreators = async () => {
+    try {
+      setCreatorsLoading(true);
+      const result = await creatorService.searchCreators({});
+      if (result.success && result.creators) {
+        setCreators(result.creators);
+      }
+    } catch (error) {
+      console.error('Error fetching creators:', error);
+    } finally {
+      setCreatorsLoading(false);
+    }
+  };
 
   const loadDealData = async (dealId) => {
     try {
@@ -255,6 +273,25 @@ const CreateContract = () => {
               {campaigns.map(c => <option className="!bg-black text-white" key={c._id} value={c._id}>{c.title}</option>)}
             </select>
             {errors.campaignId && <p className="text-red-500 text-xs">{errors.campaignId}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 px-1">Creator</label>
+            <select 
+              name="creatorId" 
+              value={formData.creatorId} 
+              onChange={handleChange}
+              disabled={creatorsLoading}
+              className={`${inputClasses} ${isDark ? 'bg-black' : 'bg-white'} ${creatorsLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <option className="!bg-black text-white" value="">Select Creator</option>
+              {creators.map(c => (
+                <option className="!bg-black text-white" key={c._id} value={c._id}>
+                  {c.name || c.username || c.displayName || c.firstName || c.lastName || 'Creator'}
+                </option>
+              ))}
+            </select>
+            {errors.creatorId && <p className="text-red-500 text-xs">{errors.creatorId}</p>}
           </div>
 
           <div className="space-y-2">

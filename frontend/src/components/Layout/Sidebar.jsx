@@ -98,6 +98,8 @@ useEffect(() => {
 
       { to: '/brand/deals', icon: Handshake, label: 'Deals' },
 
+      { to: '/brand/contracts', icon: FileText, label: 'Contracts' },
+
       { to: '/brand/disputes', icon: AlertCircle, label: 'Disputes' },
 
       { to: '/brand/payments', icon: Wallet, label: 'Payments' },
@@ -119,6 +121,8 @@ useEffect(() => {
       { to: '/creator/available-deals', icon: Search, label: 'Find Deals' },
 
       { to: '/creator/deals', icon: Handshake, label: 'My Deals' },
+
+      { to: '/creator/contracts', icon: FileText, label: 'Contracts' },
 
       { to: '/creator/disputes', icon: AlertCircle, label: 'Disputes' },
 

@@ -82,6 +82,8 @@ import Notifications from './components/Common/Notifications';
 import Disputes from './components/Common/Disputes';
 import BrandDisputes from './pages/Brand/Disputes';
 import Contracts from './pages/Brand/Contracts';
+import CreateContract from './pages/Brand/CreateContract';
+import CreatorContracts from './pages/Creator/Contracts';
 import FAQs from './pages/FAQs';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -175,6 +177,8 @@ function App() {
                                 <Route path="inbox" element={<BrandInbox />} />
                                 <Route path="notifications" element={<Notifications />} />
                                 <Route path="disputes" element={<BrandDisputes />} />
+                                <Route path="contracts" element={<Contracts />} />
+                                <Route path="createcontract" element={<CreateContract />} />
                               </Route>
 
                               {/* Creator Routes */}
@@ -198,6 +202,7 @@ function App() {
                                 <Route path="subscription" element={<SubscriptionManager />} />
                                 <Route path="inbox" element={<CreatorInbox />} />
                                 <Route path="notifications" element={<Notifications />} />
+                                <Route path="contracts" element={<CreatorContracts />} />
                                 <Route path="disputes" element={<CreatorDisputes />} />
                               </Route>
 
